@@ -37,14 +37,28 @@ fn repo() -> PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["widget", "paint"]);
-    let base = write_record(&dir, BASE, &format!("# Base\n{}", section(BASE_Q, &body("base widget"))));
+    let base = write_record(
+        &dir,
+        BASE,
+        &format!("# Base\n{}", section(BASE_Q, &body("base widget"))),
+    );
     approve_record(&dir, BASE);
-    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let id = extract_ids(&std::fs::read_to_string(&base).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
-    let text = format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two")));
+    let text = format!(
+        "# Topic\n{}{}",
+        section(H1, &body("one")),
+        section(H2, &body("two"))
+    );
     std::fs::write(dir.join(REL), text).unwrap();
-    assert!(adr(&dir, &["plan", dir.join(REL).to_str().unwrap()], &[], "").status.success());
+    assert!(
+        adr(&dir, &["plan", dir.join(REL).to_str().unwrap()], &[], "")
+            .status
+            .success()
+    );
     plan_record(&dir, REL);
     reader_says(&dir, &id);
     approve_record(&dir, REL);
@@ -59,7 +73,11 @@ fn reader_says(dir: &Path, base_id: &str) {
     let hash = record::body_hash(&rf, sec);
     let mut new = Vec::new();
     let mut terms: Vec<String> = Vec::new();
-    let mut rows: Vec<reader::Row> = reader::read_file(dir).rows.into_iter().filter(|r| r.text_hash == hash).collect();
+    let mut rows: Vec<reader::Row> = reader::read_file(dir)
+        .rows
+        .into_iter()
+        .filter(|r| r.text_hash == hash)
+        .collect();
     rows.sort_by(|a, b| a.neighbour.cmp(&b.neighbour));
     for mut row in rows {
         let other = row.neighbour != base_id && !row.neighbour.starts_with("text:");
@@ -112,17 +130,36 @@ fn plain_show_prints_inconsistent_same_and_closes_under_a_question_not_answered(
     let dir = repo();
     let shown = show(&dir, &[]);
     let lines = under(&shown, H1);
-    assert!(lines.contains(&format!("  [closes B] {}", BASE_Q)), "{}", shown);
+    assert!(
+        lines.contains(&format!("  [closes B] {}", BASE_Q)),
+        "{}",
+        shown
+    );
     assert!(lines.contains(&format!("  [same] {}", H2)), "{}", shown);
     let marks: Vec<&String> = lines.iter().filter(|l| l.starts_with("  [")).collect();
     assert_eq!(marks.len(), 3, "{}", shown);
-    assert_eq!(marks.iter().filter(|l| l.starts_with("  [inconsistent] ")).count(), 1, "{}", shown);
-    assert!(lines.iter().position(|l| l == "  depends: widget").unwrap() < lines.iter().position(|l| l.starts_with("  [")).unwrap());
+    assert_eq!(
+        marks
+            .iter()
+            .filter(|l| l.starts_with("  [inconsistent] "))
+            .count(),
+        1,
+        "{}",
+        shown
+    );
+    assert!(
+        lines.iter().position(|l| l == "  depends: widget").unwrap()
+            < lines.iter().position(|l| l.starts_with("  [")).unwrap()
+    );
     for word in ["[consistent]", "[depends]", "[unrelated]", "Reason for"] {
         assert!(!shown.contains(word), "{}: {}", word, shown);
     }
     // The other question carries no row of its own.
-    assert!(under(&shown, H2).iter().all(|l| !l.starts_with("  [")), "{}", shown);
+    assert!(
+        under(&shown, H2).iter().all(|l| !l.starts_with("  [")),
+        "{}",
+        shown
+    );
 }
 
 // adr: 6e72f34e-d484-4c63-8332-d284857176fc
@@ -141,9 +178,21 @@ fn a_supersedes_line_that_names_the_neighbour_leaves_its_word_out() {
     std::fs::write(dir.join(REL), edited).unwrap();
     let shown = show(&dir, &[]);
     let lines = under(&shown, H1);
-    assert!(lines.contains(&format!("  + supersedes: {}", BASE_Q)), "{}", shown);
-    assert!(!lines.iter().any(|l| l.starts_with("  [closes")), "{}", shown);
-    assert!(lines.iter().any(|l| l.starts_with("  [inconsistent] ")), "{}", shown);
+    assert!(
+        lines.contains(&format!("  + supersedes: {}", BASE_Q)),
+        "{}",
+        shown
+    );
+    assert!(
+        !lines.iter().any(|l| l.starts_with("  [closes")),
+        "{}",
+        shown
+    );
+    assert!(
+        lines.iter().any(|l| l.starts_with("  [inconsistent] ")),
+        "{}",
+        shown
+    );
     assert!(lines.contains(&format!("  [same] {}", H2)), "{}", shown);
 }
 
@@ -157,18 +206,36 @@ fn reader_prints_every_word_with_its_reason_and_an_answered_question_none_plain(
     let plain = show(&dir, &[]);
     let all = show(&dir, &["--reader"]);
     let lines = under(&all, H1);
-    let term_words: Vec<&String> = lines.iter().filter(|l| l.starts_with("  [inconsistent] ") || l.starts_with("  [consistent] ")).collect();
+    let term_words: Vec<&String> = lines
+        .iter()
+        .filter(|l| l.starts_with("  [inconsistent] ") || l.starts_with("  [consistent] "))
+        .collect();
     assert_eq!(term_words.len(), 2, "{}", all);
     for (word, name) in [("closes B", BASE_Q), ("same", H2)] {
-        let at = lines.iter().position(|l| *l == format!("  [{}] {}", word, name));
+        let at = lines
+            .iter()
+            .position(|l| *l == format!("  [{}] {}", word, name));
         let at = at.unwrap_or_else(|| panic!("{} {}: {}", word, name, all));
-        assert_eq!(lines[at + 1], format!("    Reason for {}.", word), "{}", all);
+        assert_eq!(
+            lines[at + 1],
+            format!("    Reason for {}.", word),
+            "{}",
+            all
+        );
     }
     for w in &term_words {
         let name = w.rsplit(' ').next().unwrap();
         assert!(["paint", "widget"].contains(&name), "{}", all);
     }
-    assert_eq!(lines.iter().filter(|l| l.starts_with("  [inconsistent]")).count(), 1, "{}", all);
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.starts_with("  [inconsistent]"))
+            .count(),
+        1,
+        "{}",
+        all
+    );
     assert!(plain.len() < all.len());
 
     // Answered: nothing in the plain listing, everything under --reader.
@@ -178,9 +245,22 @@ fn reader_prints_every_word_with_its_reason_and_an_answered_question_none_plain(
     assert!(adr_answer(&dir, &id, "A").status.success());
     let plain = show(&dir, &[]);
     assert!(plain.contains(&format!("[answered A] {}", H1)), "{}", plain);
-    assert!(!plain.contains("[inconsistent]") && !plain.contains("[same]") && !plain.contains("[closes"), "{}", plain);
+    assert!(
+        !plain.contains("[inconsistent]")
+            && !plain.contains("[same]")
+            && !plain.contains("[closes"),
+        "{}",
+        plain
+    );
     let all = show(&dir, &["--reader"]);
-    assert!(all.contains(&format!("  [closes B] {}\n    Reason for closes B.\n", BASE_Q)), "{}", all);
+    assert!(
+        all.contains(&format!(
+            "  [closes B] {}\n    Reason for closes B.\n",
+            BASE_Q
+        )),
+        "{}",
+        all
+    );
 
     // A flag that needs a file.
     assert!(!adr(&dir, &["show", "--reader"], &[], "").status.success());

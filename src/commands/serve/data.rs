@@ -55,7 +55,10 @@ impl Q<'_> {
     /// Asked and not answered: put to the owner, or edited since and asked
     /// again by the agent. What the pages count as open.
     pub fn listed(&self) -> bool {
-        matches!(self.status, QuestionStatus::Asked | QuestionStatus::ChangedSinceAsked)
+        matches!(
+            self.status,
+            QuestionStatus::Asked | QuestionStatus::ChangedSinceAsked
+        )
     }
 }
 
@@ -63,7 +66,9 @@ impl Q<'_> {
 /// carries one (the owner's answer, the build), else by the heading.
 fn names(m: &Move, sec: &Section) -> bool {
     match &m.kind {
-        MoveKind::Answer { id, .. } | MoveKind::Build { id, .. } => sec.id.as_deref() == Some(id.as_str()),
+        MoveKind::Answer { id, .. } | MoveKind::Build { id, .. } => {
+            sec.id.as_deref() == Some(id.as_str())
+        }
         _ => named(m).contains(&sec.heading_text.as_str()),
     }
 }
@@ -77,7 +82,9 @@ fn names_a_question(m: &Move) -> bool {
 /// by heading.
 fn named(m: &Move) -> Vec<&str> {
     match &m.kind {
-        MoveKind::Answer { heading, .. } | MoveKind::AnswerWaits { heading, .. } | MoveKind::Refused { heading } => {
+        MoveKind::Answer { heading, .. }
+        | MoveKind::AnswerWaits { heading, .. }
+        | MoveKind::Refused { heading } => {
             vec![heading]
         }
         MoveKind::Ask { headings, .. } => headings.iter().map(String::as_str).collect(),
@@ -120,7 +127,12 @@ pub(super) fn files(r: &Records, once: bool) -> Vec<File<'_>> {
                         .collect(),
                 })
                 .collect();
-            File { rf, report, judged, qs }
+            File {
+                rf,
+                report,
+                judged,
+                qs,
+            }
         })
         .collect()
 }
@@ -167,15 +179,37 @@ mod tests {
     fn a_move_with_an_identifier_names_its_question_by_it() {
         let q = section("id-1", "Does it?");
         let other = section("id-2", "Does it?");
-        let answer = |id: &str| Move::new(MoveKind::Answer { id: id.into(), version: "v".into(), heading: "Does it?".into() });
+        let answer = |id: &str| {
+            Move::new(MoveKind::Answer {
+                id: id.into(),
+                version: "v".into(),
+                heading: "Does it?".into(),
+            })
+        };
         assert!(names(&answer("id-1"), &q));
-        assert!(!names(&answer("id-1"), &other), "the same heading is not the same question");
-        let build = |id: &str, heading: &str| Move::new(MoveKind::Build { heading: heading.into(), id: id.into() });
+        assert!(
+            !names(&answer("id-1"), &other),
+            "the same heading is not the same question"
+        );
+        let build = |id: &str, heading: &str| {
+            Move::new(MoveKind::Build {
+                heading: heading.into(),
+                id: id.into(),
+            })
+        };
         assert!(names(&build("id-2", "another heading"), &other));
         assert!(!names(&build("id-2", "Does it?"), &q));
-        let waits = Move::new(MoveKind::AnswerWaits { heading: "Does it?".into(), on: Vec::new() });
-        assert!(names(&waits, &q) && names(&waits, &other), "by heading where the move has no identifier");
+        let waits = Move::new(MoveKind::AnswerWaits {
+            heading: "Does it?".into(),
+            on: Vec::new(),
+        });
+        assert!(
+            names(&waits, &q) && names(&waits, &other),
+            "by heading where the move has no identifier"
+        );
         assert!(names_a_question(&answer("x")) && names_a_question(&waits));
-        assert!(!names_a_question(&Move::new(MoveKind::SupersedeMarkedPairs)));
+        assert!(!names_a_question(&Move::new(
+            MoveKind::SupersedeMarkedPairs
+        )));
     }
 }

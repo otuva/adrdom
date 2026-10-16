@@ -50,7 +50,11 @@ fn approving_the_terms_file_leaves_a_terms_brief() {
     let dir = approved_repo();
     let brief = std::fs::read_to_string(dir.join(BRIEF_PATH)).expect("no terms brief written");
     assert!(brief.contains("keeper"), "{}", brief);
-    assert!(brief.contains("The person the repository belongs to."), "{}", brief);
+    assert!(
+        brief.contains("The person the repository belongs to."),
+        "{}",
+        brief
+    );
 }
 
 // adr: f1294391-48b0-4ba3-82b4-c1d6b1c2c884
@@ -85,7 +89,12 @@ fn approve_writes_the_terms_brief_when_the_terms_file_did_not_change() {
     // No ledger row; the terms brief is a file written that no row covers,
     // so it is the one line (per "What does a command that writes print?",
     // 069a6b4a A).
-    assert_eq!(stdout(&out), format!("written: {}\n", BRIEF_PATH), "{}", stdout(&out));
+    assert_eq!(
+        stdout(&out),
+        format!("written: {}\n", BRIEF_PATH),
+        "{}",
+        stdout(&out)
+    );
 
     assert_eq!(std::fs::read_to_string(dir.join(BRIEF_PATH)).unwrap(), WANT);
     assert_eq!(terms_rows(&dir), rows);
@@ -127,14 +136,26 @@ fn check_fails_a_terms_brief_that_is_missing_or_differs() {
         "{}",
         text
     );
-    assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(
+        text.contains("owner runs: adr approve adrdom/terms.md"),
+        "{}",
+        text
+    );
 
     std::fs::remove_file(dir.join(BRIEF_PATH)).unwrap();
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("adrdom/state/terms-brief.md missing"), "{}", text);
-    assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(
+        text.contains("adrdom/state/terms-brief.md missing"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("owner runs: adr approve adrdom/terms.md"),
+        "{}",
+        text
+    );
 }
 
 // adr: ec3f875c-a0f8-4085-8da1-fec9dcb14377
@@ -161,8 +182,16 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
     let out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("adrdom/state/terms-brief.md not staged"), "{}", text);
-    assert!(text.contains("agent runs: git add adrdom/state/terms-brief.md"), "{}", text);
+    assert!(
+        text.contains("adrdom/state/terms-brief.md not staged"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("agent runs: git add adrdom/state/terms-brief.md"),
+        "{}",
+        text
+    );
 
     run_git(&dir, &["add", BRIEF_PATH]);
     let out = adr(&dir, &["check", "--staged"], &[], "");
@@ -193,5 +222,9 @@ fn the_brief_names_the_terms_brief() {
         }
     }
     assert!(found, "no @ line for the terms brief:\n{}", agents);
-    assert!(agents.contains("every agent reads it before it writes a question, code or a reply:"), "{}", agents);
+    assert!(
+        agents.contains("every agent reads it before it writes a question, code or a reply:"),
+        "{}",
+        agents
+    );
 }

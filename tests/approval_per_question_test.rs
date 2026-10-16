@@ -69,7 +69,10 @@ fn approve_writes_a_row_per_question_and_a_file_hash_over_the_sorted_parts() {
     let hashes = adr::record::question_hashes(&rf);
     for (sec, h) in rf.sections.iter().zip(&hashes) {
         let id = sec.id.clone().expect("approve minted an id");
-        let row = per_question.iter().find(|r| r[2] == id).expect("a row for each id");
+        let row = per_question
+            .iter()
+            .find(|r| r[2] == id)
+            .expect("a row for each id");
         assert_eq!(&row[3], h);
         assert_eq!(row[4], REL);
     }
@@ -110,7 +113,10 @@ fn a_struck_heading_awaits_approval_unless_its_hash_is_dropped() {
     let dir = setup(&file_of(&[Q1, Q2]));
     assert!(approve(&dir).status.success());
     let rows = ledger_rows(&dir, "approved");
-    let id2 = adr::record::load(&dir.join(REL)).unwrap().sections[1].id.clone().unwrap();
+    let id2 = adr::record::load(&dir.join(REL)).unwrap().sections[1]
+        .id
+        .clone()
+        .unwrap();
     let row2 = rows.iter().find(|r| r[2] == id2).unwrap().clone();
 
     let content = std::fs::read_to_string(dir.join(REL)).unwrap();
@@ -118,7 +124,14 @@ fn a_struck_heading_awaits_approval_unless_its_hash_is_dropped() {
     std::fs::write(dir.join(REL), &content[..cut]).unwrap();
     assert!(awaits_approval(&dir));
 
-    append_ledger_row_at(&dir, "dropped", &id2, &row2[3], "dropped for the test", "2999-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "dropped",
+        &id2,
+        &row2[3],
+        "dropped for the test",
+        "2999-01-01T00:00:00Z",
+    );
     assert!(!awaits_approval(&dir));
 }
 
@@ -129,13 +142,24 @@ fn a_struck_heading_awaits_approval_unless_its_hash_is_dropped() {
 // writes nothing; with the body written it approves.
 #[test]
 fn approve_refuses_a_heading_with_no_body_and_writes_nothing() {
-    let dir = setup(&file_of(&[Q1, "### 1.2 Second question?\ndepends: decision\n"]));
+    let dir = setup(&file_of(&[
+        Q1,
+        "### 1.2 Second question?\ndepends: decision\n",
+    ]));
     let before = ledger_text(&dir);
     let out = approve(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("1.2 Second question?") && err.contains("no body"), "{}", err);
-    assert!(err.contains("agent writes the body of \"1.2 Second question?\""), "{}", err);
+    assert!(
+        err.contains("1.2 Second question?") && err.contains("no body"),
+        "{}",
+        err
+    );
+    assert!(
+        err.contains("agent writes the body of \"1.2 Second question?\""),
+        "{}",
+        err
+    );
     assert_eq!(before, ledger_text(&dir));
 
     write_record(&dir, REL, &file_of(&[Q1, Q2]));
@@ -156,7 +180,8 @@ fn approve_refuses_a_depends_on_a_question_in_its_file_without_a_set() {
     let err = stderr(&out);
     assert!(err.contains("without an answer set"), "{}", err);
     assert!(
-        err.contains("agent writes an answer set (=A, =A|B or =*) on that depends entry") && err.contains("owner runs: adr approve"),
+        err.contains("agent writes an answer set (=A, =A|B or =*) on that depends entry")
+            && err.contains("owner runs: adr approve"),
         "{}",
         err
     );
@@ -178,8 +203,15 @@ fn approve_refuses_a_depends_on_a_question_in_its_file_without_a_set() {
 fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
     let dir = setup(&file_of(&[Q1]));
     assert!(approve(&dir).status.success());
-    assert!(adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "").status.success());
-    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0].id.clone().unwrap();
+    assert!(
+        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
+            .status
+            .success()
+    );
+    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
+        .id
+        .clone()
+        .unwrap();
     assert!(adr_answer(&dir, &id1, "A").status.success());
 
     let text = std::fs::read_to_string(dir.join(REL)).unwrap();
@@ -189,9 +221,16 @@ fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(err.contains("answered, under an answer set"), "{}", err);
-    assert!(err.contains("agent removes the answer set from that entry") && err.contains("owner runs: adr approve"), "{}", err);
+    assert!(
+        err.contains("agent removes the answer set from that entry")
+            && err.contains("owner runs: adr approve"),
+        "{}",
+        err
+    );
 
-    let fixed = std::fs::read_to_string(dir.join(REL)).unwrap().replace("?=A", "?");
+    let fixed = std::fs::read_to_string(dir.join(REL))
+        .unwrap()
+        .replace("?=A", "?");
     std::fs::write(dir.join(REL), fixed).unwrap();
     let out = approve(&dir);
     assert!(out.status.success(), "{}", stderr(&out));
@@ -207,16 +246,26 @@ fn check_passes_a_file_awaiting_approval() {
     let dir = setup(&file_of(&[Q1, Q2]));
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("awaiting approval"),
+        "{}",
+        stdout(&out)
+    );
 
     // After approve nothing is printed; after an edit check still passes.
     assert!(approve(&dir).status.success());
     assert_eq!(stdout(&check_out(&dir)), "");
-    let edited = std::fs::read_to_string(dir.join(REL)).unwrap().replace("s2.", "s2, reworded.");
+    let edited = std::fs::read_to_string(dir.join(REL))
+        .unwrap()
+        .replace("s2.", "s2, reworded.");
     std::fs::write(dir.join(REL), edited).unwrap();
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("awaiting approval"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 // adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
@@ -228,20 +277,45 @@ fn a_set_approved_before_the_answer_survives_a_reapprove_after_it() {
     let q2 = Q2.replace("depends: decision", "depends: 1.1 First question?=A");
     let dir = setup(&file_of(&[Q1, &q2]));
     assert!(approve(&dir).status.success());
-    assert!(adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "").status.success());
-    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0].id.clone().unwrap();
+    assert!(
+        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
+            .status
+            .success()
+    );
+    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
+        .id
+        .clone()
+        .unwrap();
     assert!(adr_answer(&dir, &id1, "A").status.success());
 
     let out = approve(&dir);
     assert!(out.status.success(), "{}", stderr(&out));
-    let edited = std::fs::read_to_string(dir.join(REL)).unwrap().replace("s2.", "s2, reworded.");
+    let edited = std::fs::read_to_string(dir.join(REL))
+        .unwrap()
+        .replace("s2.", "s2, reworded.");
     std::fs::write(dir.join(REL), edited).unwrap();
     let out = approve(&dir);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(std::fs::read_to_string(dir.join(REL)).unwrap().contains("?=A") || std::fs::read_to_string(dir.join(REL)).unwrap().contains("=A"));
-    assert!(adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "").status.success());
+    assert!(
+        std::fs::read_to_string(dir.join(REL))
+            .unwrap()
+            .contains("?=A")
+            || std::fs::read_to_string(dir.join(REL))
+                .unwrap()
+                .contains("=A")
+    );
+    assert!(
+        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
+            .status
+            .success()
+    );
     let out = check_out(&dir);
-    assert!(!stdout(&out).contains("answers:"), "{}{}", stdout(&out), stderr(&out));
+    assert!(
+        !stdout(&out).contains("answers:"),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
 }
 
 // adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
@@ -256,8 +330,15 @@ fn a_set_changed_after_the_answer_on_an_approved_question_is_refused() {
     let q2 = Q2.replace("depends: decision", "depends: 1.1 First question?=A");
     let dir = setup(&file_of(&[Q1]));
     assert!(approve(&dir).status.success());
-    assert!(adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "").status.success());
-    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0].id.clone().unwrap();
+    assert!(
+        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
+            .status
+            .success()
+    );
+    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
+        .id
+        .clone()
+        .unwrap();
     let text = std::fs::read_to_string(dir.join(REL)).unwrap();
     std::fs::write(dir.join(REL), format!("{}\n{}", text.trim_end(), q2)).unwrap();
     assert!(approve(&dir).status.success());
@@ -267,11 +348,19 @@ fn a_set_changed_after_the_answer_on_an_approved_question_is_refused() {
     let (head, q2) = text.split_at(text.find("### 1.2 ").unwrap());
     let at = q2.find("depends: ").unwrap();
     let end = at + q2[at..].find('\n').unwrap();
-    let q2 = format!("{}depends: 1.1 First question?=A|B{}", &q2[..at], &q2[end..]);
+    let q2 = format!(
+        "{}depends: 1.1 First question?=A|B{}",
+        &q2[..at],
+        &q2[end..]
+    );
     std::fs::write(dir.join(REL), format!("{}{}", head, q2)).unwrap();
     let out = approve(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("answered, under an answer set"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("answered, under an answer set"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
@@ -283,8 +372,15 @@ fn a_set_changed_after_the_answer_on_an_approved_question_is_refused() {
 fn a_set_first_approved_after_the_ask_stays_after_the_answer() {
     let dir = setup(&file_of(&[Q1]));
     assert!(approve(&dir).status.success());
-    assert!(adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "").status.success());
-    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0].id.clone().unwrap();
+    assert!(
+        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
+            .status
+            .success()
+    );
+    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
+        .id
+        .clone()
+        .unwrap();
 
     let q2 = Q2.replace("depends: decision", "depends: 1.1 First question?=A");
     let text = std::fs::read_to_string(dir.join(REL)).unwrap();
@@ -294,13 +390,20 @@ fn a_set_first_approved_after_the_ask_stays_after_the_answer() {
     assert_eq!(ledger_rows(&dir, "assumes").len(), 1);
 
     assert!(adr_answer(&dir, &id1, "A").status.success());
-    let edited = std::fs::read_to_string(dir.join(REL)).unwrap().replace("s2.", "s2, reworded.");
+    let edited = std::fs::read_to_string(dir.join(REL))
+        .unwrap()
+        .replace("s2.", "s2, reworded.");
     std::fs::write(dir.join(REL), edited).unwrap();
     let out = approve(&dir);
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(ledger_rows(&dir, "assumes").len(), 1);
     let out = check_out(&dir);
-    assert!(!stdout(&out).contains("answers:"), "{}{}", stdout(&out), stderr(&out));
+    assert!(
+        !stdout(&out).contains("answers:"),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
 }
 
 // adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
@@ -309,13 +412,24 @@ fn a_set_first_approved_after_the_ask_stays_after_the_answer() {
 // options, so approve refuses a set on an entry naming a term.
 #[test]
 fn approve_refuses_a_set_on_an_entry_naming_a_term() {
-    let with_set = Q2.replace("depends: decision", "depends: 99999999-9999-9999-9999-999999999999=A");
+    let with_set = Q2.replace(
+        "depends: decision",
+        "depends: 99999999-9999-9999-9999-999999999999=A",
+    );
     let dir = setup(&file_of(&[Q1, &with_set]));
     let out = approve(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("depends on a term under an answer set"), "{}", err);
-    assert!(err.contains("agent removes the answer set from that entry"), "{}", err);
+    assert!(
+        err.contains("depends on a term under an answer set"),
+        "{}",
+        err
+    );
+    assert!(
+        err.contains("agent removes the answer set from that entry"),
+        "{}",
+        err
+    );
     assert!(ledger_rows(&dir, "approved").is_empty());
 }
 
@@ -328,20 +442,29 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
 fn a_changed_and_a_struck_question_each_await_approval() {
     let dir = setup(&file_of(&[Q1, Q2]));
     assert!(approve(&dir).status.success());
-    let edited = std::fs::read_to_string(dir.join(REL)).unwrap().replace("s2.", "s2, reworded.");
+    let edited = std::fs::read_to_string(dir.join(REL))
+        .unwrap()
+        .replace("s2.", "s2, reworded.");
     std::fs::write(dir.join(REL), edited).unwrap();
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(!stdout(&out).contains("new or changed"), "{}", stdout(&out));
     assert!(awaits_approval(&dir));
 
-    let id2 = adr::record::load(&dir.join(REL)).unwrap().sections[1].id.clone().unwrap();
+    let id2 = adr::record::load(&dir.join(REL)).unwrap().sections[1]
+        .id
+        .clone()
+        .unwrap();
     let kept = std::fs::read_to_string(dir.join(REL)).unwrap();
     let cut = kept.find("### 1.2 ").unwrap();
     std::fs::write(dir.join(REL), kept[..cut].trim_end().to_string() + "\n").unwrap();
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert!(!stdout(&out).contains(&format!("struck: {}", id2)), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains(&format!("struck: {}", id2)),
+        "{}",
+        stdout(&out)
+    );
     assert!(awaits_approval(&dir));
 }
 
@@ -356,12 +479,20 @@ fn a_set_letter_the_target_lacks_is_reported_by_check_and_refused_by_approve() {
     let dir = setup(&file_of(&[Q1, &bad]));
     let out = adr(&dir, &["check"], &[], "");
     let all = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(all.contains("under an answer set naming option D, which it does not have"), "{}", all);
+    assert!(
+        all.contains("under an answer set naming option D, which it does not have"),
+        "{}",
+        all
+    );
 
     let out = approve(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("naming option D, which it does not have"), "{}", err);
+    assert!(
+        err.contains("naming option D, which it does not have"),
+        "{}",
+        err
+    );
     assert!(ledger_rows(&dir, "approved").is_empty());
 
     let good = Q2.replace("depends: decision", "depends: 1.1 First question?=A|B");

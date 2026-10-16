@@ -23,11 +23,14 @@ pub(super) fn check_brief(
     role: crate::session::Role,
 ) -> (Vec<Finding>, Vec<Finding>) {
     let (mut failures, mut notes) = (Vec::new(), Vec::new());
-    let tracked = repo::git_paths(root, &["ls-files"]).is_some_and(|l| l.iter().any(|p| p == msg::BRIEF_ASSET));
+    let tracked = repo::git_paths(root, &["ls-files"])
+        .is_some_and(|l| l.iter().any(|p| p == msg::BRIEF_ASSET));
     if !tracked {
         return (failures, notes);
     }
-    let Some(text) = source.read(root, msg::BRIEF_ASSET) else { return (failures, notes) };
+    let Some(text) = source.read(root, msg::BRIEF_ASSET) else {
+        return (failures, notes);
+    };
     if !text.contains("<!-- from:") {
         return (failures, notes);
     }
@@ -41,7 +44,10 @@ pub(super) fn check_brief(
             }
         }
     }
-    let term_of: HashMap<&str, &Term> = terms.iter().filter_map(|t| t.id.as_deref().map(|id| (id, t))).collect();
+    let term_of: HashMap<&str, &Term> = terms
+        .iter()
+        .filter_map(|t| t.id.as_deref().map(|id| (id, t)))
+        .collect();
 
     let write = Move::new(MoveKind::BriefTieWrite).in_session(role).clause();
     let fix = Move::new(MoveKind::BriefTieFix).in_session(role).clause();
@@ -58,45 +64,75 @@ pub(super) fn check_brief(
         }
         let Some(at) = line.rfind(TIE_OPEN) else {
             if line.contains("<!-- from:") {
-                failures.push(Failure::said(Class::Brief, msg::brief_comment_malformed(n, "does not end the line", fix.clone())));
+                failures.push(Failure::said(
+                    Class::Brief,
+                    msg::brief_comment_malformed(n, "does not end the line", fix.clone()),
+                ));
             } else {
-                failures.push(Failure::said(Class::Brief, msg::brief_line_unmarked(n, write.clone())));
+                failures.push(Failure::said(
+                    Class::Brief,
+                    msg::brief_line_unmarked(n, write.clone()),
+                ));
             }
             continue;
         };
         let comment = &line[at + TIE_OPEN.len()..];
-        let Some(inner) = comment.strip_suffix("-->").filter(|c| !c.contains("-->") && !c.contains("<!--")) else {
-            failures.push(Failure::said(Class::Brief, msg::brief_comment_malformed(n, "does not end the line", fix.clone())));
+        let Some(inner) = comment
+            .strip_suffix("-->")
+            .filter(|c| !c.contains("-->") && !c.contains("<!--"))
+        else {
+            failures.push(Failure::said(
+                Class::Brief,
+                msg::brief_comment_malformed(n, "does not end the line", fix.clone()),
+            ));
             continue;
         };
         let tokens: Vec<&str> = inner.split(", ").map(str::trim).collect();
         if inner.trim().is_empty() {
-            failures.push(Failure::said(Class::Brief, msg::brief_comment_malformed(n, "is empty", fix.clone())));
+            failures.push(Failure::said(
+                Class::Brief,
+                msg::brief_comment_malformed(n, "is empty", fix.clone()),
+            ));
             continue;
         }
         for tok in tokens {
             if !record::is_uuid(tok) {
-                failures.push(Failure::said(Class::Brief, msg::brief_comment_unknown(n, tok, false, fix.clone())));
+                failures.push(Failure::said(
+                    Class::Brief,
+                    msg::brief_comment_unknown(n, tok, false, fix.clone()),
+                ));
             } else if let Some(t) = term_of.get(tok) {
                 if t.retired {
                     let mv = Move::new(MoveKind::BriefTieRetie { to: Vec::new() }).in_session(role);
-                    notes.push(Finding::said(Class::Brief, msg::brief_comment_stale(n, tok, Some(&t.name), true, mv.clause())));
+                    notes.push(Finding::said(
+                        Class::Brief,
+                        msg::brief_comment_stale(n, tok, Some(&t.name), true, mv.clause()),
+                    ));
                 }
             } else if headings.contains_key(tok) || led.latest_state(tok).is_some() {
                 if !crate::state::is_current(led, tok) {
-                    let heading = headings
-                        .get(tok)
-                        .copied()
-                        .or_else(|| led.latest_asked(tok).map(|r| r.detail.as_str()).filter(|d| !d.is_empty()));
+                    let heading = headings.get(tok).copied().or_else(|| {
+                        led.latest_asked(tok)
+                            .map(|r| r.detail.as_str())
+                            .filter(|d| !d.is_empty())
+                    });
                     let to: Vec<(String, String)> = crate::state::current_successors(led, tok)
                         .into_iter()
-                        .filter_map(|s| headings.get(s.as_str()).map(|h| (h.to_string(), s.clone())))
+                        .filter_map(|s| {
+                            headings.get(s.as_str()).map(|h| (h.to_string(), s.clone()))
+                        })
                         .collect();
                     let mv = Move::new(MoveKind::BriefTieRetie { to }).in_session(role);
-                    notes.push(Finding::said(Class::Brief, msg::brief_comment_stale(n, tok, heading, false, mv.clause())));
+                    notes.push(Finding::said(
+                        Class::Brief,
+                        msg::brief_comment_stale(n, tok, heading, false, mv.clause()),
+                    ));
                 }
             } else {
-                failures.push(Failure::said(Class::Brief, msg::brief_comment_unknown(n, tok, true, fix.clone())));
+                failures.push(Failure::said(
+                    Class::Brief,
+                    msg::brief_comment_unknown(n, tok, true, fix.clone()),
+                ));
             }
         }
     }

@@ -30,7 +30,9 @@ fn git_ok(dir: &Path, args: &[&str]) -> Output {
 }
 
 fn current_branch(dir: &Path) -> String {
-    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"])).trim().to_string()
+    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 fn checkout_new_branch(dir: &Path, name: &str) {
@@ -44,12 +46,21 @@ fn checkout(dir: &Path, name: &str) {
 fn commit_all(dir: &Path, msg: &str) {
     run_git(dir, &["add", "-A"]);
     let out = run_git(dir, &["commit", "-q", "-m", msg]);
-    assert!(out.status.success(), "commit '{}' failed: {}", msg, stderr(&out));
+    assert!(
+        out.status.success(),
+        "commit '{}' failed: {}",
+        msg,
+        stderr(&out)
+    );
 }
 
 fn finish_merge_commit(dir: &Path) {
     let out = run_git(dir, &["commit", "--no-edit"]);
-    assert!(out.status.success(), "merge commit failed: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "merge commit failed: {}",
+        stderr(&out)
+    );
 }
 
 /// A repo with `adr install`ed and its hook wiring immediately switched off
@@ -129,14 +140,24 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
 
     checkout_new_branch(&dir, first);
     let out = adr_answer(&dir, &id, "A");
-    assert!(out.status.success(), "{} answer failed: {}", first, stderr(&out));
+    assert!(
+        out.status.success(),
+        "{} answer failed: {}",
+        first,
+        stderr(&out)
+    );
     commit_all(&dir, &format!("{}: answer A", first));
 
     checkout(&dir, &base);
     sleep_a_beat();
     checkout_new_branch(&dir, second);
     let out = adr_answer(&dir, &id, "B");
-    assert!(out.status.success(), "{} answer failed: {}", second, stderr(&out));
+    assert!(
+        out.status.success(),
+        "{} answer failed: {}",
+        second,
+        stderr(&out)
+    );
     commit_all(&dir, &format!("{}: answer B", second));
 
     checkout(&dir, merge_target);
@@ -148,7 +169,11 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
         "check --staged should fail on the merged conflict: {}",
         stdout(&staged)
     );
-    assert!(stdout(&staged).contains(CONFLICT_TEXT), "{}", stdout(&staged));
+    assert!(
+        stdout(&staged).contains(CONFLICT_TEXT),
+        "{}",
+        stdout(&staged)
+    );
     assert!(stdout(&staged).contains(&id), "{}", stdout(&staged));
 
     finish_merge_commit(&dir);
@@ -158,11 +183,19 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
         "check should still fail after the merge commit: {}",
         stdout(&committed)
     );
-    assert!(stdout(&committed).contains(CONFLICT_TEXT), "{}", stdout(&committed));
+    assert!(
+        stdout(&committed).contains(CONFLICT_TEXT),
+        "{}",
+        stdout(&committed)
+    );
 
     // c6: `adr ask` re-asks the conflicted question -- open, no conflict.
     let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(reask.status.success(), "conflict re-ask failed: {}", stderr(&reask));
+    assert!(
+        reask.status.success(),
+        "conflict re-ask failed: {}",
+        stderr(&reask)
+    );
     assert!(
         stdout(&reask).starts_with("asked: \""),
         "expected a re-ask in the output: {}",
@@ -186,7 +219,11 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
     // An answer line put back by hand is backed by no standing answer,
     // whatever the rows of the two earlier answers say.
     let open_text = std::fs::read_to_string(&record).unwrap();
-    std::fs::write(&record, format!("{}\n**Answer:** A\n", open_text.trim_end())).unwrap();
+    std::fs::write(
+        &record,
+        format!("{}\n**Answer:** A\n", open_text.trim_end()),
+    )
+    .unwrap();
     let by_hand = adr(&dir, &["check"], &[], "");
     assert!(
         !by_hand.status.success() && stdout(&by_hand).contains("answer line without ledger row"),
@@ -195,7 +232,11 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
     );
     std::fs::write(&record, &open_text).unwrap();
     // The same holds for a refusal line put back by hand.
-    std::fs::write(&record, format!("{}\n**Answer:** refused\n", open_text.trim_end())).unwrap();
+    std::fs::write(
+        &record,
+        format!("{}\n**Answer:** refused\n", open_text.trim_end()),
+    )
+    .unwrap();
     let refused_by_hand = adr(&dir, &["check"], &[], "");
     assert!(
         !refused_by_hand.status.success()
@@ -207,7 +248,11 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
 
     // Full path: the owner answers again, A stands, check passes.
     let answer = adr_answer(&dir, &id, "A");
-    assert!(answer.status.success(), "final answer failed: {}", stderr(&answer));
+    assert!(
+        answer.status.success(),
+        "final answer failed: {}",
+        stderr(&answer)
+    );
     write_test_comment(&dir, &id);
 
     let final_check = adr(&dir, &["check"], &[], "");
@@ -252,7 +297,11 @@ fn c2_independently_asked_on_each_branch_conflicts() {
     assert_eq!(ids.len(), 1);
     let id = ids[0].clone();
     let ans_a = adr_answer(&dir, &id, "A");
-    assert!(ans_a.status.success(), "a: answer failed: {}", stderr(&ans_a));
+    assert!(
+        ans_a.status.success(),
+        "a: answer failed: {}",
+        stderr(&ans_a)
+    );
     commit_all(&dir, "a: ask and answer A");
 
     checkout(&dir, &base);
@@ -261,7 +310,11 @@ fn c2_independently_asked_on_each_branch_conflicts() {
     let ask_b = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(ask_b.status.success(), "b: ask failed: {}", stderr(&ask_b));
     let ans_b = adr_answer(&dir, &id, "B");
-    assert!(ans_b.status.success(), "b: answer failed: {}", stderr(&ans_b));
+    assert!(
+        ans_b.status.success(),
+        "b: answer failed: {}",
+        stderr(&ans_b)
+    );
     commit_all(&dir, "b: ask and answer B");
 
     checkout(&dir, "a");
@@ -269,7 +322,11 @@ fn c2_independently_asked_on_each_branch_conflicts() {
     finish_merge_commit(&dir);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "check should fail on the conflict: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "check should fail on the conflict: {}",
+        stdout(&out)
+    );
     assert!(stdout(&out).contains(CONFLICT_TEXT), "{}", stdout(&out));
     assert!(stdout(&out).contains(&id), "{}", stdout(&out));
 }
@@ -304,7 +361,11 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
         "check --staged should fail on the merged conflict: {}",
         stdout(&staged)
     );
-    assert!(stdout(&staged).contains(CONFLICT_TEXT), "{}", stdout(&staged));
+    assert!(
+        stdout(&staged).contains(CONFLICT_TEXT),
+        "{}",
+        stdout(&staged)
+    );
     assert!(stdout(&staged).contains(&id), "{}", stdout(&staged));
 
     finish_merge_commit(&dir);
@@ -314,12 +375,20 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
         "check should still fail after the merge commit: {}",
         stdout(&committed)
     );
-    assert!(stdout(&committed).contains(CONFLICT_TEXT), "{}", stdout(&committed));
+    assert!(
+        stdout(&committed).contains(CONFLICT_TEXT),
+        "{}",
+        stdout(&committed)
+    );
 
     // The re-ask clears the conflict (asked-again is now decided from the
     // rulings before the latest ask, an answer and a refusal both counted).
     let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(reask.status.success(), "conflict re-ask failed: {}", stderr(&reask));
+    assert!(
+        reask.status.success(),
+        "conflict re-ask failed: {}",
+        stderr(&reask)
+    );
     assert!(
         stdout(&reask).starts_with("asked: \""),
         "expected a re-ask in the output: {}",
@@ -342,7 +411,11 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
     // no standing ruling.
     // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
     let open_text = std::fs::read_to_string(&record).unwrap();
-    std::fs::write(&record, format!("{}\n**Answer:** refused\n", open_text.trim_end())).unwrap();
+    std::fs::write(
+        &record,
+        format!("{}\n**Answer:** refused\n", open_text.trim_end()),
+    )
+    .unwrap();
     let by_hand = adr(&dir, &["check"], &[], "");
     assert!(
         !by_hand.status.success() && stdout(&by_hand).contains("answer line without ledger row"),
@@ -353,11 +426,19 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
 
     if settle_with_refusal {
         let answer = adr_answer(&dir, &id, "refuse");
-        assert!(answer.status.success(), "final refuse failed: {}", stderr(&answer));
+        assert!(
+            answer.status.success(),
+            "final refuse failed: {}",
+            stderr(&answer)
+        );
         // A refused question is never "current", so it needs no test tie.
     } else {
         let answer = adr_answer(&dir, &id, "A");
-        assert!(answer.status.success(), "final answer failed: {}", stderr(&answer));
+        assert!(
+            answer.status.success(),
+            "final answer failed: {}",
+            stderr(&answer)
+        );
         write_test_comment(&dir, &id);
     }
 

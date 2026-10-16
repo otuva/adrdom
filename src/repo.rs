@@ -117,7 +117,11 @@ pub fn git(root: &Path, args: &[&str]) -> Option<String> {
 /// What git prints, as bytes: `None` on a failure to run it or a non-zero
 /// exit.
 fn git_bytes(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let out = Command::new("git").current_dir(root).args(args).output().ok()?;
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .output()
+        .ok()?;
     out.status.success().then_some(out.stdout)
 }
 
@@ -128,7 +132,8 @@ fn git_bytes(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
 fn index_files(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>> {
     use std::collections::{HashMap, HashSet};
     use std::sync::{Arc, Mutex, OnceLock};
-    static INDEX: OnceLock<Mutex<HashMap<std::path::PathBuf, Arc<HashSet<String>>>>> = OnceLock::new();
+    static INDEX: OnceLock<Mutex<HashMap<std::path::PathBuf, Arc<HashSet<String>>>>> =
+        OnceLock::new();
     let map = INDEX.get_or_init(Default::default);
     if let Some(found) = map.lock().unwrap_or_else(|e| e.into_inner()).get(root) {
         return found.clone();
@@ -138,7 +143,9 @@ fn index_files(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>>
         return Arc::new(HashSet::new());
     };
     let set: Arc<HashSet<String>> = Arc::new(paths.into_iter().collect());
-    map.lock().unwrap_or_else(|e| e.into_inner()).insert(root.to_path_buf(), set.clone());
+    map.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(root.to_path_buf(), set.clone());
     set
 }
 
@@ -147,7 +154,8 @@ fn index_files(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>>
 fn index_links(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>> {
     use std::collections::{HashMap, HashSet};
     use std::sync::{Arc, Mutex, OnceLock};
-    static LINKS: OnceLock<Mutex<HashMap<std::path::PathBuf, Arc<HashSet<String>>>>> = OnceLock::new();
+    static LINKS: OnceLock<Mutex<HashMap<std::path::PathBuf, Arc<HashSet<String>>>>> =
+        OnceLock::new();
     let map = LINKS.get_or_init(Default::default);
     if let Some(found) = map.lock().unwrap_or_else(|e| e.into_inner()).get(root) {
         return found.clone();
@@ -157,7 +165,9 @@ fn index_links(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>>
         return Arc::new(HashSet::new());
     };
     let set: Arc<HashSet<String>> = Arc::new(index_link_paths(&listing));
-    map.lock().unwrap_or_else(|e| e.into_inner()).insert(root.to_path_buf(), set.clone());
+    map.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(root.to_path_buf(), set.clone());
     set
 }
 
@@ -432,7 +442,8 @@ impl Source {
             // The staged bytes as text, refused as `WorkingTree` refuses
             // them when they are not UTF-8: never a lossy copy hashed or
             // judged as if it were the file.
-            Source::Index => git_bytes(root, &["show", &format!(":{}", rel)]).and_then(|b| String::from_utf8(b).ok()),
+            Source::Index => git_bytes(root, &["show", &format!(":{}", rel)])
+                .and_then(|b| String::from_utf8(b).ok()),
         }
     }
 
@@ -473,9 +484,10 @@ impl Source {
             }
             prefix.push_str(part);
             let link = match self {
-                Source::WorkingTree => {
-                    root.join(&prefix).symlink_metadata().is_ok_and(|m| m.file_type().is_symlink())
-                }
+                Source::WorkingTree => root
+                    .join(&prefix)
+                    .symlink_metadata()
+                    .is_ok_and(|m| m.file_type().is_symlink()),
                 Source::Index => index_links(root).contains(&prefix),
             };
             if link {

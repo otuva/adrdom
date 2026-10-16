@@ -95,7 +95,12 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
         .lines()
         .skip_while(|l| !l.starts_with(heading_prefix))
         .find_map(|l| l.strip_prefix("id: "))
-        .unwrap_or_else(|| panic!("no id found for heading {:?} in: {}", heading_prefix, content))
+        .unwrap_or_else(|| {
+            panic!(
+                "no id found for heading {:?} in: {}",
+                heading_prefix, content
+            )
+        })
         .to_string()
 }
 
@@ -109,7 +114,9 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
 // in file order.
 fn tiers_of(path: &std::path::Path) -> Vec<usize> {
     let rf = adr::record::load(path).unwrap();
-    (0..rf.sections.len()).map(|i| rf.tier_of(i).unwrap()).collect()
+    (0..rf.sections.len())
+        .map(|i| rf.tier_of(i).unwrap())
+        .collect()
 }
 
 #[test]
@@ -126,7 +133,12 @@ fn plan_lifecycle_end_to_end() {
 
     // approve gave every heading (all three) an id.
     let state_0_approved = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(extract_ids(&state_0_approved).len(), 3, "{}", state_0_approved);
+    assert_eq!(
+        extract_ids(&state_0_approved).len(),
+        3,
+        "{}",
+        state_0_approved
+    );
     let q1_id = id_for_heading(&state_0_approved, "### 1.1");
     let q2_id = id_for_heading(&state_0_approved, "### 1.2");
     let q3_id = id_for_heading(&state_0_approved, "### 1.3");
@@ -157,14 +169,21 @@ fn plan_lifecycle_end_to_end() {
     assert_eq!(id_for_heading(&state_3, "### 1.1"), q1_id);
     let ledger_after_ask1 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        printed.lines().any(|l| l == "asked: \"1.2 Does the paint match the widget's color?\"")
-            && printed.lines().any(|l| l == "asked: \"1.3 Does the paint need a second coat?\""),
+        printed
+            .lines()
+            .any(|l| l == "asked: \"1.2 Does the paint match the widget's color?\"")
+            && printed
+                .lines()
+                .any(|l| l == "asked: \"1.3 Does the paint need a second coat?\""),
         "one run asks every tier: {}",
         printed
     );
     assert_eq!(asked_row_count(&dir), 3, "{}", ledger_after_ask1);
     assert_eq!(
-        ledger_after_ask1.lines().filter(|l| l.contains("\tassumes\t")).count(),
+        ledger_after_ask1
+            .lines()
+            .filter(|l| l.contains("\tassumes\t"))
+            .count(),
         2,
         "{}",
         ledger_after_ask1
@@ -174,7 +193,11 @@ fn plan_lifecycle_end_to_end() {
     // ask with nothing to ask writes nothing and prints nothing; show names
     // the moves.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should have nothing to ask: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask should have nothing to ask: {}",
+        stderr(&out)
+    );
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
     assert_eq!(stdout(&out), "", "{}", stdout(&out));
     let shown = stdout(&adr(&dir, &["show"], &[], ""));
@@ -191,7 +214,6 @@ fn plan_lifecycle_end_to_end() {
     }
     assert_eq!(asked_row_count(&dir), 3, "nothing new is asked");
 
-
     // --- 5. changing the frozen set after ask is a check failure ----------
     let set_changed = state_3.replacen(
         &format!("depends: {}, {}=A", PAINT_ID, q1_id),
@@ -202,7 +224,11 @@ fn plan_lifecycle_end_to_end() {
     std::fs::write(&record, &set_changed).unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "check should have failed: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "check should have failed: {}",
+        stdout(&out)
+    );
     assert!(
         stdout(&out).contains(
             "answer set on 1.1 What color is the widget? changed after ask; agent restores the answer set from git"
@@ -222,21 +248,42 @@ fn plan_lifecycle_end_to_end() {
     // The answer removed Q2 (asked, its set lacks B); the file stays approved
     // and check passes.
     let state_5 = std::fs::read_to_string(&record).unwrap();
-    assert!(!state_5.contains("### 1.2 Does the paint match the widget's color?"), "{}", state_5);
+    assert!(
+        !state_5.contains("### 1.2 Does the paint match the widget's color?"),
+        "{}",
+        state_5
+    );
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(check_out.status.success(), "{}{}", stdout(&check_out), stderr(&check_out));
-    assert!(!stdout(&check_out).contains("no case left"), "{}", stdout(&check_out));
+    assert!(
+        check_out.status.success(),
+        "{}{}",
+        stdout(&check_out),
+        stderr(&check_out)
+    );
+    assert!(
+        !stdout(&check_out).contains("no case left"),
+        "{}",
+        stdout(&check_out)
+    );
 
     // Q3 was asked in the first run: nothing is left to ask.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should have nothing to ask: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask should have nothing to ask: {}",
+        stderr(&out)
+    );
     assert_eq!(stdout(&out), "", "{}", stdout(&out));
 
     let state_7 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(extract_ids(&state_7).len(), 2, "{}", state_7);
     assert_eq!(id_for_heading(&state_7, "### 1.1"), q1_id);
     assert_eq!(id_for_heading(&state_7, "### 1.3"), q3_id);
-    assert_eq!(asked_row_count(&dir), 3, "Q1, Q2 and Q3 were asked; Q2 was removed");
+    assert_eq!(
+        asked_row_count(&dir),
+        3,
+        "Q1, Q2 and Q3 were asked; Q2 was removed"
+    );
 
     // --- 6. owner refuses Q3 ------------------------------------------------
     let out = adr_answer(&dir, &q3_id, "refuse");
@@ -246,17 +293,25 @@ fn plan_lifecycle_end_to_end() {
     assert!(state_8.contains("**Answer:** refused"), "{}", state_8);
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        ledger.lines().any(|l| l.contains("\trefused\t") && l.contains(q3_id.as_str())),
+        ledger
+            .lines()
+            .any(|l| l.contains("\trefused\t") && l.contains(q3_id.as_str())),
         "{}",
         ledger
     );
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "check should pass: {}", stderr(&out).to_string() + &stdout(&out));
+    assert!(
+        out.status.success(),
+        "check should pass: {}",
+        stderr(&out).to_string() + &stdout(&out)
+    );
     // The file is not finished while Q2 is open: show still names a move.
     let shown = stdout(&adr(&dir, &["show"], &[], ""));
     assert!(
-        shown.lines().any(|l| l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet")),
+        shown.lines().any(|l| l.starts_with("agent ")
+            || l.starts_with("owner runs:")
+            || l.starts_with("not yet")),
         "a move is left while Q2 is open: {}",
         shown
     );
@@ -269,7 +324,9 @@ fn plan_lifecycle_end_to_end() {
     );
 
     // --- 7. plan change: drop Q3, add Q4 ------------------------------------
-    let cut = state_8.find("### 1.3 Does the paint need a second coat?").unwrap();
+    let cut = state_8
+        .find("### 1.3 Does the paint need a second coat?")
+        .unwrap();
     let mut state_9 = state_8[..cut].trim_end().to_string();
     state_9.push('\n');
     state_9.push_str(Q4_BLOCK);
@@ -279,7 +336,9 @@ fn plan_lifecycle_end_to_end() {
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
     let printed = stdout(&out);
     assert!(
-        printed.lines().any(|l| l == "withdrawn: \"1.3 Does the paint need a second coat?\""),
+        printed
+            .lines()
+            .any(|l| l == "withdrawn: \"1.3 Does the paint need a second coat?\""),
         "{}",
         printed
     );
@@ -291,9 +350,15 @@ fn plan_lifecycle_end_to_end() {
     assert_eq!(tiers_of(&record), vec![1, 2]);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should succeed on Q4: {}", stderr(&out));
     assert!(
-        stdout(&out).lines().any(|l| l == "asked: \"1.4 Does the paint have a glossy finish?\""),
+        out.status.success(),
+        "ask should succeed on Q4: {}",
+        stderr(&out)
+    );
+    assert!(
+        stdout(&out)
+            .lines()
+            .any(|l| l == "asked: \"1.4 Does the paint have a glossy finish?\""),
         "{}",
         stdout(&out)
     );

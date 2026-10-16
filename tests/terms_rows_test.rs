@@ -76,9 +76,18 @@ fn first_approve_writes_one_term_row_per_term_and_a_terms_row_per_approve() {
     assert!(rows_of(&dir, "terms").len() > terms_before);
     let rows = rows_of(&dir, "term");
     assert_eq!(rows.len(), 2, "{:?}", rows);
-    assert!(rows.iter().any(|r| r.contains("\t33333333-3333-3333-3333-333333333333\t") && r.contains("\tdecision\t")));
-    assert!(rows.iter().any(|r| r.contains("\t44444444-4444-4444-4444-444444444444\t") && r.contains("\tverdict\t")));
-    assert!(!stdout(&out).contains("\" changed; named by"), "{}", stdout(&out));
+    assert!(rows
+        .iter()
+        .any(|r| r.contains("\t33333333-3333-3333-3333-333333333333\t")
+            && r.contains("\tdecision\t")));
+    assert!(rows.iter().any(
+        |r| r.contains("\t44444444-4444-4444-4444-444444444444\t") && r.contains("\tverdict\t")
+    ));
+    assert!(
+        !stdout(&out).contains("\" changed; named by"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -93,8 +102,12 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
             H_ONE, BODY, H_TWO, BODY
         ),
     );
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "").status.success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let c = std::fs::read_to_string(&record).unwrap();
     let id = c
         .lines()
@@ -115,7 +128,11 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     let text = stdout(&out);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 3, "{}", text);
-    assert!(lines.contains(&"written: adrdom/state/terms-brief.md"), "{}", text);
+    assert!(
+        lines.contains(&"written: adrdom/state/terms-brief.md"),
+        "{}",
+        text
+    );
     assert!(lines.contains(&"approved: term \"decision\""), "{}", text);
     assert!(lines.contains(&"approved: adrdom/terms.md"), "{}", text);
     assert_eq!(rows_of(&dir, "term").len(), before + 1);
@@ -131,7 +148,10 @@ fn approve_with_nothing_changed_writes_no_term_row() {
     assert!(out.status.success(), "{}", stderr(&out));
     // No row written, so nothing printed.
     assert_eq!(stdout(&out), "", "{}", stdout(&out));
-    assert_eq!(std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap(), before);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap(),
+        before
+    );
 }
 
 #[test]
@@ -142,13 +162,22 @@ fn a_passing_retire_writes_a_term_row_with_the_new_hash() {
     std::fs::write(&terms, TERMS_VERDICT_RETIRED).unwrap();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).lines().any(|l| l == "approved: term \"verdict\""), "{}", stdout(&out));
+    assert!(
+        stdout(&out)
+            .lines()
+            .any(|l| l == "approved: term \"verdict\""),
+        "{}",
+        stdout(&out)
+    );
     let rows = rows_of(&dir, "term");
     assert_eq!(rows.len(), old.len() + 1);
     let last = rows
         .iter()
         .rfind(|r| r.contains("\t44444444-4444-4444-4444-444444444444\t"))
         .unwrap();
-    let prev = old.iter().rfind(|r| r.contains("\t44444444-4444-4444-4444-444444444444\t")).unwrap();
+    let prev = old
+        .iter()
+        .rfind(|r| r.contains("\t44444444-4444-4444-4444-444444444444\t"))
+        .unwrap();
     assert_ne!(last.split('\t').nth(3), prev.split('\t').nth(3));
 }

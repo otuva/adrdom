@@ -30,7 +30,12 @@ fn approve_takes_decision_and_detail_rows_writes_the_id_line_and_one_row() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    assert_eq!(stdout(&out).trim_end(), "approved: adrdom/blame/x.md", "{}", stdout(&out));
+    assert_eq!(
+        stdout(&out).trim_end(),
+        "approved: adrdom/blame/x.md",
+        "{}",
+        stdout(&out)
+    );
 
     // The one change to the file is the `id:` line, line 3; every other line
     // is byte for byte as it was written.
@@ -49,7 +54,10 @@ fn approve_takes_decision_and_detail_rows_writes_the_id_line_and_one_row() {
     let blame_line = ledger.lines().find(|l| l.contains("\tblame\t")).unwrap();
     let cols: Vec<&str> = blame_line.split('\t').collect();
     assert_eq!(cols.len(), 6, "{}", blame_line);
-    assert_eq!(cols[2], id, "the row carries the identifier on the file's id line");
+    assert_eq!(
+        cols[2], id,
+        "the row carries the identifier on the file's id line"
+    );
     assert_eq!(cols[3], blame::file_hash(&record::split_lines(&saved)));
     assert_eq!(cols[4], "adrdom/blame/x.md");
 }
@@ -78,7 +86,11 @@ fn approving_again_with_no_change_writes_no_new_row() {
     assert!(out2.status.success(), "{}", stderr(&out2));
     assert_eq!(stdout(&out2), "", "{}", stdout(&out2));
     assert_eq!(blame_row_count(&dir), 1, "no second row should be written");
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), first, "the file is written only when the id was minted");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        first,
+        "the file is written only when the id was minted"
+    );
 }
 
 // adr: e879fe72-ec07-48cd-9902-2b158aaae726
@@ -102,11 +114,21 @@ fn approving_an_edited_file_keeps_its_id_line_and_writes_a_second_row() {
     std::fs::write(&path, first.replacen("2-2\tdetail", "2-2\tdecision", 1)).unwrap();
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert_eq!(stdout(&out).trim_end(), "approved: adrdom/blame/x.md", "{}", stdout(&out));
+    assert_eq!(
+        stdout(&out).trim_end(),
+        "approved: adrdom/blame/x.md",
+        "{}",
+        stdout(&out)
+    );
 
     let saved = std::fs::read_to_string(&path).unwrap();
     assert!(saved.contains("2-2\tdecision"), "{}", saved);
-    assert_eq!(extract_ids(&saved), ids, "the identifier is assigned once: {}", saved);
+    assert_eq!(
+        extract_ids(&saved),
+        ids,
+        "the identifier is assigned once: {}",
+        saved
+    );
     assert_eq!(blame_row_count(&dir), 2);
 }
 
@@ -120,11 +142,7 @@ fn approving_an_edited_file_keeps_its_id_line_and_writes_a_second_row() {
 #[test]
 fn a_gap_in_coverage_refuses_and_writes_nothing() {
     let dir = setup();
-    let blob = write_origin(
-        &dir,
-        "docs/gap.md",
-        "one\ntwo\nthree\nfour\nfive\n",
-    );
+    let blob = write_origin(&dir, "docs/gap.md", "one\ntwo\nthree\nfour\nfive\n");
     // Line 3 is covered by no row.
     let rows = "1-2\tdetail\n4-5\tdetail\n";
     let path = write_blame_file(&dir, "adrdom/blame/gap.md", "docs/gap.md", &blob, rows);
@@ -132,9 +150,17 @@ fn a_gap_in_coverage_refuses_and_writes_nothing() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("covered by no row"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("covered by no row"),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(blame_row_count(&dir), 0);
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), before, "nothing written on refusal");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        before,
+        "nothing written on refusal"
+    );
 }
 
 // adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
@@ -145,7 +171,13 @@ fn a_range_beyond_the_origin_refuses() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/beyond.md", "one\ntwo\nthree\n");
     let rows = "1-10\tdetail\n";
-    let path = write_blame_file(&dir, "adrdom/blame/beyond.md", "docs/beyond.md", &blob, rows);
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/beyond.md",
+        "docs/beyond.md",
+        &blob,
+        rows,
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
@@ -162,7 +194,13 @@ fn overlapping_rows_that_fully_cover_the_origin_pass() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/overlap.md", "a\nb\nc\nd\n");
     let rows = "1-3\tdetail\n2-4\tdecision\n";
-    let path = write_blame_file(&dir, "adrdom/blame/overlap.md", "docs/overlap.md", &blob, rows);
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/overlap.md",
+        "docs/overlap.md",
+        &blob,
+        rows,
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -192,7 +230,13 @@ fn each_old_destination_is_a_shape_fault() {
         "something else entirely",
     ];
     for form in forms {
-        let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, &format!("1-1\t{}\n", form));
+        let path = write_blame_file(
+            &dir,
+            "adrdom/blame/x.md",
+            "docs/x.md",
+            &blob,
+            &format!("1-1\t{}\n", form),
+        );
         let before = std::fs::read_to_string(&path).unwrap();
 
         let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
@@ -201,9 +245,19 @@ fn each_old_destination_is_a_shape_fault() {
             "adrdom/blame/x.md: line 4: row value \"{}\" is neither decision nor detail; agent writes decision or detail after the tab",
             form
         );
-        assert!(refusal_lines(&out, "approve: ").contains(&line), "{:?}:\n{}", form, stderr(&out));
+        assert!(
+            refusal_lines(&out, "approve: ").contains(&line),
+            "{:?}:\n{}",
+            form,
+            stderr(&out)
+        );
         assert_eq!(blame_row_count(&dir), 0, "{:?}", form);
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), before, "{:?}: nothing written on refusal", form);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            before,
+            "{:?}: nothing written on refusal",
+            form
+        );
     }
 }
 
@@ -249,9 +303,17 @@ fn each_shape_fault_names_its_line_and_its_move() {
             .iter()
             .find(|l| l.starts_with(found))
             .unwrap_or_else(|| panic!("no line opens with {:?}:\n{}", found, stderr(&out)));
-        assert!(line.ends_with("; agent rewrites the blame file"), "{}", line);
+        assert!(
+            line.ends_with("; agent rewrites the blame file"),
+            "{}",
+            line
+        );
         assert_eq!(blame_row_count(&dir), 0);
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), content, "nothing written on refusal");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            content,
+            "nothing written on refusal"
+        );
     }
 }
 
@@ -276,14 +338,26 @@ fn a_hand_written_id_line_that_is_no_identifier_refuses() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
     let line = "adrdom/blame/x.md: line 3: id line holds \"not-an-identifier\", which is no identifier the tool assigns; agent removes the id line, line 3";
-    assert!(refusal_lines(&out, "approve: ").contains(&line.to_string()), "{}", stderr(&out));
+    assert!(
+        refusal_lines(&out, "approve: ").contains(&line.to_string()),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(blame_row_count(&dir), 0);
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), content, "nothing written on refusal");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        content,
+        "nothing written on refusal"
+    );
 
     // One judgement: check prints the same line, as a note on a draft.
     let checked = adr(&dir, &["check"], &[], "");
     assert!(checked.status.success(), "{}", stdout(&checked));
-    assert!(stdout(&checked).lines().any(|l| l == line), "{}", stdout(&checked));
+    assert!(
+        stdout(&checked).lines().any(|l| l == line),
+        "{}",
+        stdout(&checked)
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -301,10 +375,19 @@ fn an_id_line_below_the_header_refuses() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    let line = "adrdom/blame/x.md: line 5: id line below the header; agent removes the id line, line 5";
-    assert!(refusal_lines(&out, "approve: ").contains(&line.to_string()), "{}", stderr(&out));
+    let line =
+        "adrdom/blame/x.md: line 5: id line below the header; agent removes the id line, line 5";
+    assert!(
+        refusal_lines(&out, "approve: ").contains(&line.to_string()),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(blame_row_count(&dir), 0);
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), content, "nothing written on refusal");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        content,
+        "nothing written on refusal"
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -317,7 +400,13 @@ fn an_id_line_below_the_header_refuses() {
 fn a_copied_blame_file_is_refused_on_the_id_it_shares() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let original = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let original = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", original.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
@@ -329,17 +418,35 @@ fn a_copied_blame_file_is_refused_on_the_id_it_shares() {
     let out = adr_owner(&dir, &["approve", copy.to_str().unwrap()], "");
     assert!(!out.status.success());
     let line = "adrdom/blame/y.md: its id line holds the identifier of adrdom/blame/x.md; agent removes the id line from adrdom/blame/y.md";
-    assert!(refusal_lines(&out, "approve: ").contains(&line.to_string()), "{}", stderr(&out));
-    assert_eq!(blame_row_count(&dir), 1, "only the original has an approval");
-    assert_eq!(std::fs::read_to_string(&copy).unwrap(), before, "nothing written on refusal");
+    assert!(
+        refusal_lines(&out, "approve: ").contains(&line.to_string()),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(
+        blame_row_count(&dir),
+        1,
+        "only the original has an approval"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&copy).unwrap(),
+        before,
+        "nothing written on refusal"
+    );
 
     // The copy is a draft, so check prints its line as a note; no line of
     // check's is about the original.
     let checked = adr(&dir, &["check"], &[], "");
     assert!(checked.status.success(), "{}", stdout(&checked));
-    assert!(stdout(&checked).lines().any(|l| l == line), "{}", stdout(&checked));
     assert!(
-        !stdout(&checked).lines().any(|l| l.starts_with("adrdom/blame/x.md")),
+        stdout(&checked).lines().any(|l| l == line),
+        "{}",
+        stdout(&checked)
+    );
+    assert!(
+        !stdout(&checked)
+            .lines()
+            .any(|l| l.starts_with("adrdom/blame/x.md")),
         "{}",
         stdout(&checked)
     );
@@ -356,7 +463,13 @@ fn a_copied_blame_file_is_refused_on_the_id_it_shares() {
 fn an_edited_original_keeps_its_id_over_a_copy_never_approved() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let original = write_blame_file(&dir, "adrdom/blame/b.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let original = write_blame_file(
+        &dir,
+        "adrdom/blame/b.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", original.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     std::fs::copy(&original, dir.join("adrdom/blame/a.md")).unwrap();
@@ -367,14 +480,24 @@ fn an_edited_original_keeps_its_id_over_a_copy_never_approved() {
 
     let line = "adrdom/blame/a.md: its id line holds the identifier of adrdom/blame/b.md; agent removes the id line from adrdom/blame/a.md";
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(stdout(&checked).lines().any(|l| l == line), "{}", stdout(&checked));
     assert!(
-        !stdout(&checked).lines().any(|l| l.starts_with("adrdom/blame/b.md")),
+        stdout(&checked).lines().any(|l| l == line),
+        "{}",
+        stdout(&checked)
+    );
+    assert!(
+        !stdout(&checked)
+            .lines()
+            .any(|l| l.starts_with("adrdom/blame/b.md")),
         "{}",
         stdout(&checked)
     );
     let moves = file_moves(&dir, "adrdom/blame/a.md");
-    assert_eq!(moves, vec![line.to_string()], "no approve move for the copy");
+    assert_eq!(
+        moves,
+        vec![line.to_string()],
+        "no approve move for the copy"
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -388,7 +511,13 @@ fn an_edited_original_keeps_its_id_over_a_copy_never_approved() {
 fn a_changed_blame_file_that_lost_its_id_line_refuses() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let approved = std::fs::read_to_string(&path).unwrap();
@@ -405,13 +534,30 @@ fn a_changed_blame_file_that_lost_its_id_line_refuses() {
         id_line.strip_prefix("id: ").unwrap()
     );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve minted an identifier: {}", stdout(&out));
-    assert_eq!(refusal_lines(&out, "approve: "), vec![line.clone()], "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), written, "nothing written on refusal");
+    assert!(
+        !out.status.success(),
+        "approve minted an identifier: {}",
+        stdout(&out)
+    );
+    assert_eq!(
+        refusal_lines(&out, "approve: "),
+        vec![line.clone()],
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        written,
+        "nothing written on refusal"
+    );
     assert_eq!(blame_row_count(&dir), rows_before);
 
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(stdout(&checked).lines().any(|l| l == line), "{}", stdout(&checked));
+    assert!(
+        stdout(&checked).lines().any(|l| l == line),
+        "{}",
+        stdout(&checked)
+    );
     assert_eq!(file_moves(&dir, "adrdom/blame/x.md"), vec![line.clone()]);
 
     // The agent restores the line from git; the file is as approved again.
@@ -435,13 +581,28 @@ fn a_blame_file_approves_while_the_terms_file_awaits_approval() {
     text.push_str("\n## gizmo\ndefinition: A fixture term for tests.\naliases: \n");
     std::fs::write(&terms, &text).unwrap();
     let blob = write_origin(&dir, "docs/old.md", "one\ntwo\n");
-    let path = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-2\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/old.md",
+        "docs/old.md",
+        &blob,
+        "1-2\tdetail\n",
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert_eq!(stdout(&out).trim_end(), "approved: adrdom/blame/old.md", "{}", stdout(&out));
+    assert_eq!(
+        stdout(&out).trim_end(),
+        "approved: adrdom/blame/old.md",
+        "{}",
+        stdout(&out)
+    );
     assert_eq!(blame_row_count(&dir), 1);
-    assert_eq!(std::fs::read_to_string(&terms).unwrap(), text, "no identifier written for the new entry");
+    assert_eq!(
+        std::fs::read_to_string(&terms).unwrap(),
+        text,
+        "no identifier written for the new entry"
+    );
 }
 
 // The blob line is a content hash, not a promise that the object is in the
@@ -473,17 +634,35 @@ fn a_blob_that_differs_from_the_origin_at_its_path_refuses() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/drift.md", "one\ntwo\n");
     std::fs::write(dir.join("docs/drift.md"), "one\ntwo\nthree\n").unwrap();
-    let path = write_blame_file(&dir, "adrdom/blame/drift.md", "docs/drift.md", &blob, "1-2\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/drift.md",
+        "docs/drift.md",
+        &blob,
+        "1-2\tdetail\n",
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("blob no longer matches docs/drift.md"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("blob no longer matches docs/drift.md"),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(blame_row_count(&dir), 0);
     // One judgement: check names the same finding with the same move.
-    let refused = stderr(&out).lines().map(|l| l.trim_start_matches("approve: ").to_string()).collect::<Vec<_>>();
+    let refused = stderr(&out)
+        .lines()
+        .map(|l| l.trim_start_matches("approve: ").to_string())
+        .collect::<Vec<_>>();
     let checked = stdout(&adr(&dir, &["check"], &[], ""));
     for r in &refused {
-        assert!(checked.contains(r.as_str()), "check lacks {:?}:\n{}", r, checked);
+        assert!(
+            checked.contains(r.as_str()),
+            "check lacks {:?}:\n{}",
+            r,
+            checked
+        );
     }
 }
 
@@ -498,7 +677,13 @@ fn a_blob_that_differs_from_the_origin_at_its_path_refuses() {
 fn a_directory_origin_refuses_with_the_shape_wording() {
     let dir = setup();
     std::fs::create_dir_all(dir.join("docs")).unwrap();
-    let path = write_blame_file(&dir, "adrdom/blame/dir.md", "docs", "0".repeat(40).as_str(), "1-1\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/dir.md",
+        "docs",
+        "0".repeat(40).as_str(),
+        "1-1\tdetail\n",
+    );
     let before = std::fs::read_to_string(&path).unwrap();
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
@@ -523,13 +708,24 @@ fn a_symlink_origin_refuses() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/real.md", "one\ntwo\n");
     std::os::unix::fs::symlink("real.md", dir.join("docs/link.md")).unwrap();
-    let path = write_blame_file(&dir, "adrdom/blame/link.md", "docs/link.md", &blob, "1-2\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/link.md",
+        "docs/link.md",
+        &blob,
+        "1-2\tdetail\n",
+    );
     let before = std::fs::read_to_string(&path).unwrap();
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let line = "adrdom/blame/link.md: \"docs/link.md\" is not a regular file outside adrdom; agent rewrites the origin line";
-    assert_eq!(refusal_lines(&out, "approve: "), vec![line.to_string()], "{}", stderr(&out));
+    assert_eq!(
+        refusal_lines(&out, "approve: "),
+        vec![line.to_string()],
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(blame_row_count(&dir), 0);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
 }
@@ -570,7 +766,13 @@ fn an_origin_with_no_trailing_newline_on_its_last_line_covers_and_gaps_correctly
     let dir = setup();
     let blob = write_origin(&dir, "docs/notail.md", "one\ntwo\nthree");
     let rows = "1-1\tdetail\n2-2\tdetail\n3-3\tdetail\n";
-    let path = write_blame_file(&dir, "adrdom/blame/notail.md", "docs/notail.md", &blob, rows);
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/notail.md",
+        "docs/notail.md",
+        &blob,
+        rows,
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -587,7 +789,13 @@ fn an_origin_with_no_trailing_newline_leaves_its_last_line_a_gap_when_uncovered(
     let dir = setup();
     let blob = write_origin(&dir, "docs/notail2.md", "one\ntwo\nthree");
     let rows = "1-2\tdetail\n";
-    let path = write_blame_file(&dir, "adrdom/blame/notail2.md", "docs/notail2.md", &blob, rows);
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/notail2.md",
+        "docs/notail2.md",
+        &blob,
+        rows,
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
@@ -618,9 +826,17 @@ fn approve_lists_a_coverage_gap_and_a_bad_row_value_together() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("line(s) 3 of the origin are covered by no row"), "{}", err);
+    assert!(
+        err.contains("line(s) 3 of the origin are covered by no row"),
+        "{}",
+        err
+    );
     assert!(!err.contains("line(s) 1-2"), "{}", err);
-    assert!(err.contains("row value \"something else entirely\" is neither decision nor detail"), "{}", err);
+    assert!(
+        err.contains("row value \"something else entirely\" is neither decision nor detail"),
+        "{}",
+        err
+    );
     assert_eq!(blame_row_count(&dir), 0);
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
@@ -705,7 +921,11 @@ fn a_present_non_utf8_origin_refuses_and_writes_nothing() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("cannot be read as text"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("cannot be read as text"),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(blame_row_count(&dir), 0);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
 }
@@ -713,7 +933,13 @@ fn a_present_non_utf8_origin_refuses_and_writes_nothing() {
 /// Approve refuses `origin` as written with the not-a-regular-file finding
 /// and writes nothing.
 fn assert_origin_path_refused(dir: &std::path::Path, name: &str, origin: &str, blob: &str) {
-    let path = write_blame_file(dir, &format!("adrdom/blame/{}.md", name), origin, blob, "1-1\tdetail\n");
+    let path = write_blame_file(
+        dir,
+        &format!("adrdom/blame/{}.md", name),
+        origin,
+        blob,
+        "1-1\tdetail\n",
+    );
     let before = std::fs::read_to_string(&path).unwrap();
     let out = adr_owner(dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}: {}", origin, stdout(&out));
@@ -721,7 +947,12 @@ fn assert_origin_path_refused(dir: &std::path::Path, name: &str, origin: &str, b
         "adrdom/blame/{}.md: \"{}\" is not a regular file outside adrdom; agent rewrites the origin line",
         name, origin
     );
-    assert_eq!(refusal_lines(&out, "approve: "), vec![line], "{}", stderr(&out));
+    assert_eq!(
+        refusal_lines(&out, "approve: "),
+        vec![line],
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
 }
 
@@ -748,7 +979,13 @@ fn an_origin_path_that_leaves_the_repository_refuses() {
 fn an_origin_path_with_a_dotdot_inside_the_repository_approves() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    let path = write_blame_file(&dir, "adrdom/blame/in.md", "docs/../docs/x.md", &blob, "1-1\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/in.md",
+        "docs/../docs/x.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 }
@@ -778,17 +1015,28 @@ fn approve_keeps_the_line_endings_of_a_crlf_blame_file() {
     let blob = write_origin(&dir, "docs/x.md", "one\n");
     let path = dir.join("adrdom/blame/crlf.md");
     std::fs::create_dir_all(dir.join("adrdom/blame")).unwrap();
-    std::fs::write(&path, format!("origin: docs/x.md\r\nblob: {}\r\n\r\n1-1\tdetail\r\n", blob)).unwrap();
+    std::fs::write(
+        &path,
+        format!("origin: docs/x.md\r\nblob: {}\r\n\r\n1-1\tdetail\r\n", blob),
+    )
+    .unwrap();
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = std::fs::read_to_string(&path).unwrap();
     let id = id_line_of(&path);
     assert_eq!(
         text,
-        format!("origin: docs/x.md\r\nblob: {}\r\nid: {}\r\n\r\n1-1\tdetail\r\n", blob, id)
+        format!(
+            "origin: docs/x.md\r\nblob: {}\r\nid: {}\r\n\r\n1-1\tdetail\r\n",
+            blob, id
+        )
     );
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(!stdout(&checked).contains("adrdom/blame/crlf.md"), "{}", stdout(&checked));
+    assert!(
+        !stdout(&checked).contains("adrdom/blame/crlf.md"),
+        "{}",
+        stdout(&checked)
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -798,12 +1046,25 @@ fn approve_keeps_the_line_endings_of_a_crlf_blame_file() {
 fn approve_keeps_the_line_endings_of_an_lf_blame_file() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    let path = write_blame_file(&dir, "adrdom/blame/lf.md", "docs/x.md", &blob, "1-1\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/lf.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(!text.contains('\r'), "{:?}", text);
-    assert_eq!(text, format!("origin: docs/x.md\nblob: {}\nid: {}\n\n1-1\tdetail\n", blob, id_line_of(&path)));
+    assert_eq!(
+        text,
+        format!(
+            "origin: docs/x.md\nblob: {}\nid: {}\n\n1-1\tdetail\n",
+            blob,
+            id_line_of(&path)
+        )
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -818,10 +1079,19 @@ fn identifiers_differing_only_in_case_are_one_identifier() {
         write_record(
             &dir,
             &format!("adrdom/blame/{}.md", name),
-            &format!("origin: docs/x.md\nblob: {}\nid: {}\n\n1-1\tdetail\n", blob, id),
+            &format!(
+                "origin: docs/x.md\nblob: {}\nid: {}\n\n1-1\tdetail\n",
+                blob, id
+            ),
         )
     };
-    let u = write_blame_file(&dir, "adrdom/blame/u.md", "docs/x.md", &blob, "1-1\tdetail\n");
+    let u = write_blame_file(
+        &dir,
+        "adrdom/blame/u.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", u.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let lower = id_line_of(&u);
@@ -829,7 +1099,12 @@ fn identifiers_differing_only_in_case_are_one_identifier() {
     let out = adr_owner(&dir, &["approve", v.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let line = "adrdom/blame/v.md: its id line holds the identifier of adrdom/blame/u.md; agent removes the id line from adrdom/blame/v.md";
-    assert_eq!(refusal_lines(&out, "approve: "), vec![line.to_string()], "{}", stderr(&out));
+    assert_eq!(
+        refusal_lines(&out, "approve: "),
+        vec![line.to_string()],
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
@@ -839,15 +1114,39 @@ fn identifiers_differing_only_in_case_are_one_identifier() {
 fn a_coverage_gap_move_says_line_for_one_line_and_lines_for_more() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/gap.md", "one\ntwo\nthree\nfour\nfive\nsix\n");
-    let path = write_blame_file(&dir, "adrdom/blame/gap.md", "docs/gap.md", &blob, "1-2\tdetail\n4-4\tdetail\n6-6\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/gap.md",
+        "docs/gap.md",
+        &blob,
+        "1-2\tdetail\n4-4\tdetail\n6-6\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("agent writes a row for line 3"), "{}", stderr(&out));
-    assert!(stderr(&out).contains("agent writes a row for line 5"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("agent writes a row for line 3"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("agent writes a row for line 5"),
+        "{}",
+        stderr(&out)
+    );
     let blob = write_origin(&dir, "docs/gap2.md", "one\ntwo\nthree\nfour\nfive\n");
-    let path = write_blame_file(&dir, "adrdom/blame/gap2.md", "docs/gap2.md", &blob, "1-1\tdetail\n5-5\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/gap2.md",
+        "docs/gap2.md",
+        &blob,
+        "1-1\tdetail\n5-5\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
-    assert!(stderr(&out).contains("agent writes a row for lines 2-4"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("agent writes a row for lines 2-4"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -859,7 +1158,13 @@ fn a_coverage_gap_move_says_line_for_one_line_and_lines_for_more() {
 fn the_blame_row_carries_the_identifier_of_the_id_line() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let id = id_line_of(&path);
@@ -873,7 +1178,9 @@ fn the_blame_row_carries_the_identifier_of_the_id_line() {
     };
     assert_eq!(rows_of(), vec![id.clone()]);
 
-    let text = std::fs::read_to_string(&path).unwrap().replace("2-2\tdetail", "2-2\tdecision");
+    let text = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("2-2\tdetail", "2-2\tdecision");
     std::fs::write(&path, text).unwrap();
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -898,12 +1205,25 @@ fn a_hand_written_id_on_a_never_approved_file_is_a_finding_and_approve_refuses()
     let line = "adrdom/blame/x.md: its id line holds an identifier the tool did not write; agent removes the id line";
 
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(checked.status.success(), "a note on a draft: {}", stdout(&checked));
-    assert!(stdout(&checked).lines().any(|l| l == line), "{}", stdout(&checked));
+    assert!(
+        checked.status.success(),
+        "a note on a draft: {}",
+        stdout(&checked)
+    );
+    assert!(
+        stdout(&checked).lines().any(|l| l == line),
+        "{}",
+        stdout(&checked)
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert_eq!(refusal_lines(&out, "approve: "), vec![line.to_string()], "{}", stderr(&out));
+    assert_eq!(
+        refusal_lines(&out, "approve: "),
+        vec![line.to_string()],
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     assert_eq!(blame_row_count(&dir), 0);
 }
@@ -917,14 +1237,22 @@ fn a_hand_written_id_on_a_never_approved_file_is_a_finding_and_approve_refuses()
 fn a_blame_row_with_no_identifier_counts_as_approved_with_none_assigned() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let old_id = id_line_of(&path);
 
     // The ledger as an older build left it: `-` where the identifier stands.
     let ledger = dir.join("adrdom/state/ledger.tsv");
-    let text = std::fs::read_to_string(&ledger).unwrap().replace(&old_id, "-");
+    let text = std::fs::read_to_string(&ledger)
+        .unwrap()
+        .replace(&old_id, "-");
     std::fs::write(&ledger, text).unwrap();
     // The file as that build left it: no id line, then an edit.
     let approved = std::fs::read_to_string(&path).unwrap();
@@ -934,14 +1262,22 @@ fn a_blame_row_with_no_identifier_counts_as_approved_with_none_assigned() {
     std::fs::write(&path, edited).unwrap();
 
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(!stdout(&checked).contains("id line"), "{}", stdout(&checked));
+    assert!(
+        !stdout(&checked).contains("id line"),
+        "{}",
+        stdout(&checked)
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let new_id = id_line_of(&path);
     assert!(record::is_uuid(&new_id), "{}", new_id);
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(!stdout(&checked).contains("blame/x.md"), "{}", stdout(&checked));
+    assert!(
+        !stdout(&checked).contains("blame/x.md"),
+        "{}",
+        stdout(&checked)
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -952,7 +1288,13 @@ fn a_blame_row_with_no_identifier_counts_as_approved_with_none_assigned() {
 fn an_approved_file_with_a_faulty_id_line_is_told_to_write_back_its_id() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let approved = std::fs::read_to_string(&path).unwrap();
@@ -963,7 +1305,9 @@ fn an_approved_file_with_a_faulty_id_line_is_told_to_write_back_its_id() {
     assert!(!out.status.success());
     let expect = format!("agent writes back the id line \"{}\"", id_line);
     assert!(
-        refusal_lines(&out, "approve: ").iter().any(|l| l.contains("which is no identifier") && l.ends_with(&expect)),
+        refusal_lines(&out, "approve: ")
+            .iter()
+            .any(|l| l.contains("which is no identifier") && l.ends_with(&expect)),
         "{}",
         stderr(&out)
     );
@@ -977,11 +1321,27 @@ fn an_approved_file_with_a_faulty_id_line_is_told_to_write_back_its_id() {
 fn a_row_partly_beyond_the_origin_leaves_no_coverage_gap() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "1\n2\n3\n4\n5\n");
-    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-10\tdecision\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-10\tdecision\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
     let lines = refusal_lines(&out, "approve: ");
-    assert!(lines.iter().any(|l| l.contains("beyond")), "{}", stderr(&out));
-    assert!(!lines.iter().any(|l| l.contains("gap") || l.contains("not covered") || l.contains("uncovered")), "{}", stderr(&out));
+    assert!(
+        lines.iter().any(|l| l.contains("beyond")),
+        "{}",
+        stderr(&out)
+    );
+    assert!(
+        !lines
+            .iter()
+            .any(|l| l.contains("gap") || l.contains("not covered") || l.contains("uncovered")),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(lines.len(), 1, "{}", stderr(&out));
 }

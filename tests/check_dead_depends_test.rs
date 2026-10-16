@@ -32,7 +32,9 @@ fn add_answered(dir: &Path, rel: &str, title: &str, sec: &str) -> String {
     content.push_str(sec);
     write_record(dir, rel, &content);
     approve_record(dir, rel);
-    assert!(adr(dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
     let id = ids.last().unwrap().clone();
     let out = adr_answer(dir, &id, "A");
@@ -69,7 +71,13 @@ fn alpha_and_beta() -> (std::path::PathBuf, String) {
     let _ = beta;
     for rel in ["adrdom/decisions/a.md", "adrdom/decisions/b.md"] {
         let out = adr_owner(&dir, &["approve", dir.join(rel).to_str().unwrap()], "");
-        assert!(out.status.success(), "approve {}: {}{}", rel, stdout(&out), stderr(&out));
+        assert!(
+            out.status.success(),
+            "approve {}: {}{}",
+            rel,
+            stdout(&out),
+            stderr(&out)
+        );
     }
     (dir, alpha)
 }
@@ -91,9 +99,21 @@ fn check_ignores_the_depends_line_of_a_superseded_section() {
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!text.contains("which names no term and no question of this file"), "{}", text);
-    assert!(!text.contains("tiers: adrdom/decisions/b.md: \n"), "{}", text);
-    assert!(!text.contains("tiers: adrdom/decisions/b.md:\n"), "{}", text);
+    assert!(
+        !text.contains("which names no term and no question of this file"),
+        "{}",
+        text
+    );
+    assert!(
+        !text.contains("tiers: adrdom/decisions/b.md: \n"),
+        "{}",
+        text
+    );
+    assert!(
+        !text.contains("tiers: adrdom/decisions/b.md:\n"),
+        "{}",
+        text
+    );
     for line in text.lines() {
         assert!(
             !line.starts_with("plan:"),
@@ -134,7 +154,8 @@ fn check_still_refuses_a_live_section_standing_on_a_superseded_decision() {
 fn assert_no_dep_line(text: &str, alpha: &str) {
     for line in text.lines() {
         assert!(
-            !(line.contains(alpha) && line.contains("depends")) && !line.contains("decision of another file"),
+            !(line.contains(alpha) && line.contains("depends"))
+                && !line.contains("decision of another file"),
             "old entry reported: {}\n{}",
             line,
             text

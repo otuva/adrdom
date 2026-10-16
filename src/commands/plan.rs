@@ -28,7 +28,6 @@
 //! 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop with no reader
 //! on the machine?", bd94a89f-7142-4dab-b757-6482a718a0a0 A); `adr read`
 //! loads them too.
-use crate::rules::Command;
 use crate::index;
 use crate::ledger;
 use crate::msg;
@@ -37,6 +36,7 @@ use crate::plan::{self, Planning, Step};
 use crate::reader;
 use crate::record::{self, RecordFile};
 use crate::repo;
+use crate::rules::Command;
 use crate::state;
 use std::path::{Path, PathBuf};
 
@@ -48,7 +48,8 @@ pub fn run(file: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[out::refusal(Command::Plan,
+            out::eprint(&[out::refusal(
+                Command::Plan,
                 &msg::not_a_repo("plan", &[&file.display().to_string()], msg::Actor::Agent),
             )]);
             return 1;
@@ -62,14 +63,18 @@ pub fn run(file: PathBuf) -> i32 {
         Some(rel) if crate::rules::is_topic_file_path(&rel) => rel,
         rel => {
             let rel = rel.unwrap_or_else(|| file.display().to_string());
-            out::eprint(&[out::refusal(Command::Plan, &msg::plan_not_a_topic_file(&rel))]);
+            out::eprint(&[out::refusal(
+                Command::Plan,
+                &msg::plan_not_a_topic_file(&rel),
+            )]);
             return 1;
         }
     };
     let mut rf = match record::load(&root.join(&rel)) {
         Ok(rf) => rf,
         Err(e) => {
-            out::eprint(&[out::refusal(Command::Plan,
+            out::eprint(&[out::refusal(
+                Command::Plan,
                 &msg::read_failed(&rel, &e, msg::topic_file_unread("plan", &rel, &e)),
             )]);
             return 1;
@@ -78,8 +83,13 @@ pub fn run(file: PathBuf) -> i32 {
     // Planning a topic file that loads makes the session a planner
     // (6c406624), whatever the run finds after.
     if let Err(e) = crate::session::mark_planner(&root) {
-        out::eprint(&[out::refusal(Command::Plan,
-            &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner(msg::Act::Rewrites(repo::ROLES_PATH.to_string()))),
+        out::eprint(&[out::refusal(
+            Command::Plan,
+            &msg::write_failed(
+                repo::ROLES_PATH,
+                &e,
+                msg::Next::owner(msg::Act::Rewrites(repo::ROLES_PATH.to_string())),
+            ),
         )]);
         return 1;
     }
@@ -101,7 +111,10 @@ pub fn run(file: PathBuf) -> i32 {
 /// the planning keys its rows by heading text.
 fn shape_refusals(rf: &RecordFile) -> Vec<crate::rules::Finding> {
     let mut out = crate::rules::parse_findings(&rf.rel, rf);
-    out.extend(crate::rules::duplicate_heading_refusals(&rf.rel, &rf.sections));
+    out.extend(crate::rules::duplicate_heading_refusals(
+        &rf.rel,
+        &rf.sections,
+    ));
     out
 }
 
@@ -134,8 +147,15 @@ fn did(pl: &Planning, idxs: &[usize], step: Step, out: &mut Vec<Line>) {
             Step::Heading => "heading",
             Step::Body => "heading with its body",
         };
-        out.push(Line::Record { depth: 0, text: msg::plan_question_read(&q.heading, what) });
-        out.extend(plan::neighbour_lines_at(q, step).into_iter().map(|text| Line::Record { depth: 1, text }));
+        out.push(Line::Record {
+            depth: 0,
+            text: msg::plan_question_read(&q.heading, what),
+        });
+        out.extend(
+            plan::neighbour_lines_at(q, step)
+                .into_iter()
+                .map(|text| Line::Record { depth: 1, text }),
+        );
     }
 }
 
@@ -159,12 +179,20 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     let mut pl = planning(root, rf, &e, &led);
     let todo: Vec<usize> = pl.missing_heading().iter().map(|q| q.idx).collect();
     if !todo.is_empty() {
-        let queries: Vec<String> = todo.iter().map(|&i| plan::heading_text(&rf.sections[i])).collect();
+        let queries: Vec<String> = todo
+            .iter()
+            .map(|&i| plan::heading_text(&rf.sections[i]))
+            .collect();
         let near = index::nearest(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         let entries: Vec<(String, Vec<String>)> = todo
             .iter()
             .zip(&near)
-            .map(|(&i, n)| (record::heading_hash(&rf.sections[i]), n.iter().map(|x| x.id.clone()).collect()))
+            .map(|(&i, n)| {
+                (
+                    record::heading_hash(&rf.sections[i]),
+                    n.iter().map(|x| x.id.clone()).collect(),
+                )
+            })
             .collect();
         crate::neighbours::record(root, &entries, &live).map_err(stop)?;
         pl = planning(root, rf, &e, &led);
@@ -174,19 +202,38 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     // Once every heading's neighbours are on a line and every heading has
     // its body, the neighbours of each question with its body.
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
-    if pl.lines_missing(Step::Heading).is_empty() && pl.without_body().is_empty() && !todo.is_empty() {
+    if pl.lines_missing(Step::Heading).is_empty()
+        && pl.without_body().is_empty()
+        && !todo.is_empty()
+    {
         // The other questions not yet asked are ranked by their own text. One
         // call embeds the texts of the questions to read and of every
         // planned question.
-        let planned: Vec<usize> = pl.questions.iter().filter(|q| q.has_body).map(|q| q.idx).collect();
-        let mut queries: Vec<String> = todo.iter().map(|&i| record::body_text(rf, &rf.sections[i])).collect();
-        queries.extend(planned.iter().map(|&i| record::body_text(rf, &rf.sections[i])));
-        let (near, qv) = index::nearest_with_vectors(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
+        let planned: Vec<usize> = pl
+            .questions
+            .iter()
+            .filter(|q| q.has_body)
+            .map(|q| q.idx)
+            .collect();
+        let mut queries: Vec<String> = todo
+            .iter()
+            .map(|&i| record::body_text(rf, &rf.sections[i]))
+            .collect();
+        queries.extend(
+            planned
+                .iter()
+                .map(|&i| record::body_text(rf, &rf.sections[i])),
+        );
+        let (near, qv) =
+            index::nearest_with_vectors(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         let vecs = &qv[todo.len()..];
         for (&i, n) in todo.iter().zip(&near) {
             let own: Vec<usize> = match planned.iter().position(|&p| p == i) {
                 Some(me) if planned.len() > 1 => {
-                    index::rank(&vecs[me], vecs, |k| k != me, index::NEIGHBOURS).into_iter().map(|(k, _)| planned[k]).collect()
+                    index::rank(&vecs[me], vecs, |k| k != me, index::NEIGHBOURS)
+                        .into_iter()
+                        .map(|(k, _)| planned[k])
+                        .collect()
                 }
                 _ => Vec::new(),
             };

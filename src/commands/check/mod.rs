@@ -16,14 +16,14 @@ mod tests;
 pub(crate) use banned::collect_targets;
 pub use tests::test_index;
 
-use crate::rules::{Class, Command};
 use crate::depends;
 use crate::ledger::Ledger;
-use crate::rules;
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
 use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
+use crate::rules;
+use crate::rules::{Class, Command};
 use crate::state;
 use crate::terms as terms_mod;
 use crate::view;
@@ -57,8 +57,18 @@ pub fn collect_with_tests(root: &Path, tests: &HashMap<String, Vec<String>>) -> 
 /// page computed it for the cards, and `check` files the same findings by
 /// rule, less the directory ones it reads off the directory itself, so a
 /// request judges each file once.
-pub(crate) fn collect_from(held: &crate::commands::show::Records, judged: &[&[rules::Finding]]) -> view::CheckReport {
-    build(&held.root, false, None, None, Some(&held.tests), Some((held, judged)))
+pub(crate) fn collect_from(
+    held: &crate::commands::show::Records,
+    judged: &[&[rules::Finding]],
+) -> view::CheckReport {
+    build(
+        &held.root,
+        false,
+        None,
+        None,
+        Some(&held.tests),
+        Some((held, judged)),
+    )
 }
 
 /// Everything `check` reports, computed against `root`. `run` passes
@@ -125,7 +135,7 @@ fn build(
     // "What does a reference in a topic file carry?" left open): built once here too, shared the
     // same way `terms_list`/`phrase_lookup` already are. Built from `records`, already loaded
     // above, rather than re-reading every topic file a second time off disk.
-    let cross_file_headings = depends::cross_file_heading_index(&records, &led);
+    let cross_file_headings = depends::cross_file_heading_index(&records, led);
 
     // Plan/context approval state must be read off each file exactly as it
     // sits on disk: captured here, keyed by `rel` and threaded down to
@@ -133,7 +143,12 @@ fn build(
     // `ids::check_ids`'s stale-plan filter).
     let raw_hashes: HashMap<String, (Vec<String>, String)> = records
         .iter()
-        .map(|rf| (rf.rel.clone(), (record::question_hashes(rf), record::context_hash(rf))))
+        .map(|rf| {
+            (
+                rf.rel.clone(),
+                (record::question_hashes(rf), record::context_hash(rf)),
+            )
+        })
         .collect();
     // The files awaiting approval: a finding on one of them is a note (per
     // "What does check do with a fault on a file awaiting approval?").
@@ -141,23 +156,23 @@ fn build(
     // same scope `approve` reads for the planning rules.
     let awaiting: Vec<String> = records
         .iter()
-        .filter(|rf| rules::planning_rules_apply(&led, rf, &rf.rel))
+        .filter(|rf| rules::planning_rules_apply(led, rf, &rf.rel))
         .map(|rf| rf.rel.clone())
         .collect();
 
-    let names = crate::view::heading_names(&records, &led);
+    let names = crate::view::heading_names(&records, led);
     // Which plans are approved comes from `raw_hashes`, computed once and shared with
     // `check_terms`. The replaced-id set is built once and extended per file with that file's own
     // `supersedes:` lines.
     let approved_rels: std::collections::HashSet<String> = raw_hashes
         .iter()
-        .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(&led, rel, plan_h))
+        .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(led, rel, plan_h))
         .map(|(rel, _)| rel.clone())
         .collect();
-    let replaced_base = depends::replaced_base(&records, &approved_rels, &cross_file_headings, &led);
+    let replaced_base = depends::replaced_base(&records, &approved_rels, &cross_file_headings, led);
     let replaced_per_record: Vec<std::collections::HashSet<String>> = records
         .iter()
-        .map(|rf| depends::replaced_ids(&replaced_base, rf, &cross_file_headings, &led))
+        .map(|rf| depends::replaced_ids(&replaced_base, rf, &cross_file_headings, led))
         .collect();
     // Every finding each topic file earns on its own: the one judgement
     // `approve` refuses on (`rules::judge_topic_file`, per "Does a command
@@ -168,7 +183,7 @@ fn build(
     // Built only when a file awaits approval: the planning rules judge no
     // other file (`rules::planning_rules_apply`).
     let built = (held.is_none() && !awaiting.is_empty())
-        .then(|| crate::plan::Shared::new_via(root, &records, &terms_list, &led, &source));
+        .then(|| crate::plan::Shared::new_via(root, &records, &terms_list, led, &source));
     let shared = match held {
         Some((h, _)) if !awaiting.is_empty() => Some(&h.index().planning),
         _ => built.as_ref(),
@@ -177,55 +192,73 @@ fn build(
     // lines are judged against it, and `check_blame` judges the files.
     let read_blame;
     let (blame_index, blame_unreadable): (&crate::blame::Index, Vec<String>) = match held {
-        Some((h, _)) => (&h.index().blame, h.unreadable_blame_files.iter().map(|(rel, _)| rel.clone()).collect()),
+        Some((h, _)) => (
+            &h.index().blame,
+            h.unreadable_blame_files
+                .iter()
+                .map(|(rel, _)| rel.clone())
+                .collect(),
+        ),
         None => {
-            read_blame = crate::blame::Index::read(root, &source, &led);
+            read_blame = crate::blame::Index::read(root, &source, led);
             (&read_blame.0, read_blame.1)
         }
     };
     let per_record_findings: Vec<Vec<rules::Finding>> = match held {
         Some((_, judged)) if judged.len() == records.len() => judged
             .iter()
-            .map(|fs| fs.iter().filter(|f| !matches!(f.subject, rules::Subject::Directory(_))).cloned().collect())
+            .map(|fs| {
+                fs.iter()
+                    .filter(|f| !matches!(f.subject, rules::Subject::Directory(_)))
+                    .cloned()
+                    .collect()
+            })
             .collect(),
         _ => records
-        .iter()
-        .zip(&replaced_per_record)
-        .map(|(rf, replaced)| {
-            let judge = rules::TopicFileJudge {
-                root,
-                rel: &rf.rel,
-                rf,
-                all: &records,
-                terms_list: &terms_list,
-                phrase_lookup: &phrase_lookup,
-                cross_file_headings: &cross_file_headings,
-                names: &names,
-                replaced,
-                blame: blame_index,
-                led: &led,
-                planning: awaiting.contains(&rf.rel),
-                shared,
-                directory: false,
-            };
-            topic_file_findings(&judge)
-        })
-        .collect(),
+            .iter()
+            .zip(&replaced_per_record)
+            .map(|(rf, replaced)| {
+                let judge = rules::TopicFileJudge {
+                    root,
+                    rel: &rf.rel,
+                    rf,
+                    all: &records,
+                    terms_list: &terms_list,
+                    phrase_lookup: &phrase_lookup,
+                    cross_file_headings: &cross_file_headings,
+                    names: &names,
+                    replaced,
+                    blame: blame_index,
+                    led,
+                    planning: awaiting.contains(&rf.rel),
+                    shared,
+                    directory: false,
+                };
+                topic_file_findings(&judge)
+            })
+            .collect(),
     };
-    let present_ids: std::collections::HashSet<String> =
-        rules::held_ids(&records).into_iter().map(str::to_string).collect();
+    let present_ids: std::collections::HashSet<String> = rules::held_ids(&records)
+        .into_iter()
+        .map(str::to_string)
+        .collect();
     let removed_files: Vec<(String, Vec<crate::moves::RemovalHold>)> =
-        rules::removal_awaiting(&led, &|rel| source.exists(root, rel))
+        rules::removal_awaiting(led, &|rel| source.exists(root, rel))
             .into_iter()
             .map(|rel| {
-                let holds = rules::removal_holds(root, &rel, &led, &present_ids).holds;
+                let holds = rules::removal_holds(root, &rel, led, &present_ids).holds;
                 (rel, holds)
             })
             .collect();
     // A removed file differs from its approval: what keeps `approve` from
     // taking its removal is a note, with the move that clears it.
     for (rel, _) in &removed_files {
-        notes.extend(rules::judge_removed_topic_file(root, rel, &led, &present_ids));
+        notes.extend(rules::judge_removed_topic_file(
+            root,
+            rel,
+            led,
+            &present_ids,
+        ));
     }
     // An answered id of a removed file is named by the ids category with the
     // file's removal move, so the missing-answered finding leaves it out.
@@ -240,36 +273,81 @@ fn build(
         .map(|r| r.id.clone())
         .collect();
     // The rules on the topic files as a whole (`rules::judge_records`).
-    let missing_answered = rules::judge_records_except(&records, &led, &in_removed_file);
+    let missing_answered = rules::judge_records_except(&records, led, &in_removed_file);
     let mut failures: Vec<rules::Finding> = Vec::new();
     let mut stops: Vec<String> = unreadable_stops;
-    let (parse_failures, parse_notes) = parse::check_rule(Class::Parse, &records, &per_record_findings, &awaiting, &led);
+    let (parse_failures, parse_notes) =
+        parse::check_rule(Class::Parse, &records, &per_record_findings, &awaiting, led);
     push_failures(&mut failures, parse_failures);
     push_failures(&mut notes, parse_notes);
-    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes, &removed_files));
-    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &mut stops));
+    push_failures(
+        &mut failures,
+        ids::check_ids(
+            &records,
+            led,
+            &missing_answered,
+            &raw_hashes,
+            &removed_files,
+        ),
+    );
+    push_failures(
+        &mut failures,
+        ledger::check_ledger(led, &records, root, &ledger_content, since, &mut stops),
+    );
     push_failures(&mut failures, reader::check_reader(root, &source, since));
-    push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
-    push_failures(&mut failures, answers::check_answers(root, &records, &terms_list, &led, &source));
-    push_failures(&mut failures, banned::check_banned(root, staged, message, &source, &mut stops));
+    push_failures(
+        &mut failures,
+        banned::check_banned_ledger(led, root, &source),
+    );
+    push_failures(
+        &mut failures,
+        answers::check_answers(root, &records, &terms_list, led, &source),
+    );
+    push_failures(
+        &mut failures,
+        banned::check_banned(root, staged, message, &source, &mut stops),
+    );
     push_failures(&mut failures, install::check_install(root, &source));
-    let (plan_failures, plan_notes) =
-        plan::check_plan(root, &source, &records, &led, &per_record_findings, &awaiting);
+    let (plan_failures, plan_notes) = plan::check_plan(
+        root,
+        &source,
+        &records,
+        led,
+        &per_record_findings,
+        &awaiting,
+    );
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
-    let (terms_failures, terms_waits) = terms::check_terms(root, &records, &led, &source, &approved_rels);
+    let (terms_failures, terms_waits) =
+        terms::check_terms(root, &records, led, &source, &approved_rels);
     push_failures(&mut failures, terms_failures);
-    let (blame_failures, blame_notes) = blame::check_blame(root, &source, blame_index, &blame_unreadable, &mut stops);
+    let (blame_failures, blame_notes) =
+        blame::check_blame(root, &source, blame_index, &blame_unreadable, &mut stops);
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
     if staged || message.is_some() {
         push_failures(&mut failures, planner::check_commit(root));
     }
-    let (brief_failures, brief_notes) = brief::check_brief(root, &source, &records, &terms_list, &led, crate::session::role(root));
+    let (brief_failures, brief_notes) = brief::check_brief(
+        root,
+        &source,
+        &records,
+        &terms_list,
+        led,
+        crate::session::role(root),
+    );
     push_failures(&mut failures, brief_failures);
     notes.extend(brief_notes);
-    let untested = tests::check_tests(root, &records, &led, tests, &source, crate::session::role(root));
-    let (tells_failures, tells_notes) = parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, &led);
+    let untested = tests::check_tests(
+        root,
+        &records,
+        led,
+        tests,
+        &source,
+        crate::session::role(root),
+    );
+    let (tells_failures, tells_notes) =
+        parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, led);
     push_failures(&mut failures, tells_failures);
     push_failures(&mut notes, tells_notes);
     // Per "What does check do with an untested current decision?": reported
@@ -278,8 +356,17 @@ fn build(
 
     // While the terms file waits for the owner's approval, the hook refuses
     // a commit: its move is `not yet`.
-    let moves = if terms_waits { vec![crate::moves::Move::new(crate::moves::MoveKind::CommitWaits)] } else { Vec::new() };
-    view::CheckReport { failures, notes, stops, moves }
+    let moves = if terms_waits {
+        vec![crate::moves::Move::new(crate::moves::MoveKind::CommitWaits)]
+    } else {
+        Vec::new()
+    };
+    view::CheckReport {
+        failures,
+        notes,
+        stops,
+        moves,
+    }
 }
 
 /// What `check` reports of one topic file of the records: the judgement
@@ -347,16 +434,39 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     let merging = repo::git(&root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some();
     if let Some(m) = message.as_deref().filter(|_| !merging) {
         let mut stops: Vec<String> = Vec::new();
-        let found = banned::check_banned(&root, false, Some(m), &Source::for_check(false, true), &mut stops);
+        let found = banned::check_banned(
+            &root,
+            false,
+            Some(m),
+            &Source::for_check(false, true),
+            &mut stops,
+        );
         let mut lines: Vec<Line> = stops.into_iter().map(stopped).collect();
         lines.extend(found.into_iter().map(Line::Finding));
         out::print(&lines);
         return if lines.is_empty() { 0 } else { 1 };
     }
-    let report = build(&root, staged, message.as_deref(), since.as_deref(), None, None);
-    let exit_code = if report.failures.is_empty() && report.stops.is_empty() { 0 } else { 1 };
+    let report = build(
+        &root,
+        staged,
+        message.as_deref(),
+        since.as_deref(),
+        None,
+        None,
+    );
+    let exit_code = if report.failures.is_empty() && report.stops.is_empty() {
+        0
+    } else {
+        1
+    };
     let mut lines: Vec<Line> = report.stops.into_iter().map(stopped).collect();
-    lines.extend(report.failures.into_iter().chain(report.notes).map(Line::Finding));
+    lines.extend(
+        report
+            .failures
+            .into_iter()
+            .chain(report.notes)
+            .map(Line::Finding),
+    );
     lines.extend(report.moves.into_iter().map(Line::Move));
     out::print(&lines);
     exit_code
@@ -380,10 +490,16 @@ fn is_note(rf: &RecordFile, r: &rules::Finding, draft: bool, led: &Ledger) -> bo
     if !draft {
         return false;
     }
-    if !matches!(r.class, rules::Class::Tells | rules::Class::Plan | rules::Class::Parse) {
+    if !matches!(
+        r.class,
+        rules::Class::Tells | rules::Class::Plan | rules::Class::Parse
+    ) {
         return false;
     }
     // Every question the finding is about must still be able to change; a
     // finding about none is about the file as a whole.
-    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| rules::has_force(rf, s, led))
+    !r.sections
+        .iter()
+        .filter_map(|i| rf.sections.get(*i))
+        .any(|s| rules::has_force(rf, s, led))
 }

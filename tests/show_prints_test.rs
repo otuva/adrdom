@@ -82,8 +82,12 @@ fn show_with_no_file_prints_all_moves_after_all_decisions() {
     let three = "Is the widget door open?";
     let path2 = write_record(&dir, rel2, &format!("# Door\n\n{}", q(three)));
     approve_record(&dir, rel2);
-    assert!(adr(&dir, &["ask", path2.to_str().unwrap()], &[], "").status.success());
-    assert!(adr_answer(&dir, &id_of(&path2, three), "A").status.success());
+    assert!(adr(&dir, &["ask", path2.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    assert!(adr_answer(&dir, &id_of(&path2, three), "A")
+        .status
+        .success());
     commit_all(&dir, "the door, asked");
     let text = show(&dir, &[]);
     let lines: Vec<&str> = text.lines().collect();
@@ -92,17 +96,26 @@ fn show_with_no_file_prints_all_moves_after_all_decisions() {
         .enumerate()
         .rposition(|(i, l)| {
             // an option line: four spaces, under a two-space heading line
-            l.starts_with("    ") && i > 0 && lines[i - 1].starts_with("  ") && !lines[i - 1].starts_with("   ")
+            l.starts_with("    ")
+                && i > 0
+                && lines[i - 1].starts_with("  ")
+                && !lines[i - 1].starts_with("   ")
         })
         .unwrap();
     let first_move = lines
         .iter()
-        .position(|l| l.starts_with("agent ") || l.starts_with("owner runs: ") || l.starts_with("not yet: "))
+        .position(|l| {
+            l.starts_with("agent ") || l.starts_with("owner runs: ") || l.starts_with("not yet: ")
+        })
         .unwrap();
     assert!(last_decision < first_move, "{}", text);
-    assert!(lines.iter().any(|l| l.starts_with("# Door") ), "{}", text);
+    assert!(lines.iter().any(|l| l.starts_with("# Door")), "{}", text);
     assert!(text.contains("owner runs: adr answer"), "{}", text);
-    assert!(lines.iter().any(|l| l.starts_with("agent builds")), "{}", text);
+    assert!(
+        lines.iter().any(|l| l.starts_with("agent builds")),
+        "{}",
+        text
+    );
 }
 
 // adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
@@ -168,22 +181,46 @@ fn show_prints_the_unrelated_line_only_under_its_flag() {
     // The first question is answered: its depends line comes under
     // --dependents, its unrelated line under --unrelated alone.
     let flagged = show(&dir, &[REL, "--unrelated"]);
-    assert!(flagged.contains(&format!("] {}\n  Yes the widget holds.\n  unrelated: {}\n", ONE, TWO)), "{}", flagged);
+    assert!(
+        flagged.contains(&format!(
+            "] {}\n  Yes the widget holds.\n  unrelated: {}\n",
+            ONE, TWO
+        )),
+        "{}",
+        flagged
+    );
     let flagged = show(&dir, &[REL, "--unrelated", "--dependents"]);
-    assert!(flagged.contains(&format!("  unrelated: {}\n", TWO)), "{}", flagged);
+    assert!(
+        flagged.contains(&format!("  unrelated: {}\n", TWO)),
+        "{}",
+        flagged
+    );
 
     // Edit the unrelated line of the first question: plain show keeps the
     // changed status and prints no marked line; the flag prints the mark.
     let text = std::fs::read_to_string(&path).unwrap();
-    let edited = text.replacen(&format!("unrelated: {}", id_of(&path, TWO)), "unrelated: widget", 1);
+    let edited = text.replacen(
+        &format!("unrelated: {}", id_of(&path, TWO)),
+        "unrelated: widget",
+        1,
+    );
     assert_ne!(edited, text);
     std::fs::write(&path, edited).unwrap();
     let plain = show(&dir, &[REL]);
     assert!(plain.contains("[changed"), "{}", plain);
     assert!(!plain.contains("unrelated:"), "{}", plain);
-    assert!(!plain.lines().any(|l| l.trim_start().starts_with("+ ") || l.trim_start().starts_with("- ") && !l.contains(") ")), "{}", plain);
+    assert!(
+        !plain.lines().any(|l| l.trim_start().starts_with("+ ")
+            || l.trim_start().starts_with("- ") && !l.contains(") ")),
+        "{}",
+        plain
+    );
     let flagged = show(&dir, &[REL, "--unrelated"]);
-    assert!(flagged.contains(&format!("- unrelated: {}\n", TWO)), "{}", flagged);
+    assert!(
+        flagged.contains(&format!("- unrelated: {}\n", TWO)),
+        "{}",
+        flagged
+    );
     assert!(flagged.contains("+ unrelated: widget\n"), "{}", flagged);
 }
 
@@ -201,15 +238,38 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     approve_minimal_terms(&dir, "widget");
     // A new topic file: every question, its heading and every line, is
     // marked new.
-    let path = write_record(&dir, REL, &format!("# Gate\n\nWhat the gate does.\n\n{}{}", q(ONE), q(TWO)));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\nWhat the gate does.\n\n{}{}", q(ONE), q(TWO)),
+    );
     let shown = show(&dir, &[REL]);
-    assert!(shown.starts_with("[new] Gate (adrdom/decisions/gate.md)\n+ [new] prose\n  + What the gate does.\n"), "{}", shown);
-    assert!(shown.contains(&format!("+ [not asked] {}\n  + depends: widget\n  + Problem: the widget breaks.\n", ONE)), "{}", shown);
-    assert!(shown.ends_with(&format!("; agent runs: adr plan {}\n", REL)), "{}", shown);
+    assert!(
+        shown.starts_with(
+            "[new] Gate (adrdom/decisions/gate.md)\n+ [new] prose\n  + What the gate does.\n"
+        ),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.contains(&format!(
+            "+ [not asked] {}\n  + depends: widget\n  + Problem: the widget breaks.\n",
+            ONE
+        )),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.ends_with(&format!("; agent runs: adr plan {}\n", REL)),
+        "{}",
+        shown
+    );
 
     // Approved and asked, then changed: ONE's body edited, TWO struck.
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     commit_all(&dir, "the gate, asked");
     let text = std::fs::read_to_string(&path).unwrap();
     let at = text.find(&format!("### {}\n", TWO)).unwrap();
@@ -218,7 +278,11 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     let shown = show(&dir, &[REL]);
     // The `id:` line approve signs is part of the change, unmarked here.
     let id_one = extract_ids(&text[text.find(&format!("### {}\n", ONE)).unwrap()..])[0].clone();
-    assert!(shown.starts_with("[changed] Gate (adrdom/decisions/gate.md)\n"), "{}", shown);
+    assert!(
+        shown.starts_with("[changed] Gate (adrdom/decisions/gate.md)\n"),
+        "{}",
+        shown
+    );
     assert!(
         shown.contains(&format!(
             "[changed since asked] {}\n    depends: widget\n    id: {}\n  - Problem: the widget breaks.\n  + Problem: the widget breaks in use.\n    Standard: plain words.\n",
@@ -250,9 +314,17 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     assert!(out.status.success(), "{}", stderr(&out));
     commit_all(&dir, "the terms");
     let terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
-    std::fs::write(dir.join("adrdom/terms.md"), terms.replace("A part of a gate.", "A moving part of a gate.")).unwrap();
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        terms.replace("A part of a gate.", "A moving part of a gate."),
+    )
+    .unwrap();
     let shown = show(&dir, &["adrdom/terms.md"]);
-    assert!(shown.starts_with("[changed] adrdom/terms.md\n[changed] widget\n"), "{}", shown);
+    assert!(
+        shown.starts_with("[changed] adrdom/terms.md\n[changed] widget\n"),
+        "{}",
+        shown
+    );
     assert!(
         shown.contains("  - definition: A part of a gate.\n  + definition: A moving part of a gate.\n    aliases:\n[approved] gate\n  definition: A way through a wall.\n"),
         "{}",
@@ -266,9 +338,19 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
 
     // A new blame file: its lines, marked.
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdetail\n");
+    write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
     let shown = show(&dir, &["adrdom/blame/x.md"]);
-    assert!(shown.starts_with("[new] adrdom/blame/x.md\n  + origin: docs/x.md\n"), "{}", shown);
+    assert!(
+        shown.starts_with("[new] adrdom/blame/x.md\n  + origin: docs/x.md\n"),
+        "{}",
+        shown
+    );
     assert!(shown.contains("  + 1-1\tdetail\n"), "{}", shown);
 }
 
@@ -286,30 +368,64 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
     let path = write_record(
         &dir,
         REL,
-        &format!("# Gate\n\n{}{}### {}\ndepends: widget, {}=A\n{}\n", q(ONE), q(TWO), three, ONE, BODY),
+        &format!(
+            "# Gate\n\n{}{}### {}\ndepends: widget, {}=A\n{}\n",
+            q(ONE),
+            q(TWO),
+            three,
+            ONE,
+            BODY
+        ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
 
     let plain = show(&dir, &[REL]);
     for word in ["neighbour", "dependents:", "replaced by"] {
         assert!(!plain.contains(word), "{}: {}", word, plain);
     }
     let all = show(&dir, &["--all"]);
-    assert!(!all.contains("neighbour") && !all.contains("dependents:"), "{}", all);
+    assert!(
+        !all.contains("neighbour") && !all.contains("dependents:"),
+        "{}",
+        all
+    );
     // The one carve-out (per "What does show print of a reader's word on a
     // question?", 6e72f34e A): a reader's word line, inconsistent, same or
     // closes with its letter.
-    for l in plain.lines().filter(|l| l.trim_start().starts_with('[') && l.starts_with(' ')) {
-        assert!(l.starts_with("  [inconsistent] ") || l.starts_with("  [same] ") || l.starts_with("  [closes "), "{}", plain);
+    for l in plain
+        .lines()
+        .filter(|l| l.trim_start().starts_with('[') && l.starts_with(' '))
+    {
+        assert!(
+            l.starts_with("  [inconsistent] ")
+                || l.starts_with("  [same] ")
+                || l.starts_with("  [closes "),
+            "{}",
+            plain
+        );
     }
 
     let neighbours = show(&dir, &[REL, "--neighbours"]);
-    assert!(neighbours.contains("  term \"widget\": heading"), "{}", neighbours);
+    assert!(
+        neighbours.contains("  term \"widget\": heading"),
+        "{}",
+        neighbours
+    );
     assert!(!plain.contains("  term \"widget\": heading"), "{}", plain);
     let dependents = show(&dir, &[REL, "--dependents"]);
-    assert!(dependents.contains(&format!("  dependents: {}\n", three)), "{}", dependents);
-    assert!(!dependents.contains("  term \"widget\": heading"), "{}", dependents);
+    assert!(
+        dependents.contains(&format!("  dependents: {}\n", three)),
+        "{}",
+        dependents
+    );
+    assert!(
+        !dependents.contains("  term \"widget\": heading"),
+        "{}",
+        dependents
+    );
     assert!(!dependents.contains("replaced by"), "{}", dependents);
 
     let out = adr(&dir, &["show", "--neighbours"], &[], "");
@@ -324,15 +440,42 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
 fn show_prints_no_count_tier_or_hint_line() {
     let (dir, _path) = asked();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdetail\n");
-    for args in [vec![], vec![REL], vec!["--all"], vec!["adrdom/terms.md"], vec!["adrdom/blame/x.md"]] {
+    write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
+    for args in [
+        vec![],
+        vec![REL],
+        vec!["--all"],
+        vec!["adrdom/terms.md"],
+        vec!["adrdom/blame/x.md"],
+    ] {
         let shown = show(&dir, &args);
         for line in shown.lines() {
-            assert!(is_a_kind_show_prints(line), "show {:?} printed {:?}:\n{}", args, line, shown);
-            assert!(!line.starts_with("tier ") && !line.starts_with("next"), "{:?}: {}", args, shown);
+            assert!(
+                is_a_kind_show_prints(line),
+                "show {:?} printed {:?}:\n{}",
+                args,
+                line,
+                shown
+            );
+            assert!(
+                !line.starts_with("tier ") && !line.starts_with("next"),
+                "{:?}: {}",
+                args,
+                shown
+            );
         }
         assert!(!shown.contains("adr show <topic file>"), "{}", shown);
-        assert!(!shown.contains("detail 1") && !shown.contains("from: "), "{}", shown);
+        assert!(
+            !shown.contains("detail 1") && !shown.contains("from: "),
+            "{}",
+            shown
+        );
     }
 }
 
@@ -347,9 +490,21 @@ fn a_removed_topic_file_shows_each_question_with_its_own_status() {
     let version = current_version(&dir, &two);
     std::fs::remove_file(&path).unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.starts_with(&format!("[removed] {}\n", REL)), "{}", shown);
-    assert!(shown.contains(&format!("[answered A] {}\n", ONE)), "{}", shown);
-    assert!(shown.contains(&format!("[asked @{}] {}\n", version, TWO)), "{}", shown);
+    assert!(
+        shown.starts_with(&format!("[removed] {}\n", REL)),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.contains(&format!("[answered A] {}\n", ONE)),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.contains(&format!("[asked @{}] {}\n", version, TWO)),
+        "{}",
+        shown
+    );
     assert!(!shown.contains(&format!("[removed] {}", ONE)), "{}", shown);
 }
 
@@ -364,17 +519,27 @@ fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag()
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let (c, d) = ("Is the widget gate replaced?", "Is the widget gate the replacement?");
+    let (c, d) = (
+        "Is the widget gate replaced?",
+        "Is the widget gate the replacement?",
+    );
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(c)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
     let c_id = id_of(&path, c);
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("### {}\ndepends: widget\nsupersedes: {}\n{}\n", d, c_id, BODY));
+    text.push_str(&format!(
+        "### {}\ndepends: widget\nsupersedes: {}\n{}\n",
+        d, c_id, BODY
+    ));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     // Committed before the answer: the approved text git holds has no
     // answer line under the replacement, the ledger has its answer.
     commit_all(&dir, "the gate, replaced");
@@ -382,17 +547,35 @@ fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag()
     std::fs::remove_file(&path).unwrap();
 
     let plain = show(&dir, &[REL]);
-    assert!(plain.starts_with(&format!("[removed] {}\n", REL)), "{}", plain);
-    assert!(plain.contains(&format!("[answered A] {}\n  Yes the widget holds.\n", d)), "{}", plain);
+    assert!(
+        plain.starts_with(&format!("[removed] {}\n", REL)),
+        "{}",
+        plain
+    );
+    assert!(
+        plain.contains(&format!("[answered A] {}\n  Yes the widget holds.\n", d)),
+        "{}",
+        plain
+    );
     assert!(!plain.contains(&format!("[superseded] {}", c)), "{}", plain);
     assert!(!plain.contains("replaced by"), "{}", plain);
     let both = show(&dir, &[REL, "--dependents", "--superseded"]);
     assert!(
-        both.contains(&format!("[superseded] {}\n  depends: widget\n  replaced by: {}\n", c, d)),
+        both.contains(&format!(
+            "[superseded] {}\n  depends: widget\n  replaced by: {}\n",
+            c, d
+        )),
         "{}",
         both
     );
-    assert!(both.contains(&format!("[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  supersedes: {}\n", d, c)), "{}", both);
+    assert!(
+        both.contains(&format!(
+            "[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  supersedes: {}\n",
+            d, c
+        )),
+        "{}",
+        both
+    );
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
@@ -435,7 +618,10 @@ fn show_refuses_a_file_and_all_together() {
 #[test]
 fn show_into_a_full_device_does_not_pass() {
     let (dir, _) = asked();
-    let full = std::fs::OpenOptions::new().write(true).open("/dev/full").unwrap();
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .unwrap();
     let out = scrubbed(std::process::Command::new(adr_bin()))
         .args(["show", "--all"])
         .current_dir(&dir)
@@ -461,23 +647,49 @@ fn a_question_new_since_approval_marks_its_heading_at_every_stage() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let path = write_record(&dir, REL, &format!("# Gate\n\n### {}\n", ONE));
-    assert!(show(&dir, &[REL]).contains(&format!("\n+ [no body] {}\n", ONE)), "headings only: {}", show(&dir, &[REL]));
+    assert!(
+        show(&dir, &[REL]).contains(&format!("\n+ [no body] {}\n", ONE)),
+        "headings only: {}",
+        show(&dir, &[REL])
+    );
     std::fs::write(&path, format!("# Gate\n\n### {}\ndepends: widget\n", ONE)).unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains(&format!("\n+ [no body] {}\n  + depends: widget\n", ONE)), "lines written: {}", shown);
+    assert!(
+        shown.contains(&format!("\n+ [no body] {}\n  + depends: widget\n", ONE)),
+        "lines written: {}",
+        shown
+    );
     std::fs::write(&path, format!("# Gate\n\n{}", q(ONE))).unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains(&format!("\n+ [not asked] {}\n  + depends: widget\n", ONE)), "body written: {}", shown);
+    assert!(
+        shown.contains(&format!("\n+ [not asked] {}\n  + depends: widget\n", ONE)),
+        "body written: {}",
+        shown
+    );
 
     approve_record(&dir, REL);
     commit_all(&dir, "the gate");
     let shown = show(&dir, &[REL]);
-    assert!(!shown.lines().any(|l| l.starts_with("+ ") || l.starts_with("- ")), "approved: {}", shown);
+    assert!(
+        !shown
+            .lines()
+            .any(|l| l.starts_with("+ ") || l.starts_with("- ")),
+        "approved: {}",
+        shown
+    );
     let text = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, format!("{}\n### {}\ndepends: widget\n", text, TWO)).unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains(&format!("\n+ [no body] {}\n  + depends: widget\n", TWO)), "plan change: {}", shown);
-    assert!(shown.contains(&format!("\n[not asked] {}\n", ONE)), "the approved question is not marked: {}", shown);
+    assert!(
+        shown.contains(&format!("\n+ [no body] {}\n  + depends: widget\n", TWO)),
+        "plan change: {}",
+        shown
+    );
+    assert!(
+        shown.contains(&format!("\n[not asked] {}\n", ONE)),
+        "the approved question is not marked: {}",
+        shown
+    );
 }
 
 // adr: cdc905a2-5b58-4c38-beff-4a8bd3b6f42e
@@ -491,11 +703,17 @@ fn the_decisions_standing_on_a_term_come_under_the_dependents_flag() {
     let plain = show(&dir, &["adrdom/terms.md"]);
     assert!(!plain.contains("dependents:"), "{}", plain);
     let dependents = show(&dir, &["adrdom/terms.md", "--dependents"]);
-    let at = dependents.find("] widget\n").unwrap_or_else(|| panic!("{}", dependents));
+    let at = dependents
+        .find("] widget\n")
+        .unwrap_or_else(|| panic!("{}", dependents));
     let entry = &dependents[at..];
     let entry = &entry[..entry[1..].find("\n[").map(|i| i + 1).unwrap_or(entry.len())];
     // ONE is answered, a current decision; TWO is asked, not yet one.
-    assert!(entry.contains(&format!("  dependents: {} ({})\n", ONE, REL)), "{}", dependents);
+    assert!(
+        entry.contains(&format!("  dependents: {} ({})\n", ONE, REL)),
+        "{}",
+        dependents
+    );
     assert!(!entry.contains(TWO), "{}", dependents);
 }
 
@@ -518,24 +736,38 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     );
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}{}", q(a), q(b), q(c)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     assert!(adr_answer(&dir, &id_of(&path, a), "A").status.success());
-    assert!(adr_answer(&dir, &id_of(&path, b), "refuse").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, b), "refuse")
+        .status
+        .success());
     assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
     let c_id = id_of(&path, c);
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("### {}\ndepends: widget\nsupersedes: {}\n{}\n", d, c_id, BODY));
+    text.push_str(&format!(
+        "### {}\ndepends: widget\nsupersedes: {}\n{}\n",
+        d, c_id, BODY
+    ));
     text.push_str(&q(e));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     // The approved plan is committed before the answer strikes the section of
     // the superseded question: its reference lines come from git.
     commit_all(&dir, "the replacement, asked");
     assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
 
     let first_line_after = |shown: &str, heading: &str| -> String {
-        shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", heading))).nth(1).unwrap_or("").to_string()
+        shown
+            .lines()
+            .skip_while(|l| !l.ends_with(&format!("] {}", heading)))
+            .nth(1)
+            .unwrap_or("")
+            .to_string()
     };
     // The line under an answered question is the option picked, so the
     // reference lines are judged from the line after it.
@@ -555,14 +787,32 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     }
     assert!(plain.contains(&format!("[refused] {}", b)), "{}", plain);
     assert!(!plain.contains("supersedes:"), "{}", plain);
-    assert_eq!(first_line_after(&plain, e), "  depends: widget", "{}", plain);
+    assert_eq!(
+        first_line_after(&plain, e),
+        "  depends: widget",
+        "{}",
+        plain
+    );
 
     let shown = show(&dir, &[REL, "--dependents", "--superseded"]);
     for h in [a, b, c, d] {
-        assert!(depends_line_of(&shown, h).starts_with("  depends:"), "{}: {}", h, shown);
+        assert!(
+            depends_line_of(&shown, h).starts_with("  depends:"),
+            "{}: {}",
+            h,
+            shown
+        );
     }
-    assert!(shown.contains(&format!("  supersedes: {}\n", c)), "{}", shown);
-    assert!(shown.contains(&format!("  replaced by: {}\n", d)), "{}", shown);
+    assert!(
+        shown.contains(&format!("  supersedes: {}\n", c)),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.contains(&format!("  replaced by: {}\n", d)),
+        "{}",
+        shown
+    );
 }
 
 // adr: b0acc95b-3dd5-4158-ac5c-65a2159972a9
@@ -577,17 +827,27 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let (c, d) = ("Is the widget gate replaced?", "Is the widget gate the replacement?");
+    let (c, d) = (
+        "Is the widget gate replaced?",
+        "Is the widget gate the replacement?",
+    );
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(c)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
     let c_id = id_of(&path, c);
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("### {}\ndepends: widget\nsupersedes: {}\n{}\n", d, c_id, BODY));
+    text.push_str(&format!(
+        "### {}\ndepends: widget\nsupersedes: {}\n{}\n",
+        d, c_id, BODY
+    ));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     // The approved plan is committed before the answer strikes the section of
     // the superseded question: its reference lines come from git.
     commit_all(&dir, "the replacement, asked");
@@ -603,26 +863,52 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
         .unwrap_or_else(|| panic!("{}", summary))
         .trim()
         .to_string();
-    assert!(sentence.starts_with("Yes") || sentence.starts_with("No"), "{}", summary);
+    assert!(
+        sentence.starts_with("Yes") || sentence.starts_with("No"),
+        "{}",
+        summary
+    );
     let plain = show(&dir, &[REL]);
-    assert!(plain.contains(&format!("[answered A] {}\n  {}\n", d, sentence)), "{}", plain);
+    assert!(
+        plain.contains(&format!("[answered A] {}\n  {}\n", d, sentence)),
+        "{}",
+        plain
+    );
     assert!(!plain.contains(&format!("[superseded] {}", c)), "{}", plain);
     assert!(!plain.contains("replaced by"), "{}", plain);
     let all = show(&dir, &["--all"]);
     assert!(!all.contains(&format!("[superseded] {}", c)), "{}", all);
 
     let superseded = show(&dir, &[REL, "--superseded"]);
-    assert!(superseded.contains(&format!("[superseded] {}\n  replaced by: {}\n", c, d)), "{}", superseded);
+    assert!(
+        superseded.contains(&format!("[superseded] {}\n  replaced by: {}\n", c, d)),
+        "{}",
+        superseded
+    );
     assert!(!superseded.contains("supersedes:"), "{}", superseded);
     let dependents = show(&dir, &[REL, "--dependents"]);
-    assert!(!dependents.contains(&format!("[superseded] {}", c)), "{}", dependents);
+    assert!(
+        !dependents.contains(&format!("[superseded] {}", c)),
+        "{}",
+        dependents
+    );
     let both = show(&dir, &[REL, "--dependents", "--superseded"]);
     assert!(
-        both.contains(&format!("[superseded] {}\n  depends: widget\n  replaced by: {}\n", c, d)),
+        both.contains(&format!(
+            "[superseded] {}\n  depends: widget\n  replaced by: {}\n",
+            c, d
+        )),
         "{}",
         both
     );
-    assert!(both.contains(&format!("[answered A] {}\n  {}\n  depends: widget\n  supersedes: {}\n", d, sentence, c)), "{}", both);
+    assert!(
+        both.contains(&format!(
+            "[answered A] {}\n  {}\n  depends: widget\n  supersedes: {}\n",
+            d, sentence, c
+        )),
+        "{}",
+        both
+    );
 }
 
 // adr: d1d6fed2-4e1a-44bd-b9cb-22f779a00bce
@@ -638,16 +924,35 @@ fn unrelated_prints_the_unrelated_line_of_an_answered_question() {
     let with_unrelated = format!("### {}\ndepends: widget\nunrelated: {}\n{}\n", a, b, BODY);
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", with_unrelated, q(b)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     assert!(adr_answer(&dir, &id_of(&path, a), "A").status.success());
 
     let plain = show(&dir, &[REL]);
     assert!(!plain.contains("unrelated:"), "{}", plain);
     let shown = show(&dir, &[REL, "--unrelated"]);
     // Under the heading: the option picked, then the unrelated line.
-    let after_a: Vec<&str> = shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", a))).skip(1).take(2).collect();
-    assert_eq!(after_a, vec!["  Yes the widget holds.".to_string(), format!("  unrelated: {}", b)], "{}", shown);
-    assert!(!shown.contains(&format!("] {}\n  depends:", a)), "{}", shown);
+    let after_a: Vec<&str> = shown
+        .lines()
+        .skip_while(|l| !l.ends_with(&format!("] {}", a)))
+        .skip(1)
+        .take(2)
+        .collect();
+    assert_eq!(
+        after_a,
+        vec![
+            "  Yes the widget holds.".to_string(),
+            format!("  unrelated: {}", b)
+        ],
+        "{}",
+        shown
+    );
+    assert!(
+        !shown.contains(&format!("] {}\n  depends:", a)),
+        "{}",
+        shown
+    );
 }
 
 // The terms file waits for approval and two topic files carry findings with
@@ -662,13 +967,27 @@ fn show_prints_the_terms_move_before_the_topic_files_moves() {
         "# Terms\n\n## widget\ndefinition: A part of a gate.\naliases: widgets\n",
     )
     .unwrap();
-    write_record(&dir, "adrdom/decisions/a.md", "# A\n\nprose\n\n### Is the widget red?\n\n### Is the widget blue?\n");
-    write_record(&dir, "adrdom/decisions/b.md", "# B\n\nprose\n\n### Is the widget glossy?\n");
+    write_record(
+        &dir,
+        "adrdom/decisions/a.md",
+        "# A\n\nprose\n\n### Is the widget red?\n\n### Is the widget blue?\n",
+    );
+    write_record(
+        &dir,
+        "adrdom/decisions/b.md",
+        "# B\n\nprose\n\n### Is the widget glossy?\n",
+    );
     let shown = show(&dir, &[]);
-    let terms = shown.find("owner runs: adr approve adrdom/terms.md").expect(&shown);
+    let terms = shown
+        .find("owner runs: adr approve adrdom/terms.md")
+        .expect(&shown);
     let first_agent = shown.find("agent ").expect(&shown);
     assert!(terms < first_agent, "{}", shown);
-    assert!(shown.find("[new] adrdom/terms.md").unwrap() < terms, "{}", shown);
+    assert!(
+        shown.find("[new] adrdom/terms.md").unwrap() < terms,
+        "{}",
+        shown
+    );
 }
 
 // The refusal of a file that cannot be read carries a move: it stands after
@@ -678,12 +997,26 @@ fn show_prints_the_terms_move_before_the_topic_files_moves() {
 fn show_prints_the_refusal_of_an_unreadable_file_after_the_decisions() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    write_record(&dir, "adrdom/decisions/z.md", "# Z\n\nprose\n\n### Is the widget red?\n");
-    std::fs::write(dir.join("adrdom/decisions/a-bad.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    write_record(
+        &dir,
+        "adrdom/decisions/z.md",
+        "# Z\n\nprose\n\n### Is the widget red?\n",
+    );
+    std::fs::write(
+        dir.join("adrdom/decisions/a-bad.md"),
+        [0x23u8, 0x20, 0xff, 0xfe, 0x0a],
+    )
+    .unwrap();
     std::fs::create_dir_all(dir.join("adrdom/blame")).unwrap();
-    std::fs::write(dir.join("adrdom/blame/bad.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    std::fs::write(
+        dir.join("adrdom/blame/bad.md"),
+        [0x23u8, 0x20, 0xff, 0xfe, 0x0a],
+    )
+    .unwrap();
     let shown = show(&dir, &[]);
     let topic = shown.find("# Z (adrdom/decisions/z.md)").expect(&shown);
-    let bad = shown.find("adrdom/decisions/a-bad.md: cannot be read").expect(&shown);
+    let bad = shown
+        .find("adrdom/decisions/a-bad.md: cannot be read")
+        .expect(&shown);
     assert!(topic < bad, "{}", shown);
 }

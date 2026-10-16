@@ -33,7 +33,11 @@ fn three(dir: &Path, rec: &Path, check_ok: bool) -> (String, String, String) {
     let chk = adr(dir, &["check"], &[], "");
     // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     if check_ok {
-        assert!(chk.status.success(), "a draft finding is a note, never a failure: {}", both(&chk));
+        assert!(
+            chk.status.success(),
+            "a draft finding is a note, never a failure: {}",
+            both(&chk)
+        );
     }
     let apr = adr_owner(dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!apr.status.success(), "{}", both(&apr));
@@ -45,10 +49,17 @@ fn three(dir: &Path, rec: &Path, check_ok: bool) -> (String, String, String) {
 #[test]
 fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
     // adr: 149c9a73-16eb-46aa-9806-2950423ee1a2
-    let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision currently holds."));
+    let (dir, rec) = unapproved(&question(
+        "Does the decision hold?",
+        "the decision currently holds.",
+    ));
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
-        assert!(out.contains("\"currently\" states what the code does"), "{}", out);
+        assert!(
+            out.contains("\"currently\" states what the code does"),
+            "{}",
+            out
+        );
     }
     assert!(apr.contains("agent rewrites the line"), "{}", apr);
     // The list is the tool's own (src/tells.rs): the repository carries no
@@ -70,7 +81,9 @@ fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
     let mut names = Vec::new();
     files(&dir, &mut names);
     assert!(
-        !names.iter().any(|n| n.contains("phrase") || n.contains("tell")),
+        !names
+            .iter()
+            .any(|n| n.contains("phrase") || n.contains("tell")),
         "no phrase file in the repository: {:?}",
         names
     );
@@ -82,9 +95,17 @@ fn check_approve_and_plan_find_a_question_that_pairs_no_term() {
     let (dir, rec) = unapproved(&question("Does the lid hold?", "the lid is unclear."));
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
-        assert!(out.contains("\"Does the lid hold?\" uses no term"), "{}", out);
+        assert!(
+            out.contains("\"Does the lid hold?\" uses no term"),
+            "{}",
+            out
+        );
     }
-    assert!(apr.contains("uses no term; agent writes the term in adrdom/terms.md"), "{}", apr);
+    assert!(
+        apr.contains("uses no term; agent writes the term in adrdom/terms.md"),
+        "{}",
+        apr
+    );
 }
 
 // adr: 711a7636-9f4d-402d-ae62-265208adf0ac
@@ -98,19 +119,27 @@ fn a_heading_with_no_body_is_no_question_yet() {
 // adr: 711a7636-9f4d-402d-ae62-265208adf0ac
 #[test]
 fn a_question_with_a_term_passes() {
-    let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision is unclear."));
+    let (dir, rec) = unapproved(&question(
+        "Does the decision hold?",
+        "the decision is unclear.",
+    ));
     let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", both(&out));
 }
 
 #[test]
 fn an_asked_question_is_not_read_for_loaded_phrases() {
-    let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision is unclear."));
+    let (dir, rec) = unapproved(&question(
+        "Does the decision hold?",
+        "the decision is unclear.",
+    ));
     approve_record(&dir, REL);
     // The asked text is held by hash and cannot be edited, so a phrase the
     // list grew to cover later must not fail check or approve on it: model it
     // as an asked row for a body that carries a loaded phrase.
-    let text = std::fs::read_to_string(&rec).unwrap().replace("is unclear.", "currently holds.");
+    let text = std::fs::read_to_string(&rec)
+        .unwrap()
+        .replace("is unclear.", "currently holds.");
     std::fs::write(&rec, &text).unwrap();
     let rf = adr::record::load(&rec).unwrap();
     let sec = &rf.sections[0];
@@ -132,7 +161,12 @@ fn options() -> &'static str {
 fn check_approve_and_plan_find_a_set_on_a_term() {
     let (dir, _) = unapproved("# Example\n");
     let terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
-    let id = terms.lines().find_map(|l| l.strip_prefix("id: ")).expect("approved term has an id").trim().to_string();
+    let id = terms
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .expect("approved term has an id")
+        .trim()
+        .to_string();
     let content = format!(
         "# Example\n\n### Does the decision hold?\ndepends: {}=A\n\nProblem: the decision is unclear.\n\nStandard: plain words.\n\n{}",
         id,
@@ -175,7 +209,12 @@ fn check_approve_and_plan_find_a_set_on_an_answered_question() {
         options()
     ));
     let terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
-    let term = terms.lines().find_map(|l| l.strip_prefix("id: ")).expect("approved term has an id").trim().to_string();
+    let term = terms
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .expect("approved term has an id")
+        .trim()
+        .to_string();
     // The answered question sits in the same file, complete and unedited:
     // its section hash matches its asked row and it carries its terms line,
     // so nothing else fails check and the exit code is the draft finding's
@@ -188,10 +227,21 @@ fn check_approve_and_plan_find_a_set_on_an_answered_question() {
         options().trim_end_matches('\n')
     );
     let hash = mirror_section_hash(&section);
-    append_ledger_row_at(&dir, "asked", target, &hash, "Does the lid stay?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        target,
+        &hash,
+        "Does the lid stay?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(&dir, "answered", target, &hash, "A", "2024-01-01T00:00:01Z");
     let draft = std::fs::read_to_string(&rec).unwrap();
-    std::fs::write(&rec, format!("{}\n{}\n\n**Answer:** A\n", draft.trim_end(), section)).unwrap();
+    std::fs::write(
+        &rec,
+        format!("{}\n{}\n\n**Answer:** A\n", draft.trim_end(), section),
+    )
+    .unwrap();
     write_test_comment(&dir, target);
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
@@ -201,5 +251,11 @@ fn check_approve_and_plan_find_a_set_on_an_answered_question() {
             out
         );
     }
-    assert_eq!(apr.matches("which is answered, under an answer set").count(), 1, "{}", apr);
+    assert_eq!(
+        apr.matches("which is answered, under an answer set")
+            .count(),
+        1,
+        "{}",
+        apr
+    );
 }

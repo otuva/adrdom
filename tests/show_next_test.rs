@@ -100,10 +100,21 @@ fn assert_each_names(lines: &[String], headings: &[&str], mv: impl Fn(&str) -> S
     assert!(!lines.is_empty(), "no finding");
     for l in lines {
         assert!(l.starts_with(&format!("{}: ", REL)), "{}", l);
-        assert!(headings.iter().any(|h| l.ends_with(&format!("; {}", mv(h)))), "{}", l);
+        assert!(
+            headings
+                .iter()
+                .any(|h| l.ends_with(&format!("; {}", mv(h)))),
+            "{}",
+            l
+        );
     }
     for h in headings {
-        assert!(lines.iter().any(|l| l.contains(&format!("\"{}\"", h))), "no finding for {}: {:?}", h, lines);
+        assert!(
+            lines.iter().any(|l| l.contains(&format!("\"{}\"", h))),
+            "no finding for {}: {:?}",
+            h,
+            lines
+        );
     }
 }
 
@@ -173,20 +184,36 @@ fn show_names_the_next_move_at_every_step() {
     // A body edited after it was asked: the owner approves the edit, then
     // the move is the agent's, to ask it again.
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen("the widget breaks.", "the widget breaks in use.", 1),
+    )
+    .unwrap();
     approve_record(&dir, REL);
     assert_eq!(
         next(&dir),
-        vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
+        vec![
+            ask_for(&[ONE]),
+            answer_for(&dir, &two, TWO),
+            waits(THREE, TWO)
+        ]
     );
     // Its line in the listing names it changed since asked, and carries no
     // version for the owner to use.
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
-    assert!(shown.contains(&format!("\n[changed since asked] {}\n", ONE)), "{}", shown);
+    assert!(
+        shown.contains(&format!("\n[changed since asked] {}\n", ONE)),
+        "{}",
+        shown
+    );
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
         next(&dir),
-        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
+        vec![
+            answer_for(&dir, &one, ONE),
+            answer_for(&dir, &two, TWO),
+            waits(THREE, TWO)
+        ]
     );
 
     // One of two answered: it is not built while the other is open.
@@ -208,7 +235,11 @@ fn show_names_the_next_move_at_every_step() {
     assert!(adr_answer(&dir, &two, "A").status.success());
     assert_eq!(
         next(&dir),
-        vec![build_of(ONE, &one), build_of(TWO, &two), answer_for(&dir, &three, THREE)]
+        vec![
+            build_of(ONE, &one),
+            build_of(TWO, &two),
+            answer_for(&dir, &three, THREE)
+        ]
     );
 
     write_test_comment(&dir, &one);
@@ -242,7 +273,11 @@ fn next_names_an_owner_answer_only_where_answer_takes_the_question() {
     let (one, two, three) = (id_of(&path, ONE), id_of(&path, TWO), id_of(&path, THREE));
     assert_eq!(
         next(&dir),
-        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
+        vec![
+            answer_for(&dir, &one, ONE),
+            answer_for(&dir, &two, TWO),
+            waits(THREE, TWO)
+        ]
     );
     assert!(!adr_answer(&dir, &three, "A").status.success());
 
@@ -251,11 +286,20 @@ fn next_names_an_owner_answer_only_where_answer_takes_the_question() {
     let lines = next(&dir);
     assert!(lines.contains(&answer_for(&dir, &two, TWO)), "{:?}", lines);
     assert!(
-        lines.contains(&format!("not yet: \"{}\" is asked and waits for \"{}\", \"{}\"", THREE, TWO, ONE)),
+        lines.contains(&format!(
+            "not yet: \"{}\" is asked and waits for \"{}\", \"{}\"",
+            THREE, TWO, ONE
+        )),
         "{:?}",
         lines
     );
-    assert!(!lines.iter().any(|l| l.contains(&format!("adr answer {}@", three))), "{:?}", lines);
+    assert!(
+        !lines
+            .iter()
+            .any(|l| l.contains(&format!("adr answer {}@", three))),
+        "{:?}",
+        lines
+    );
 
     // TWO answered: THREE still waits, for the refused ONE alone.
     assert!(adr_answer(&dir, &two, "A").status.success());
@@ -263,7 +307,11 @@ fn next_names_an_owner_answer_only_where_answer_takes_the_question() {
     assert!(lines.contains(&waits(THREE, ONE)), "{:?}", lines);
     let refused = adr_answer(&dir, &three, "A");
     assert!(!refused.status.success());
-    assert!(stderr(&refused).contains("is refused and holds the tiers above it"), "{}", stderr(&refused));
+    assert!(
+        stderr(&refused).contains("is refused and holds the tiers above it"),
+        "{}",
+        stderr(&refused)
+    );
 }
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
@@ -284,9 +332,13 @@ fn show_names_the_plan_change_an_answered_decision_waits_for() {
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     assert!(adr_answer(&dir, &id_of(&path, ONE), "A").status.success());
-    assert!(adr_answer(&dir, &id_of(&path, TWO), "refuse").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, TWO), "refuse")
+        .status
+        .success());
 
     let refused = format!(
         "agent writes the plan change that drops or replaces \"{}\"",
@@ -333,11 +385,16 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
     approve_minimal_terms(&dir, "widget");
     let mut plan = String::from("# Gate\n");
     for n in ["one", "two", "three", "four"] {
-        plan.push_str(&format!("\n{}", q(&format!("Is the widget gate {} hold?", n), "widget")));
+        plan.push_str(&format!(
+            "\n{}",
+            q(&format!("Is the widget gate {} hold?", n), "widget")
+        ));
     }
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
         assert!(adr_answer(&dir, &id, "A").status.success());
         write_test_comment(&dir, &id);
@@ -357,7 +414,12 @@ agent writes the question these stand on",
         next(&dir),
         vec![
             refusal.clone(),
-            format!("{}: \"{}\" has no neighbours on record for its heading; {}", REL, five, plan_for()),
+            format!(
+                "{}: \"{}\" has no neighbours on record for its heading; {}",
+                REL,
+                five,
+                plan_for()
+            ),
         ]
     );
 
@@ -373,7 +435,13 @@ agent writes the question these stand on",
         .map(|l| l.to_string())
         .collect();
     assert_eq!(plan_lines.first(), Some(&refusal), "{:?}", plan_lines);
-    assert!(plan_lines.iter().any(|l| l.contains("has no neighbours on record for its heading")), "{:?}", plan_lines);
+    assert!(
+        plan_lines
+            .iter()
+            .any(|l| l.contains("has no neighbours on record for its heading")),
+        "{:?}",
+        plan_lines
+    );
 }
 
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
@@ -399,7 +467,10 @@ fn show_names_what_replaced_a_superseded_question() {
 
     // The supersedes line is written with the plan, before approval.
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n{}", TWO, ONE, BODY));
+    text.push_str(&format!(
+        "\n### {}\ndepends: widget\nsupersedes: {}\n{}",
+        TWO, ONE, BODY
+    ));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
     let two = id_of(&path, TWO);
@@ -418,7 +489,12 @@ fn show_names_what_replaced_a_superseded_question() {
 
     // What replaced a superseded question is computed from the records:
     // it comes under its flag.
-    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents", "--superseded"], &[], ""));
+    let shown = stdout(&adr(
+        &dir,
+        &["show", "--all", "--dependents", "--superseded"],
+        &[],
+        "",
+    ));
     let expected = format!(
         "[superseded] {one}\n  depends: widget\n  replaced by: {two}\n\
 [answered A] {two}\n  Yes the widget holds.\n  depends: widget\n  supersedes: {one}\n",
@@ -430,7 +506,10 @@ fn show_names_what_replaced_a_superseded_question() {
     // A heading that names no current decision: approve refuses it and
     // names the move.
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n{}", THREE, ONE, BODY));
+    text.push_str(&format!(
+        "\n### {}\ndepends: widget\nsupersedes: {}\n{}",
+        THREE, ONE, BODY
+    ));
     std::fs::write(&path, text).unwrap();
     let approved = adr_owner(&dir, &["approve", p], "");
     assert!(!approved.status.success());
@@ -454,7 +533,9 @@ fn show_prints_no_next_when_nothing_is_left() {
     approve_minimal_terms(&dir, "widget");
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(ONE, "widget")));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let one = id_of(&path, ONE);
     assert!(adr_answer(&dir, &one, "A").status.success());
     write_test_comment(&dir, &one);
@@ -462,7 +543,9 @@ fn show_prints_no_next_when_nothing_is_left() {
     let out = adr(&dir, &["show"], &[], "");
     let moves: Vec<&str> = stdout(&out)
         .lines()
-        .filter(|l| l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet"))
+        .filter(|l| {
+            l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet")
+        })
         .map(|_| "")
         .collect();
     assert!(moves.is_empty(), "no move is left: {}", stdout(&out));
@@ -542,7 +625,11 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     let one = id_of(&path, ONE);
     assert_eq!(
         next(&dir),
-        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
+        vec![
+            answer_for(&dir, &one, ONE),
+            answer_for(&dir, &two, TWO),
+            waits(THREE, TWO)
+        ]
     );
 
     // Edited after it was asked: `next` hands the question back to the
@@ -559,15 +646,27 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     approve_record(&dir, REL);
     assert_eq!(
         next(&dir),
-        vec![ask_for(&[TWO]), answer_for(&dir, &one, ONE), waits(THREE, TWO)]
+        vec![
+            ask_for(&[TWO]),
+            answer_for(&dir, &one, ONE),
+            waits(THREE, TWO)
+        ]
     );
-    let refused = adr_owner(&dir, &["answer", &format!("{}@{}", two, old_version), "A"], "");
+    let refused = adr_owner(
+        &dir,
+        &["answer", &format!("{}@{}", two, old_version), "A"],
+        "",
+    );
     assert!(!refused.status.success());
     // The tool knows the agent's `ask` is the move: the refusal names it and
     // gives the owner nothing to run.
     assert_eq!(
         stderr(&refused).trim_end(),
-        format!("answer: \"{}\" is edited since it was asked; {}", TWO, ask_clause())
+        format!(
+            "answer: \"{}\" is edited since it was asked; {}",
+            TWO,
+            ask_clause()
+        )
     );
 
     // The unedited question is still answerable.
@@ -594,12 +693,20 @@ fn answer_on_a_question_never_asked_names_the_ask() {
 
     // Asked, edited and asked again: the version read is old, the tool holds
     // the current one and prints the owner's command with it.
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let old = current_version(&dir, &one);
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen("the widget breaks.", "the widget breaks in use.", 1),
+    )
+    .unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let out = adr_owner(&dir, &["answer", &format!("{}@{}", one, old), "A"], "");
     assert_eq!(
         stderr(&out).trim_end(),
@@ -629,5 +736,9 @@ fn show_refuses_a_file_approve_does_not_take() {
     );
     let terms = adr(&dir, &["show", "adrdom/terms.md"], &[], "");
     assert!(terms.status.success(), "{}", stderr(&terms));
-    assert!(stdout(&terms).starts_with("[approved] adrdom/terms.md\n"), "{}", stdout(&terms));
+    assert!(
+        stdout(&terms).starts_with("[approved] adrdom/terms.md\n"),
+        "{}",
+        stdout(&terms)
+    );
 }

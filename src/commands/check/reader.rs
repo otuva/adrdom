@@ -1,9 +1,9 @@
-use crate::rules::Class;
 use super::ledger::{head_parents, parent_object_present};
 use super::Failure;
 use crate::msg;
 use crate::reader::{self, Row};
 use crate::repo::{self, Source};
+use crate::rules::Class;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -33,21 +33,28 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) ->
     // included) is no edit; a pending merge names its other side in
     // MERGE_HEAD, a merge commit names its parents. The merge finding adds
     // nothing when the HEAD finding was printed for the same edit.
-    let merged: Vec<String> = if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
-        vec!["HEAD".to_string(), "MERGE_HEAD".to_string()]
-    } else {
-        let parents = head_parents(root);
-        if parents.len() >= 2 {
-            // A parent whose commit object is missing is the ledger's report.
-            parents.into_iter().filter(|sha| parent_object_present(root, sha)).collect()
+    let merged: Vec<String> =
+        if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
+            vec!["HEAD".to_string(), "MERGE_HEAD".to_string()]
         } else {
-            Vec::new()
-        }
-    };
+            let parents = head_parents(root);
+            if parents.len() >= 2 {
+                // A parent whose commit object is missing is the ledger's report.
+                parents
+                    .into_iter()
+                    .filter(|sha| parent_object_present(root, sha))
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        };
     if !head_edited && !merged.is_empty() {
         let contents: Vec<String> = merged
             .iter()
-            .map(|r| repo::git(root, &["show", &format!("{}:{}", r, repo::READER_PATH)]).unwrap_or_default())
+            .map(|r| {
+                repo::git(root, &["show", &format!("{}:{}", r, repo::READER_PATH)])
+                    .unwrap_or_default()
+            })
             .collect();
         let parents: Vec<&str> = contents.iter().map(|c| c.as_str()).collect();
         if Side::of(&parents).edited_in(&content) {
@@ -57,7 +64,10 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) ->
 
     if let Some(commit) = since {
         if !repo::is_zero_sha(commit) && parent_object_present(root, commit) && edited_at(commit) {
-            out.push(Failure::said(Class::Reader, msg::reader_since_row_edited(commit)));
+            out.push(Failure::said(
+                Class::Reader,
+                msg::reader_since_row_edited(commit),
+            ));
         }
     }
     out
@@ -68,7 +78,13 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) ->
 type Identity = (String, String, String, String, String);
 
 fn identity(r: &Row) -> Identity {
-    (r.time.clone(), r.text_hash.clone(), r.neighbour.clone(), r.prompt_hash.clone(), r.model.clone())
+    (
+        r.time.clone(),
+        r.text_hash.clone(),
+        r.neighbour.clone(),
+        r.prompt_hash.clone(),
+        r.model.clone(),
+    )
 }
 
 /// The lines of one side of a comparison and the identities of its rows.
@@ -82,7 +98,11 @@ struct Side<'a> {
 impl<'a> Side<'a> {
     fn of(contents: &[&'a str]) -> Side<'a> {
         let lines: HashSet<&str> = contents.iter().flat_map(|c| c.lines()).collect();
-        let identities = lines.iter().filter_map(|l| reader::parse_row(l)).map(|r| identity(&r)).collect();
+        let identities = lines
+            .iter()
+            .filter_map(|l| reader::parse_row(l))
+            .map(|r| identity(&r))
+            .collect();
         Side { lines, identities }
     }
 

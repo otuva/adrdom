@@ -46,7 +46,12 @@ pub struct Neighbour {
 
 fn rec(kind: &'static str, id: String, text: String) -> Rec {
     let hash = record::sha256_hex(&text);
-    Rec { kind, id, text, hash }
+    Rec {
+        kind,
+        id,
+        text,
+        hash,
+    }
 }
 
 /// The pool, in a fixed order: every current decision, then every term that
@@ -124,8 +129,16 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
 
 /// The indexes of the (at most) `n` vectors nearest to `query` among those
 /// `keep` accepts, nearest first, ties by index.
-pub fn rank(query: &[f32], vecs: &[Vec<f32>], keep: impl Fn(usize) -> bool, n: usize) -> Vec<(usize, f32)> {
-    let mut scored: Vec<(f32, usize)> = (0..vecs.len()).filter(|&i| keep(i)).map(|i| (dot(query, &vecs[i]), i)).collect();
+pub fn rank(
+    query: &[f32],
+    vecs: &[Vec<f32>],
+    keep: impl Fn(usize) -> bool,
+    n: usize,
+) -> Vec<(usize, f32)> {
+    let mut scored: Vec<(f32, usize)> = (0..vecs.len())
+        .filter(|&i| keep(i))
+        .map(|i| (dot(query, &vecs[i]), i))
+        .collect();
     scored.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
     scored.into_iter().take(n).map(|(s, i)| (i, s)).collect()
 }
@@ -135,7 +148,12 @@ pub fn rank(query: &[f32], vecs: &[Vec<f32>], keep: impl Fn(usize) -> bool, n: u
 /// returned after. This is the one function that embeds texts besides the
 /// records: a caller that ranks texts of its own against each other passes
 /// them as `extra`.
-pub fn refresh(root: &Path, emb: &dyn Embedder, recs: &[Rec], extra: &[String]) -> Result<Vectors, String> {
+pub fn refresh(
+    root: &Path,
+    emb: &dyn Embedder,
+    recs: &[Rec],
+    extra: &[String],
+) -> Result<Vectors, String> {
     let retry = || msg::fix_then_same_command("the cache directory the error names");
     let dir = root.join(repo::CACHE_DIR);
     fs::create_dir_all(&dir).map_err(|e| msg::create_failed(repo::CACHE_DIR, e, retry()))?;
@@ -152,7 +170,11 @@ pub fn refresh(root: &Path, emb: &dyn Embedder, recs: &[Rec], extra: &[String]) 
     let mut texts: Vec<String> = todo.iter().map(|&i| recs[i].text.clone()).collect();
     let n_new = texts.len();
     texts.extend(extra.iter().cloned());
-    let mut got = if texts.is_empty() { Vec::new() } else { emb.embed(&texts)? };
+    let mut got = if texts.is_empty() {
+        Vec::new()
+    } else {
+        emb.embed(&texts)?
+    };
     let queries = got.split_off(n_new);
     for (k, v) in todo.iter().zip(got) {
         vecs[*k] = Some(v);
@@ -162,7 +184,13 @@ pub fn refresh(root: &Path, emb: &dyn Embedder, recs: &[Rec], extra: &[String]) 
     let mut out = format!("# model {} dim {}\n", emb.name(), dim);
     for (r, v) in recs.iter().zip(&vecs) {
         let nums: Vec<String> = v.iter().map(|x| x.to_string()).collect();
-        out.push_str(&format!("{}\t{}\t{}\t{}\n", r.kind, r.id, r.hash, nums.join(" ")));
+        out.push_str(&format!(
+            "{}\t{}\t{}\t{}\n",
+            r.kind,
+            r.id,
+            r.hash,
+            nums.join(" ")
+        ));
     }
     let path = root.join(INDEX_PATH);
     let old = fs::read_to_string(&path).unwrap_or_default();
@@ -175,9 +203,16 @@ pub fn refresh(root: &Path, emb: &dyn Embedder, recs: &[Rec], extra: &[String]) 
 /// For each query text, the `n` records of the pool nearest to it, nearest
 /// first. Loads the embedding model, brings the index up to date and embeds
 /// the queries in the same call. An error when the model is missing.
-pub fn nearest(root: &Path, led: &Ledger, queries: &[String], n: usize) -> Result<Vec<Vec<Neighbour>>, String> {
+pub fn nearest(
+    root: &Path,
+    led: &Ledger,
+    queries: &[String],
+    n: usize,
+) -> Result<Vec<Vec<Neighbour>>, String> {
     nearest_with_vectors(root, led, queries, n).map(|(near, _)| near)
 }
+
+type NearestVectors = (Vec<Vec<Neighbour>>, Vec<Vec<f32>>);
 
 /// `nearest`, and the vector of each query text as well, so a caller that
 /// ranks the query texts against each other does not embed them again.
@@ -186,7 +221,7 @@ pub fn nearest_with_vectors(
     led: &Ledger,
     queries: &[String],
     n: usize,
-) -> Result<(Vec<Vec<Neighbour>>, Vec<Vec<f32>>), String> {
+) -> Result<NearestVectors, String> {
     let files = record::load_all(root);
     let terms = state::load_terms(root).map(|t| t.terms).unwrap_or_default();
     let recs = pool(&files, led, &terms);
@@ -231,7 +266,10 @@ mod tests {
         let d = std::env::temp_dir().join(format!(
             "adr-index-unit-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::create_dir_all(&d).unwrap();
         d
@@ -257,7 +295,11 @@ mod tests {
         assert_eq!(emb.0.get(), 5);
         // Stale rows are not kept.
         let text = fs::read_to_string(root.join(INDEX_PATH)).unwrap();
-        assert!(text.starts_with("# model fake-bag-of-words dim 256\n"), "{}", text);
+        assert!(
+            text.starts_with("# model fake-bag-of-words dim 256\n"),
+            "{}",
+            text
+        );
         assert_eq!(text.lines().count(), 3);
         fs::remove_dir_all(&root).unwrap();
     }
@@ -269,7 +311,9 @@ mod tests {
         let emb = Counting(Cell::new(0));
         refresh(&root, &emb, &recs, &[]).unwrap();
         let path = root.join(INDEX_PATH);
-        let t = fs::read_to_string(&path).unwrap().replace("fake-bag-of-words", "other-model");
+        let t = fs::read_to_string(&path)
+            .unwrap()
+            .replace("fake-bag-of-words", "other-model");
         fs::write(&path, t).unwrap();
         refresh(&root, &emb, &recs, &[]).unwrap();
         assert_eq!(emb.0.get(), 2);
@@ -301,7 +345,14 @@ mod tests {
             terms_line_idx: None,
         };
         let terms = vec![term("new term", None), term("old", Some("id-1"))];
-        let p = pool(&[], &Ledger { rows: Vec::new(), malformed: Vec::new() }, &terms);
+        let p = pool(
+            &[],
+            &Ledger {
+                rows: Vec::new(),
+                malformed: Vec::new(),
+            },
+            &terms,
+        );
         assert_eq!(p.len(), 1);
         assert_eq!(p[0].id, "id-1");
     }

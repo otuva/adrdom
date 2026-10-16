@@ -31,7 +31,9 @@ fn show_and_answer_print_the_picked_option_sentence_and_not_why_or_costs() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
 
     let ans = adr_answer(&dir, &id, "A");

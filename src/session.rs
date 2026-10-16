@@ -28,7 +28,9 @@ const PLANNER_WORD: &str = "planner";
 /// with a non-empty value. A value holding a tab, CR or newline counts as
 /// absent, for the role file is tab and line separated.
 pub fn id() -> Option<String> {
-    SESSION_VARS.iter().find_map(|name| usable(std::env::var(name).ok()?))
+    SESSION_VARS
+        .iter()
+        .find_map(|name| usable(std::env::var(name).ok()?))
 }
 
 fn usable(value: String) -> Option<String> {
@@ -70,13 +72,22 @@ fn role_of(root: &Path, id: &str) -> std::io::Result<Role> {
     let found = match std::fs::read(root.join(crate::repo::ROLES_PATH)) {
         Ok(bytes) => {
             // A line edited to CRLF still reads.
-            let held = bytes.split(|b| *b == b'\n').any(|l| l.strip_suffix(b"\r").unwrap_or(l) == line.as_bytes());
-            if held { Role::Planner } else { Role::Plain }
+            let held = bytes
+                .split(|b| *b == b'\n')
+                .any(|l| l.strip_suffix(b"\r").unwrap_or(l) == line.as_bytes());
+            if held {
+                Role::Planner
+            } else {
+                Role::Plain
+            }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Role::Plain,
         Err(e) => return Err(e),
     };
-    cache().lock().unwrap_or_else(|e| e.into_inner()).insert(key, found);
+    cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(key, found);
     Ok(found)
 }
 
@@ -99,11 +110,21 @@ fn mark_planner_as(root: &Path, id: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut file = std::fs::OpenOptions::new().create(true).append(true).open(&path)?;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)?;
     // A file whose last line lost its newline gets one before the new line.
-    let lead = if std::fs::read(&path)?.last().is_some_and(|b| *b != b'\n') { "\n" } else { "" };
+    let lead = if std::fs::read(&path)?.last().is_some_and(|b| *b != b'\n') {
+        "\n"
+    } else {
+        ""
+    };
     file.write_all(format!("{}{}\t{}\n", lead, id, PLANNER_WORD).as_bytes())?;
-    cache().lock().unwrap_or_else(|e| e.into_inner()).insert((root.to_path_buf(), id.to_string()), Role::Planner);
+    cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert((root.to_path_buf(), id.to_string()), Role::Planner);
     Ok(())
 }
 
@@ -145,7 +166,11 @@ mod tests {
     fn the_file_is_read_from_disk() {
         let dir = scratch("disk");
         std::fs::create_dir_all(dir.join(crate::repo::STATE_DIR)).unwrap();
-        std::fs::write(dir.join(crate::repo::ROLES_PATH), "other\tplanner\ns3\tplanner\n").unwrap();
+        std::fs::write(
+            dir.join(crate::repo::ROLES_PATH),
+            "other\tplanner\ns3\tplanner\n",
+        )
+        .unwrap();
         assert_eq!(role_of(&dir, "s3").unwrap(), Role::Planner);
         assert_eq!(role_of(&dir, "s").unwrap(), Role::Plain);
         let _ = std::fs::remove_dir_all(&dir);

@@ -9,15 +9,27 @@ fn flat() -> String {
 #[test]
 fn the_brief_has_another_agent_build_what_an_agent_asked() {
     let b = flat();
-    assert!(b.contains("it does not build the decisions it asked"), "{}", b);
-    assert!(b.contains("A builder is another session; it builds from the record alone"), "{}", b);
+    assert!(
+        b.contains("it does not build the decisions it asked"),
+        "{}",
+        b
+    );
+    assert!(
+        b.contains("A builder is another session; it builds from the record alone"),
+        "{}",
+        b
+    );
 }
 
 // adr: 125ee772-d011-4dab-b53e-97a09ec03198
 #[test]
 fn the_brief_has_a_review_name_a_decision_for_each_behaviour() {
     let b = flat();
-    assert!(b.contains("In a review of a build, a behaviour with no decision behind it is a finding."), "{}", b);
+    assert!(
+        b.contains("In a review of a build, a behaviour with no decision behind it is a finding."),
+        "{}",
+        b
+    );
 }
 
 // adr: 6c406624-b874-4697-9a44-91941019b7d1
@@ -26,8 +38,16 @@ fn the_brief_has_a_review_name_a_decision_for_each_behaviour() {
 #[test]
 fn the_brief_tells_a_planner_what_the_tool_holds_it_from() {
     let b = flat();
-    assert!(b.contains("A session that runs `adr plan` or `adr ask` is a planner until it ends"), "{}", b);
-    assert!(b.contains("its commits hold only paths under `adrdom/`"), "{}", b);
+    assert!(
+        b.contains("A session that runs `adr plan` or `adr ask` is a planner until it ends"),
+        "{}",
+        b
+    );
+    assert!(
+        b.contains("its commits hold only paths under `adrdom/`"),
+        "{}",
+        b
+    );
     assert!(b.contains("`builder` (another session)"), "{}", b);
 }
 
@@ -52,5 +72,9 @@ fn the_brief_names_the_adr_code_comment() {
 fn the_brief_gives_the_shape_of_a_blame_file() {
     let b = flat();
     assert!(b.contains("A blame file holds `origin: <path>`, `blob: <hash>`, a blank line, then one row per line range, `<start>-<end>`, a tab, `decision` or `detail`, over every line of the origin"), "{}", b);
-    assert!(b.contains("a question written from it carries `blame: <file> <start>-<end>`."), "{}", b);
+    assert!(
+        b.contains("a question written from it carries `blame: <file> <start>-<end>`."),
+        "{}",
+        b
+    );
 }

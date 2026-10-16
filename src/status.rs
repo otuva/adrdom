@@ -79,7 +79,10 @@ impl QuestionStatus {
     pub fn is_dead(self) -> bool {
         matches!(
             self,
-            QuestionStatus::Refused | QuestionStatus::Superseded | QuestionStatus::Withdrawn | QuestionStatus::Dropped
+            QuestionStatus::Refused
+                | QuestionStatus::Superseded
+                | QuestionStatus::Withdrawn
+                | QuestionStatus::Dropped
         )
     }
 }
@@ -93,7 +96,10 @@ pub fn question_status(led: &Ledger, sec: &Section) -> QuestionStatus {
     } else {
         QuestionStatus::NotAsked
     };
-    sec.id.as_deref().and_then(|id| question_status_of_id(led, id)).unwrap_or(never_asked)
+    sec.id
+        .as_deref()
+        .and_then(|id| question_status_of_id(led, id))
+        .unwrap_or(never_asked)
 }
 
 /// The status of `sec` of `rf` as a reader of its text names it:
@@ -101,7 +107,9 @@ pub fn question_status(led: &Ledger, sec: &Section) -> QuestionStatus {
 /// asked named `ChangedSinceAsked`.
 pub fn question_status_in(led: &Ledger, rf: &RecordFile, sec: &Section) -> QuestionStatus {
     match question_status(led, sec) {
-        QuestionStatus::Asked if !crate::view::asked_text_stands(led, rf, sec) => QuestionStatus::ChangedSinceAsked,
+        QuestionStatus::Asked if !crate::view::asked_text_stands(led, rf, sec) => {
+            QuestionStatus::ChangedSinceAsked
+        }
         st => st,
     }
 }
@@ -137,7 +145,9 @@ pub fn open_to_ask_text(led: &Ledger, rf: &RecordFile, sec: &Section) -> bool {
     let Some(id) = &sec.id else { return true };
     match led.latest_state(id) {
         None => true,
-        Some(row) if row.event == "asked" => crate::record::section_hash(&rf.lines, sec) != row.hash,
+        Some(row) if row.event == "asked" => {
+            crate::record::section_hash(&rf.lines, sec) != row.hash
+        }
         Some(_) => false,
     }
 }
@@ -157,7 +167,12 @@ pub enum FileStatus {
 }
 
 impl FileStatus {
-    pub const ALL: [FileStatus; 4] = [FileStatus::New, FileStatus::Changed, FileStatus::Approved, FileStatus::Removed];
+    pub const ALL: [FileStatus; 4] = [
+        FileStatus::New,
+        FileStatus::Changed,
+        FileStatus::Approved,
+        FileStatus::Removed,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -205,7 +220,13 @@ pub fn topic_file_status_at(led: &Ledger, rf: &RecordFile, rel: &str) -> TopicFi
 fn approval_status(led: &Ledger, event: &str, rel: &str, approved: bool) -> FileStatus {
     if approved {
         FileStatus::Approved
-    } else if (if event == "blame" { led.latest_blame(rel) } else { led.latest_for_path(event, rel) }).is_some() {
+    } else if (if event == "blame" {
+        led.latest_blame(rel)
+    } else {
+        led.latest_for_path(event, rel)
+    })
+    .is_some()
+    {
         FileStatus::Changed
     } else {
         FileStatus::New
@@ -225,11 +246,21 @@ pub fn prose_status(led: &Ledger, rel: &str, approved: bool) -> FileStatus {
 }
 
 pub fn terms_file_status(led: &Ledger, tf: &TermsFile) -> TermsFileStatus {
-    approval_status(led, "terms", crate::repo::TERMS_PATH, crate::state::terms_approved(led, tf))
+    approval_status(
+        led,
+        "terms",
+        crate::repo::TERMS_PATH,
+        crate::state::terms_approved(led, tf),
+    )
 }
 
 pub fn blame_file_status(led: &Ledger, rel: &str, content: &str) -> BlameFileStatus {
-    approval_status(led, "blame", rel, crate::state::blame_approved(led, rel, content))
+    approval_status(
+        led,
+        "blame",
+        rel,
+        crate::state::blame_approved(led, rel, content),
+    )
 }
 
 /// The status of one entry of the terms file against its latest `term` row.
@@ -244,8 +275,13 @@ pub enum TermStatus {
 }
 
 impl TermStatus {
-    pub const ALL: [TermStatus; 5] =
-        [TermStatus::New, TermStatus::Changed, TermStatus::Approved, TermStatus::Retired, TermStatus::Removed];
+    pub const ALL: [TermStatus; 5] = [
+        TermStatus::New,
+        TermStatus::Changed,
+        TermStatus::Approved,
+        TermStatus::Retired,
+        TermStatus::Removed,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -264,7 +300,11 @@ impl TermStatus {
 /// its latest approval is held by that approval (an approval written before
 /// the tool kept a row per entry).
 pub fn term_status(led: &Ledger, tf: &TermsFile, t: &Term) -> TermStatus {
-    let settled = if t.retired { TermStatus::Retired } else { TermStatus::Approved };
+    let settled = if t.retired {
+        TermStatus::Retired
+    } else {
+        TermStatus::Approved
+    };
     match t.id.as_deref().and_then(|id| led.latest_for_id("term", id)) {
         None if crate::state::terms_approved(led, tf) || terms_rows_catch_up(led) => settled,
         None => TermStatus::New,
@@ -277,7 +317,10 @@ pub fn term_status(led: &Ledger, tf: &TermsFile, t: &Term) -> TermStatus {
 /// per entry: a `terms` row and no `term` row at all. An entry with no row
 /// of its own is then held by that approval, not new.
 pub fn terms_rows_catch_up(led: &Ledger) -> bool {
-    !led.rows.iter().any(|r| r.event == "term") && led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some()
+    !led.rows.iter().any(|r| r.event == "term")
+        && led
+            .latest_for_path("terms", crate::repo::TERMS_PATH)
+            .is_some()
 }
 
 #[cfg(test)]
@@ -326,8 +369,14 @@ mod tests {
             crate::record::split_lines("# T\n\n### Does it?\ndepends: w\nid: id-1\n\nProblem: p.\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n"),
         );
         let sec = &rf.sections[0];
-        assert_eq!(question_status(&led(&[("asked", "id-1"), ("dropped", "id-1")]), sec), QuestionStatus::Dropped);
+        assert_eq!(
+            question_status(&led(&[("asked", "id-1"), ("dropped", "id-1")]), sec),
+            QuestionStatus::Dropped
+        );
         assert_eq!(question_status(&led(&[]), sec), QuestionStatus::NotAsked);
-        assert_eq!(question_status(&led(&[("asked", "id-1")]), sec), QuestionStatus::Asked);
+        assert_eq!(
+            question_status(&led(&[("asked", "id-1")]), sec),
+            QuestionStatus::Asked
+        );
     }
 }

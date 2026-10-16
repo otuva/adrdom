@@ -64,7 +64,9 @@ fn pool_repo() -> std::path::PathBuf {
     approve_terms_with(&dir, &refs);
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     for id in &ids[..2] {
         let out = adr_answer(&dir, id, "A");
@@ -156,10 +158,17 @@ mod pool {
 fn install_writes_the_ignore_file_and_check_holds_it() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    assert_eq!(std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(), "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n");
+    assert_eq!(
+        std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(),
+        "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n"
+    );
     // A second install leaves it as it is.
     let again = adr(&dir, &["install"], &[], "");
-    assert!(!stdout(&again).contains("adrdom/.gitignore"), "{}", stdout(&again));
+    assert!(
+        !stdout(&again).contains("adrdom/.gitignore"),
+        "{}",
+        stdout(&again)
+    );
     assert!(adr(&dir, &["check"], &[], "").status.success());
 
     // Missing fails, and install clears it.
@@ -179,18 +188,26 @@ fn install_writes_the_ignore_file_and_check_holds_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("adrdom/.gitignore differs from what install writes; agent runs: adr install"),
+        stdout(&out).contains(
+            "adrdom/.gitignore differs from what install writes; agent runs: adr install"
+        ),
         "{}",
         stdout(&out)
     );
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    assert_eq!(std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(), "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n");
+    assert_eq!(
+        std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(),
+        "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n"
+    );
     assert!(adr(&dir, &["check"], &[], "").status.success());
 
     // Git ignores what the tool writes under the cache.
     std::fs::create_dir_all(dir.join("adrdom/cache")).unwrap();
     std::fs::write(dir.join("adrdom/cache/index.tsv"), "x").unwrap();
-    let st = stdout(&run_git(&dir, &["status", "--porcelain", "--untracked-files=all"]));
+    let st = stdout(&run_git(
+        &dir,
+        &["status", "--porcelain", "--untracked-files=all"],
+    ));
     assert!(!st.contains("adrdom/cache"), "{}", st);
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -216,7 +233,12 @@ fn every_command_but_planning_runs_without_the_model() {
     let show = adr(&dir, &["show"], &no_model, "");
     assert!(show.status.success(), "{}", stderr(&show));
     let check = adr(&dir, &["check"], &no_model, "");
-    assert!(check.status.success(), "{}{}", stdout(&check), stderr(&check));
+    assert!(
+        check.status.success(),
+        "{}{}",
+        stdout(&check),
+        stderr(&check)
+    );
     // No cache directory was made: nothing but planning touches the model.
     assert!(!dir.join("adrdom/cache").exists());
     std::fs::remove_dir_all(&dir).unwrap();
@@ -231,9 +253,15 @@ fn the_loader_refuses_when_the_model_is_missing() {
     let r = adr::embed::load(&dir);
     std::env::remove_var("ADR_NO_MODEL");
     let (want, next) = if cfg!(feature = "model") {
-        ("the embedding model is not installed", "agent runs: adr install --planning")
+        (
+            "the embedding model is not installed",
+            "agent runs: adr install --planning",
+        )
     } else {
-        ("the embedding model is missing", "agent builds adr with the model feature")
+        (
+            "the embedding model is missing",
+            "agent builds adr with the model feature",
+        )
     };
     let e = r.err().expect("the model is absent");
     assert!(e.contains(want), "{}", e);

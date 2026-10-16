@@ -1,9 +1,9 @@
 pub mod actions;
 pub mod approval;
 pub mod banned;
+pub mod blame;
 #[cfg(feature = "model")]
 pub mod cache;
-pub mod blame;
 pub mod commands;
 pub mod depends;
 pub mod embed;
@@ -13,9 +13,9 @@ pub mod moves;
 pub mod msg;
 pub mod neighbours;
 pub mod out;
+pub mod plan;
 #[cfg(feature = "model")]
 pub mod planning;
-pub mod plan;
 pub mod reader;
 pub mod record;
 pub mod repo;

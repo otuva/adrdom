@@ -51,8 +51,14 @@ fn ledger_rows(dir: &Path) -> Vec<adr::ledger::Row> {
 /// Every question heading and term name by identifier, as the records hold
 /// them now.
 fn names_now(dir: &Path) -> std::collections::HashMap<String, String> {
-    let terms = adr::state::load_terms(dir).map(|tf| tf.terms).unwrap_or_default();
-    adr::actions::event_names_in(&adr::record::load_all(dir), &terms, &adr::ledger::Ledger::default())
+    let terms = adr::state::load_terms(dir)
+        .map(|tf| tf.terms)
+        .unwrap_or_default();
+    adr::actions::event_names_in(
+        &adr::record::load_all(dir),
+        &terms,
+        &adr::ledger::Ledger::default(),
+    )
 }
 
 // Runs `act` and holds what it printed to the rows it appended: one line
@@ -73,9 +79,17 @@ fn prints_one_line_per_row(dir: &Path, act: impl FnOnce() -> Output) -> Output {
     let appended = adr::ledger::parse(&after[before.len()..]).rows;
     let printed = stdout(&out);
     let mut lines: Vec<&str> = printed.lines().collect();
-    assert_eq!(lines.len(), appended.len(), "one line per row: {}\n{:?}", printed, appended);
+    assert_eq!(
+        lines.len(),
+        appended.len(),
+        "one line per row: {}\n{:?}",
+        printed,
+        appended
+    );
     for row in &appended {
-        let want = adr::out::Event::from_row(row, &names).expect("every row an act writes is an event").text();
+        let want = adr::out::Event::from_row(row, &names)
+            .expect("every row an act writes is an event")
+            .text();
         let at = lines
             .iter()
             .position(|l| *l == want || l.starts_with(&format!("{}: ", want)))
@@ -168,10 +182,17 @@ fn a_ban_after_commits_prints_one_line_per_row_it_appends() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     run_git(&dir, &["add", "-A"]);
-    assert!(run_git(&dir, &["commit", "-q", "-m", "install"]).status.success());
+    assert!(run_git(&dir, &["commit", "-q", "-m", "install"])
+        .status
+        .success());
     prints_one_line_per_row(&dir, || adr(&dir, &["ban"], &[], "zorblax\n"));
     run_git(&dir, &["add", "-A"]);
-    assert!(run_git(&dir, &["commit", "-q", "-m", "ban"]).status.success());
+    assert!(run_git(&dir, &["commit", "-q", "-m", "ban"])
+        .status
+        .success());
     let out = prints_one_line_per_row(&dir, || adr(&dir, &["ban"], &[], "zorblax quxworth\n"));
-    assert!(!stdout(&out).is_empty(), "a ban that appends rows prints them");
+    assert!(
+        !stdout(&out).is_empty(),
+        "a ban that appends rows prints them"
+    );
 }

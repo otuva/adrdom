@@ -57,14 +57,24 @@ fn approve(dir: &Path, name: &str) -> std::process::Output {
 
 fn approve_ok(dir: &Path, name: &str) {
     let out = approve(dir, name);
-    assert!(out.status.success(), "approve {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve {} failed: {}",
+        name,
+        stderr(&out)
+    );
 }
 
 /// asks the file, answers `heading` A.
 fn ask_answer(dir: &Path, name: &str, heading: &str) {
     let p = dir.join(rel(name));
     let out = adr(dir, &["ask", p.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask {} failed: {}",
+        name,
+        stderr(&out)
+    );
     let id = id_of(&p, heading);
     let out = adr_answer(dir, &id, "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
@@ -79,14 +89,23 @@ fn setup() -> PathBuf {
 
 /// a.md with Q1 answered.
 fn with_q1(dir: &Path) -> PathBuf {
-    let p = write_record(dir, &rel("a"), &format!("# A\n{}", sec(Q1, "widget", None, true)));
+    let p = write_record(
+        dir,
+        &rel("a"),
+        &format!("# A\n{}", sec(Q1, "widget", None, true)),
+    );
     approve_ok(dir, "a");
     ask_answer(dir, "a", Q1);
     p
 }
 
 fn assert_refused_naming(out: &std::process::Output, names: &[&str]) {
-    assert!(!out.status.success(), "should have refused: {}{}", stdout(out), stderr(out));
+    assert!(
+        !out.status.success(),
+        "should have refused: {}{}",
+        stdout(out),
+        stderr(out)
+    );
     let err = stderr(out);
     for n in names {
         assert!(err.contains(n), "stderr should name {:?}: {}", n, err);
@@ -110,7 +129,11 @@ fn approve_refuses_a_supersedes_line_that_leaves_out_the_chain_above_the_target(
     let before = std::fs::read_to_string(&a).unwrap();
     let out = approve(&dir, "a");
     assert_refused_naming(&out, &[Q2, Q3]);
-    assert_eq!(std::fs::read_to_string(&a).unwrap(), before, "a refused approve writes nothing");
+    assert_eq!(
+        std::fs::read_to_string(&a).unwrap(),
+        before,
+        "a refused approve writes nothing"
+    );
 
     let full = before.replace(
         &format!("supersedes: {}\n", Q1),
@@ -119,7 +142,11 @@ fn approve_refuses_a_supersedes_line_that_leaves_out_the_chain_above_the_target(
     assert_ne!(full, before);
     std::fs::write(&a, full).unwrap();
     let out = approve(&dir, "a");
-    assert!(out.status.success(), "naming all three must pass: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "naming all three must pass: {}",
+        stderr(&out)
+    );
 }
 
 // adr: 796a2544-43e5-43db-b5d3-8a4e737ec9c6
@@ -127,7 +154,13 @@ fn approve_refuses_a_supersedes_line_that_leaves_out_the_chain_above_the_target(
 fn approve_refuses_a_supersedes_line_that_leaves_out_a_dependent_in_another_file() {
     let dir = setup();
     let a = with_q1(&dir);
-    old_dependent(&dir, "b", Q5, &id_of(&a, Q1), "55555555-5555-5555-5555-555555555555");
+    old_dependent(
+        &dir,
+        "b",
+        Q5,
+        &id_of(&a, Q1),
+        "55555555-5555-5555-5555-555555555555",
+    );
 
     append(&a, &sec(Q4, "widget", Some(Q1), true));
     let out = approve(&dir, "a");
@@ -137,11 +170,18 @@ fn approve_refuses_a_supersedes_line_that_leaves_out_a_dependent_in_another_file
     let c = std::fs::read_to_string(&p).unwrap();
     std::fs::write(
         &p,
-        c.replace(&format!("supersedes: {}\n", Q1), &format!("supersedes: {}, {}\n", Q1, Q5)),
+        c.replace(
+            &format!("supersedes: {}\n", Q1),
+            &format!("supersedes: {}, {}\n", Q1, Q5),
+        ),
     )
     .unwrap();
     let out = approve(&dir, "a");
-    assert!(out.status.success(), "naming q1 and q5 must pass: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "naming q1 and q5 must pass: {}",
+        stderr(&out)
+    );
 }
 
 // adr: 796a2544-43e5-43db-b5d3-8a4e737ec9c6
@@ -177,7 +217,11 @@ fn old_dependent(dir: &Path, name: &str, heading: &str, target: &str, id: &str) 
     let hash = mirror_section_hash(&section);
     append_ledger_row_at(dir, "asked", id, &hash, heading, "2024-01-01T00:00:00Z");
     append_ledger_row_at(dir, "answered", id, &hash, "A", "2024-01-01T00:00:01Z");
-    write_record(dir, &rel(name), &format!("# Old\n\n{}\n**Answer:** A\n", section.trim_end()));
+    write_record(
+        dir,
+        &rel(name),
+        &format!("# Old\n\n{}\n**Answer:** A\n", section.trim_end()),
+    );
 }
 
 /// The case where approve passed (Q4 names Q1 only, Q1 had no dependents)
@@ -191,7 +235,13 @@ fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf
         let out = adr(dir, &["ask", a.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "ask a failed: {}", stderr(&out));
     }
-    old_dependent(dir, "c", Q7, &id_of(&a, Q1), "77777777-7777-7777-7777-777777777777");
+    old_dependent(
+        dir,
+        "c",
+        Q7,
+        &id_of(&a, Q1),
+        "77777777-7777-7777-7777-777777777777",
+    );
     a
 }
 
@@ -229,17 +279,24 @@ fn answer_refuses_a_replacement_whose_target_gained_a_dependent_after_ask() {
 
 // adr: 796a2544-43e5-43db-b5d3-8a4e737ec9c6
 #[test]
-fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_target_gained_a_dependent() {
+fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_target_gained_a_dependent(
+) {
     let dir = setup();
     let _a = q1_gains_a_dependent_after_approve(&dir, false);
     let out = adr(&dir, &["check"], &[], "");
     let all = format!("{}{}", stdout(&out), stderr(&out));
     assert!(!out.status.success(), "check should fail: {}", all);
-    for n in [Q7, "c.md", "agent rewrites the supersedes line of", "to add adrdom/decisions/c.md"] {
+    for n in [
+        Q7,
+        "c.md",
+        "agent rewrites the supersedes line of",
+        "to add adrdom/decisions/c.md",
+    ] {
         assert!(all.contains(n), "check output should name {:?}: {}", n, all);
     }
     assert_eq!(
-        all.matches("supersedes a decision that current decisions stand on").count(),
+        all.matches("supersedes a decision that current decisions stand on")
+            .count(),
         1,
         "the tree refusal is printed once: {}",
         all
@@ -258,15 +315,28 @@ fn a_decision_superseded_by_two_names_both_under_superseded() {
     let b = write_record(
         &dir,
         &rel("b"),
-        &format!("# B\n{}{}", sec(Q4, "widget", Some(Q1), true), sec(Q5, "widget", Some(Q1), true)),
+        &format!(
+            "# B\n{}{}",
+            sec(Q4, "widget", Some(Q1), true),
+            sec(Q5, "widget", Some(Q1), true)
+        ),
     );
     approve_ok(&dir, "b");
     let out = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask b failed: {}", stderr(&out));
     for h in [Q4, Q5] {
         let out = adr_answer(&dir, &id_of(&b, h), "A");
-        assert!(out.status.success(), "answer {} failed: {}", h, stderr(&out));
+        assert!(
+            out.status.success(),
+            "answer {} failed: {}",
+            h,
+            stderr(&out)
+        );
     }
     let shown = stdout(&adr(&dir, &["show", "--superseded", &rel("a")], &[], ""));
-    assert!(shown.contains(&format!("replaced by: {}, {}", Q4, Q5)), "{}", shown);
+    assert!(
+        shown.contains(&format!("replaced by: {}, {}", Q4, Q5)),
+        "{}",
+        shown
+    );
 }

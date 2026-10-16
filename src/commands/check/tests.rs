@@ -1,9 +1,9 @@
-use crate::rules::Class;
 use crate::ledger::Ledger;
-use crate::rules::{Finding, Subject};
 use crate::msg;
 use crate::record::RecordFile;
 use crate::repo::{self, Source};
+use crate::rules::Class;
+use crate::rules::{Finding, Subject};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -81,13 +81,18 @@ pub(super) fn check_tests(
     }
 
     // In the order of the identifiers, so two runs print the same lines.
-    let mut untested: Vec<&String> = current.iter().filter(|id| !test_ids.contains_key(*id)).collect();
+    let mut untested: Vec<&String> = current
+        .iter()
+        .filter(|id| !test_ids.contains_key(*id))
+        .collect();
     untested.sort();
     for id in untested {
         // Per "What does check do with an untested current decision?": a
         // note on every run, never a failure, with the move that builds it
         // (per "Does check print a line with no move on it?", bd83aa22 A).
-        let Some(&(rf, i)) = place.get(id.as_str()) else { continue };
+        let Some(&(rf, i)) = place.get(id.as_str()) else {
+            continue;
+        };
         // Two standing answers: nothing stands to build; the conflict's own
         // finding names the move, as `show` names it.
         if crate::state::conflicting_rulings(led, id).is_some() {
@@ -97,19 +102,26 @@ pub(super) fn check_tests(
         // own finding names the move, and `show` names no build for it;
         // the untested line says so.
         let mv = if rf.tiers.is_none() {
-            crate::moves::Move::new(crate::moves::MoveKind::BuildWaitsTiers { heading: rf.sections[i].heading_text.clone() })
+            crate::moves::Move::new(crate::moves::MoveKind::BuildWaitsTiers {
+                heading: rf.sections[i].heading_text.clone(),
+            })
         } else {
             crate::moves::of_untested(rf, i, id, role)
         };
         notes.push(
-            Finding::said(Class::Untested, msg::untested(&rf.rel, &rf.sections[i].heading_text, mv.clause()))
-                .about(Subject::TopicFile(rf.rel.clone()))
-                .in_section(i),
+            Finding::said(
+                Class::Untested,
+                msg::untested(&rf.rel, &rf.sections[i].heading_text, mv.clause()),
+            )
+            .about(Subject::TopicFile(rf.rel.clone()))
+            .in_section(i),
         );
     }
 
-    let mut stale: Vec<(&String, &Vec<String>)> =
-        test_ids.iter().filter(|(id, _)| !current.contains(*id)).collect();
+    let mut stale: Vec<(&String, &Vec<String>)> = test_ids
+        .iter()
+        .filter(|(id, _)| !current.contains(*id))
+        .collect();
     stale.sort();
     for (id, locations) in stale {
         // A superseded question no file holds is named by the heading its
@@ -117,17 +129,27 @@ pub(super) fn check_tests(
         let heading = place
             .get(id.as_str())
             .map(|&(rf, i)| rf.sections[i].heading_text.as_str())
-            .or_else(|| led.latest_asked(id).map(|r| r.detail.as_str()).filter(|d| !d.is_empty()));
+            .or_else(|| {
+                led.latest_asked(id)
+                    .map(|r| r.detail.as_str())
+                    .filter(|d| !d.is_empty())
+            });
         // The tie moves to the current decisions that took the decision's
         // place, or goes when none did (2381d759): a note, never a failure.
         let to: Vec<(String, String)> = crate::state::current_successors(led, id)
             .into_iter()
-            .filter_map(|n| place.get(n.as_str()).map(|&(rf, i)| (rf.sections[i].heading_text.clone(), n.clone())))
+            .filter_map(|n| {
+                place
+                    .get(n.as_str())
+                    .map(|&(rf, i)| (rf.sections[i].heading_text.clone(), n.clone()))
+            })
             .collect();
         let mv = crate::moves::Move::new(crate::moves::MoveKind::Retie { to }).in_session(role);
-        notes.push(Finding::said(Class::Tested, msg::stale_test(id, heading, locations, mv.clause())));
+        notes.push(Finding::said(
+            Class::Tested,
+            msg::stale_test(id, heading, locations, mv.clause()),
+        ));
     }
 
     notes
 }
-

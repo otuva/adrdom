@@ -7,8 +7,8 @@
 
 mod common;
 
-use common::*;
 use adr::record;
+use common::*;
 
 const OLD_CONTENT: &str = r#"# Example
 
@@ -50,7 +50,12 @@ Standard: clear yes or no.
 fn line(time: &str, event: &str, id: &str, hash: &str, detail: &str) -> String {
     format!(
         "{}\t{}\t{}\t{}\t{}\t{}\n",
-        time, event, id, hash, detail, adr::version::VERSION
+        time,
+        event,
+        id,
+        hash,
+        detail,
+        adr::version::VERSION
     )
 }
 
@@ -82,9 +87,21 @@ fn later_time_approved_row_wins_even_when_it_sits_earlier_in_the_file() {
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let mut content = std::fs::read_to_string(&ledger_path).unwrap_or_default();
     // Physically first in the file, but the later time.
-    content.push_str(&line("2024-01-01T00:00:02Z", "approved", "-", &new_hash, rel));
+    content.push_str(&line(
+        "2024-01-01T00:00:02Z",
+        "approved",
+        "-",
+        &new_hash,
+        rel,
+    ));
     // Physically second (last in the file), but the earlier time.
-    content.push_str(&line("2024-01-01T00:00:01Z", "approved", "-", &old_hash, rel));
+    content.push_str(&line(
+        "2024-01-01T00:00:01Z",
+        "approved",
+        "-",
+        &old_hash,
+        rel,
+    ));
     std::fs::write(&ledger_path, &content).unwrap();
 
     // Context approved too, so only the plan-hash comparison this test
@@ -110,13 +127,55 @@ fn later_time_approved_row_wins_even_when_it_sits_earlier_in_the_file() {
 #[test]
 fn same_rows_different_file_order_give_the_same_check_and_show_output() {
     let rows = vec![
-        line("2024-01-01T00:00:01Z", "approved", "-", "1111111111111111111111111111111111111111111111111111111111111111", "adrdom/decisions/x.md"),
-        line("2024-01-01T00:00:05Z", "approved", "-", "2222222222222222222222222222222222222222222222222222222222222222", "adrdom/decisions/x.md"),
-        line("2024-01-01T00:00:01Z", "banned", "-", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "nonsense1"),
-        line("2024-01-01T00:00:03Z", "unbanned", "-", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "nonsense1"),
-        line("2024-01-01T00:00:05Z", "asked", "33333333-3333-3333-3333-333333333333", "4444444444444444444444444444444444444444444444444444444444444444", "Some heading?"),
-        line("2024-01-01T00:00:09Z", "answered", "33333333-3333-3333-3333-333333333333", "4444444444444444444444444444444444444444444444444444444444444444", "A"),
-        line("2024-01-01T00:00:01Z", "context", "-", "5555555555555555555555555555555555555555555555555555555555555555", "adrdom/decisions/x.md"),
+        line(
+            "2024-01-01T00:00:01Z",
+            "approved",
+            "-",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            "adrdom/decisions/x.md",
+        ),
+        line(
+            "2024-01-01T00:00:05Z",
+            "approved",
+            "-",
+            "2222222222222222222222222222222222222222222222222222222222222222",
+            "adrdom/decisions/x.md",
+        ),
+        line(
+            "2024-01-01T00:00:01Z",
+            "banned",
+            "-",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "nonsense1",
+        ),
+        line(
+            "2024-01-01T00:00:03Z",
+            "unbanned",
+            "-",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "nonsense1",
+        ),
+        line(
+            "2024-01-01T00:00:05Z",
+            "asked",
+            "33333333-3333-3333-3333-333333333333",
+            "4444444444444444444444444444444444444444444444444444444444444444",
+            "Some heading?",
+        ),
+        line(
+            "2024-01-01T00:00:09Z",
+            "answered",
+            "33333333-3333-3333-3333-333333333333",
+            "4444444444444444444444444444444444444444444444444444444444444444",
+            "A",
+        ),
+        line(
+            "2024-01-01T00:00:01Z",
+            "context",
+            "-",
+            "5555555555555555555555555555555555555555555555555555555555555555",
+            "adrdom/decisions/x.md",
+        ),
     ];
 
     let dir_a = init_repo();
@@ -131,11 +190,17 @@ fn same_rows_different_file_order_give_the_same_check_and_show_output() {
     let mut order_b = rows.clone();
     order_b.reverse();
     std::fs::write(dir_b.join("adrdom/state/ledger.tsv"), order_b.join("")).unwrap();
-    assert_ne!(order_a, order_b, "the two files must actually differ in row order");
+    assert_ne!(
+        order_a, order_b,
+        "the two files must actually differ in row order"
+    );
 
     let check_a = stdout(&adr(&dir_a, &["check"], &[], ""));
     let check_b = stdout(&adr(&dir_b, &["check"], &[], ""));
-    assert_eq!(check_a, check_b, "check output must not depend on file order");
+    assert_eq!(
+        check_a, check_b,
+        "check output must not depend on file order"
+    );
 
     let show_a = stdout(&adr(&dir_a, &["show", "--all"], &[], ""));
     let show_b = stdout(&adr(&dir_b, &["show", "--all"], &[], ""));
@@ -153,7 +218,13 @@ fn a_dropped_row_follows_an_answered_row_by_time_not_by_file_place() {
     let q = "33333333-3333-3333-3333-333333333333";
     let cause = "44444444-4444-4444-4444-444444444444";
     let h = "5555555555555555555555555555555555555555555555555555555555555555";
-    let dropped = line("2024-01-01T00:00:05Z", "dropped", q, h, &format!("{} A", cause));
+    let dropped = line(
+        "2024-01-01T00:00:05Z",
+        "dropped",
+        q,
+        h,
+        &format!("{} A", cause),
+    );
     let early_answer = line("2024-01-01T00:00:03Z", "answered", q, h, "A");
     let late_answer = line("2024-01-01T00:00:09Z", "answered", q, h, "A");
     let want = format!("dropped row for {} follows its answered row", q);

@@ -290,7 +290,10 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         "Problem: names leaked into decisions, reworded after the answer.",
         1,
     );
-    assert_ne!(answered, tampered, "fixture edit should have changed something");
+    assert_ne!(
+        answered, tampered,
+        "fixture edit should have changed something"
+    );
     std::fs::write(&record, &tampered).unwrap();
 
     let check_out = adr(&dir, &["check"], &[], "");
@@ -402,7 +405,11 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id_1 = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id_1, "A");
-    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.1 failed: {}",
+        stderr(&answer_out)
+    );
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(SECOND_QUESTION);
@@ -417,7 +424,11 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
         .find(|id| id != &old_id_1)
         .expect("second id assigned");
     let answer_out = adr_answer(&dir, &old_id_2, "A");
-    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.2 failed: {}",
+        stderr(&answer_out)
+    );
 
     // Add a third question that supersedes both prior ids at once,
     // comma-separated on a single `supersedes:` line (4.14).
@@ -444,7 +455,11 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
         .expect("third id assigned");
 
     let answer_out = adr_answer(&dir, &new_id, "A");
-    assert!(answer_out.status.success(), "answer 1.3 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.3 failed: {}",
+        stderr(&answer_out)
+    );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     for old in [&old_id_1, &old_id_2] {
@@ -474,13 +489,20 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
     let question_id = extract_ids(&content)[0].clone();
 
     let first = adr_answer(&dir, &question_id, "A");
-    assert!(first.status.success(), "first answer failed: {}", stderr(&first));
+    assert!(
+        first.status.success(),
+        "first answer failed: {}",
+        stderr(&first)
+    );
 
     // Answering the same, now-answered id again must refuse with the same
     // "already answered" message the pre-refactor command produced, and
     // must not append a second `answered` row.
     let second = adr_answer(&dir, &question_id, "A");
-    assert!(!second.status.success(), "second answer should have refused");
+    assert!(
+        !second.status.success(),
+        "second answer should have refused"
+    );
     assert!(
         stderr(&second).contains("is already answered"),
         "{}",
@@ -494,7 +516,10 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(
-        ledger.lines().filter(|l| l.contains("\tanswered\t")).count(),
+        ledger
+            .lines()
+            .filter(|l| l.contains("\tanswered\t"))
+            .count(),
         1,
         "second answer must not have written another answered row: {}",
         ledger
@@ -531,21 +556,18 @@ fn answer_takes_a_two_id_supersedes_when_a_sibling_replaced_one_target_after_the
     // on 1.4. Both targets are current, so approve accepts the plan.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&format!(
-        "{}{}",
+        "{}{}{}",
         FOURTH_QUESTION.replacen(
             "depends: authority\n",
             &format!("depends: authority\nsupersedes: {}\n", old_id_2),
             1
         ),
-        format!(
-            "{}{}",
-            plan_lines(THIRD_QUESTION, &[&old_id_1, &old_id_2]).replacen(
-                "depends: authority\n",
-                "depends: authority, 1.4 What is the fourth unit of authority called?=A\n",
-                1
-            ),
-            body_lines(THIRD_QUESTION)
+        plan_lines(THIRD_QUESTION, &[&old_id_1, &old_id_2]).replacen(
+            "depends: authority\n",
+            "depends: authority, 1.4 What is the fourth unit of authority called?=A\n",
+            1
         ),
+        body_lines(THIRD_QUESTION),
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);
@@ -568,7 +590,9 @@ fn answer_takes_a_two_id_supersedes_when_a_sibling_replaced_one_target_after_the
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     for old in [&old_id_1, &old_id_2] {
         assert!(
-            ledger.lines().any(|l| l.contains("\tsuperseded\t") && l.contains(old.as_str()) && l.contains(third_id.as_str())),
+            ledger.lines().any(|l| l.contains("\tsuperseded\t")
+                && l.contains(old.as_str())
+                && l.contains(third_id.as_str())),
             "{} is superseded by 1.3: {}",
             old,
             ledger
@@ -603,7 +627,11 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
-    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.1 failed: {}",
+        stderr(&answer_out)
+    );
 
     // The second question supersedes the first and is answered: the first
     // stops being current here.
@@ -627,7 +655,11 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         .find(|id| id != &old_id)
         .expect("second id assigned");
     let answer_out = adr_answer(&dir, &second_id, "A");
-    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.2 failed: {}",
+        stderr(&answer_out)
+    );
 
     // Add and really ask the third question with no `supersedes:` line yet
     // -- old_id is already superseded, so a real ask naming it here would
@@ -660,7 +692,9 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         1,
     );
     std::fs::write(&record, &edited).unwrap();
-    let heading_idx = edited.find("### 1.3 What is the third unit of authority called?").unwrap();
+    let heading_idx = edited
+        .find("### 1.3 What is the third unit of authority called?")
+        .unwrap();
     let section_text = edited[heading_idx..].trim_end_matches('\n');
     let new_hash = mirror_section_hash(section_text);
     // Later than old_id's real `superseded` row (today's actual clock
@@ -704,7 +738,11 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         .lines()
         .filter(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str()))
         .count();
-    assert_eq!(rows, 1, "expected exactly one superseded row for the first id: {}", ledger);
+    assert_eq!(
+        rows, 1,
+        "expected exactly one superseded row for the first id: {}",
+        ledger
+    );
 }
 
 // (E3) A split: two questions asked together (same `ask` call), both
@@ -736,7 +774,11 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
-    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.1 failed: {}",
+        stderr(&answer_out)
+    );
 
     // Both the second and third questions supersede old_id while it is
     // still current, and both get asked in the same `ask` run.
@@ -763,7 +805,10 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
     assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
 
     let content = std::fs::read_to_string(&record).unwrap();
-    let ids: Vec<String> = extract_ids(&content).into_iter().filter(|id| id != &old_id).collect();
+    let ids: Vec<String> = extract_ids(&content)
+        .into_iter()
+        .filter(|id| id != &old_id)
+        .collect();
     assert_eq!(ids.len(), 2, "expected the second and third ids: {:?}", ids);
     let second_id = ids[0].clone();
     let third_id = ids[1].clone();
@@ -792,8 +837,12 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
         "expected one superseded row per answer naming old_id: {:?}",
         superseded_rows
     );
-    assert!(superseded_rows.iter().any(|l| l.contains(second_id.as_str())));
-    assert!(superseded_rows.iter().any(|l| l.contains(third_id.as_str())));
+    assert!(superseded_rows
+        .iter()
+        .any(|l| l.contains(second_id.as_str())));
+    assert!(superseded_rows
+        .iter()
+        .any(|l| l.contains(third_id.as_str())));
 }
 
 // A stale target: X is superseded, then a later question Z names X in
@@ -814,7 +863,11 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
-    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.1 failed: {}",
+        stderr(&answer_out)
+    );
 
     // The second question supersedes old_id and is answered: old_id is
     // now superseded, no longer current.
@@ -838,7 +891,11 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
         .find(|id| id != &old_id)
         .expect("second id assigned");
     let answer_out = adr_answer(&dir, &second_id, "A");
-    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.2 failed: {}",
+        stderr(&answer_out)
+    );
 
     // The third question names the already-superseded old_id: `approve`
     // refuses it, before the plan holds it.
@@ -856,13 +913,28 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     );
     let err = stderr(&out);
     assert!(!err.starts_with("approve: "), "{}", err);
-    assert!(err.contains("1.3 What is the third unit of authority called?"), "{}", err);
+    assert!(
+        err.contains("1.3 What is the third unit of authority called?"),
+        "{}",
+        err
+    );
     assert!(err.contains(old_id.as_str()), "{}", err);
-    assert!(err.contains("which is not a current decision; agent rewrites the supersedes entry"), "{}", err);
-    assert!(err.contains("agent rewrites the supersedes entry"), "{}", err);
+    assert!(
+        err.contains("which is not a current decision; agent rewrites the supersedes entry"),
+        "{}",
+        err
+    );
+    assert!(
+        err.contains("agent rewrites the supersedes entry"),
+        "{}",
+        err
+    );
 
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, before, "a refused approve must change nothing in the topic file");
+    assert_eq!(
+        after, before,
+        "a refused approve must change nothing in the topic file"
+    );
 }
 
 #[test]
@@ -878,7 +950,11 @@ fn answer_accepts_a_supersedes_target_that_is_current() {
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
-    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.1 failed: {}",
+        stderr(&answer_out)
+    );
 
     // The second question supersedes the first while it is still current
     // (latest state `answered`): accepted.
@@ -902,7 +978,11 @@ fn answer_accepts_a_supersedes_target_that_is_current() {
         .find(|id| id != &old_id)
         .expect("second id assigned");
     let answer_out = adr_answer(&dir, &second_id, "A");
-    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer 1.2 failed: {}",
+        stderr(&answer_out)
+    );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
@@ -933,7 +1013,11 @@ fn answer_refuses_when_terms_md_is_missing() {
     std::fs::remove_file(dir.join("adrdom/terms.md")).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         "adrdom/terms.md missing; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"
@@ -959,7 +1043,11 @@ fn answer_refuses_when_terms_md_holds_an_unapproved_added_term_with_a_shape_erro
         "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n",
     );
     let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
-    assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
+    assert!(
+        terms_out.status.success(),
+        "approve terms failed: {}",
+        stderr(&terms_out)
+    );
 
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
@@ -977,9 +1065,19 @@ fn answer_refuses_when_terms_md_holds_an_unapproved_added_term_with_a_shape_erro
     std::fs::write(&terms_path, &terms).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
-    assert!(err.contains("adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"), "{}", err);
+    assert!(
+        err.contains(
+            "adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"
+        ),
+        "{}",
+        err
+    );
     assert!(!err.contains("agent fixes"), "{}", err);
 }
 
@@ -1000,7 +1098,11 @@ fn answer_and_refuse_stop_while_terms_md_holds_an_unapproved_added_term() {
         "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n",
     );
     let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
-    assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
+    assert!(
+        terms_out.status.success(),
+        "approve terms failed: {}",
+        stderr(&terms_out)
+    );
 
     let mut content = FIRST_QUESTION.to_string();
     content.push_str(SECOND_QUESTION);
@@ -1021,12 +1123,32 @@ fn answer_and_refuse_stop_while_terms_md_holds_an_unapproved_added_term() {
     std::fs::write(&terms_path, &terms).unwrap();
 
     let answer_out = adr_answer(&dir, &id1, "A");
-    assert!(!answer_out.status.success(), "answer should have refused: {}", stdout(&answer_out));
-    assert!(stderr(&answer_out).contains("adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"), "{}", stderr(&answer_out));
+    assert!(
+        !answer_out.status.success(),
+        "answer should have refused: {}",
+        stdout(&answer_out)
+    );
+    assert!(
+        stderr(&answer_out).contains(
+            "adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"
+        ),
+        "{}",
+        stderr(&answer_out)
+    );
 
     let refuse_out = adr_answer(&dir, &id2, "refuse");
-    assert!(!refuse_out.status.success(), "refuse should have refused: {}", stdout(&refuse_out));
-    assert!(stderr(&refuse_out).contains("adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"), "{}", stderr(&refuse_out));
+    assert!(
+        !refuse_out.status.success(),
+        "refuse should have refused: {}",
+        stdout(&refuse_out)
+    );
+    assert!(
+        stderr(&refuse_out).contains(
+            "adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"
+        ),
+        "{}",
+        stderr(&refuse_out)
+    );
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -1050,7 +1172,11 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
         "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n\n## gadget\ndefinition: A second fixture term no question names.\naliases: \n",
     );
     let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
-    assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
+    assert!(
+        terms_out.status.success(),
+        "approve terms failed: {}",
+        stderr(&terms_out)
+    );
 
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
@@ -1081,7 +1207,11 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     std::fs::write(&terms_path, &draft).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         "adrdom/decisions/example.md: adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"
@@ -1118,7 +1248,9 @@ fn answer_refuses_a_section_with_no_terms_line() {
         + "\n";
     std::fs::write(&record, &without_terms).unwrap();
 
-    let heading_idx = without_terms.find("### 1.1 What is the authority?").unwrap();
+    let heading_idx = without_terms
+        .find("### 1.1 What is the authority?")
+        .unwrap();
     let section_text = without_terms[heading_idx..].trim_end_matches('\n');
     let new_hash = mirror_section_hash(section_text);
     // Later than the real `asked` row `adr ask` just wrote (today's actual
@@ -1127,10 +1259,21 @@ fn answer_refuses_a_section_with_no_terms_line() {
     // row's place in `rows` comes from its time, so this hand-written row
     // has to carry a time after "now" to stand as the latest one, not just
     // sit later in the file.
-    append_ledger_row_at(&dir, "asked", &id, &new_hash, "1.1 What is the authority?", "2099-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        &id,
+        &new_hash,
+        "1.1 What is the authority?",
+        "2099-01-01T00:00:00Z",
+    );
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         format!("{} (\"1.1 What is the authority?\"): no terms line; agent runs: adr ask adrdom/decisions/example.md", id)
@@ -1146,7 +1289,13 @@ fn corrupt_terms_line(dir: &Path, record: &Path, heading: &str, new_terms_line: 
     let id = extract_ids(&asked)[0].clone();
     let edited: String = asked
         .lines()
-        .map(|l| if l.starts_with("terms: ") { new_terms_line } else { l })
+        .map(|l| {
+            if l.starts_with("terms: ") {
+                new_terms_line
+            } else {
+                l
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n")
         + "\n";
@@ -1184,7 +1333,11 @@ fn answer_refuses_a_malformed_terms_line() {
     );
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         format!("{} (\"1.1 What is the unit of authority called?\"): malformed terms line; agent runs: adr ask adrdom/decisions/example.md", id)
@@ -1213,7 +1366,11 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     );
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
@@ -1245,7 +1402,11 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     approve_terms_via_ledger(&dir, retired_terms);
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
@@ -1284,10 +1445,23 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
     // (the `adr` helper already removes it): every owner command refuses,
     // exit code 2, and none of the refusals mention "terminal".
     let approve_out = adr(&dir, &["approve", record.to_str().unwrap()], &[], "");
-    assert_eq!(approve_out.status.code(), Some(2), "{}", stderr(&approve_out));
+    assert_eq!(
+        approve_out.status.code(),
+        Some(2),
+        "{}",
+        stderr(&approve_out)
+    );
     let approve_err = stderr(&approve_out);
-    assert!(approve_err.contains("this is the owner's command"), "{}", approve_err);
-    assert!(!approve_err.to_lowercase().contains("terminal"), "{}", approve_err);
+    assert!(
+        approve_err.contains("this is the owner's command"),
+        "{}",
+        approve_err
+    );
+    assert!(
+        !approve_err.to_lowercase().contains("terminal"),
+        "{}",
+        approve_err
+    );
 
     let answer_out = adr(
         &dir,
@@ -1297,29 +1471,56 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
     );
     assert_eq!(answer_out.status.code(), Some(2), "{}", stderr(&answer_out));
     let answer_err = stderr(&answer_out);
-    assert!(answer_err.contains("this is the owner's command"), "{}", answer_err);
-    assert!(!answer_err.to_lowercase().contains("terminal"), "{}", answer_err);
+    assert!(
+        answer_err.contains("this is the owner's command"),
+        "{}",
+        answer_err
+    );
+    assert!(
+        !answer_err.to_lowercase().contains("terminal"),
+        "{}",
+        answer_err
+    );
 
     let unban_out = adr(&dir, &["unban"], &[], "somebannedword\n");
     assert_eq!(unban_out.status.code(), Some(2), "{}", stderr(&unban_out));
     let unban_err = stderr(&unban_out);
-    assert!(unban_err.contains("this is the owner's command"), "{}", unban_err);
-    assert!(!unban_err.to_lowercase().contains("terminal"), "{}", unban_err);
+    assert!(
+        unban_err.contains("this is the owner's command"),
+        "{}",
+        unban_err
+    );
+    assert!(
+        !unban_err.to_lowercase().contains("terminal"),
+        "{}",
+        unban_err
+    );
 
     let uninstall_out = adr(&dir, &["uninstall"], &[], "");
-    assert_eq!(uninstall_out.status.code(), Some(2), "{}", stderr(&uninstall_out));
+    assert_eq!(
+        uninstall_out.status.code(),
+        Some(2),
+        "{}",
+        stderr(&uninstall_out)
+    );
     let uninstall_err = stderr(&uninstall_out);
     assert!(
         uninstall_err.contains("this is the owner's command"),
         "{}",
         uninstall_err
     );
-    assert!(!uninstall_err.to_lowercase().contains("terminal"), "{}", uninstall_err);
+    assert!(
+        !uninstall_err.to_lowercase().contains("terminal"),
+        "{}",
+        uninstall_err
+    );
 
     // Nothing any of the refused commands could have written landed.
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        !ledger.lines().any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
+        !ledger
+            .lines()
+            .any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
         "no approve row should have been written on refusal: {}",
         ledger
     );
@@ -1441,7 +1642,12 @@ fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
     );
     // The move the refusal names, as printed, with a letter in place of
     // `<letter>`: made at the end of this test, and it answers the question.
-    let command = err.trim_end().split("owner runs: adr ").nth(1).unwrap().to_string();
+    let command = err
+        .trim_end()
+        .split("owner runs: adr ")
+        .nth(1)
+        .unwrap()
+        .to_string();
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert!(
@@ -1469,7 +1675,10 @@ fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: {}: no version given; owner runs: adr show", question_id)
+        format!(
+            "answer: {}: no version given; owner runs: adr show",
+            question_id
+        )
     );
 }
 
@@ -1547,7 +1756,9 @@ fn answer_on_a_withdrawn_question_says_withdrawn_not_edited() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let full = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&full)[0].clone();
     let version = current_version(&dir, &id);
@@ -1598,12 +1809,20 @@ fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_version() {
     let out = adr_owner(&dir, &["answer", &stale_arg, "Z"], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("has moved since that version was read"), "{}", err);
+    assert!(
+        err.contains("has moved since that version was read"),
+        "{}",
+        err
+    );
     assert!(!err.contains("letter Z does not name an option"), "{}", err);
     // With the current version the letter is the one fault left.
     let current = format!("{}@{}", question_id, current_version(&dir, &question_id));
     let out = adr_owner(&dir, &["answer", &current, "Z"], "");
-    assert!(stderr(&out).contains("letter Z does not name an option"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("letter Z does not name an option"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672

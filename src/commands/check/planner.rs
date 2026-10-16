@@ -15,15 +15,31 @@ pub(super) fn check_commit(root: &Path) -> Vec<Failure> {
     match session::role_checked(root) {
         Ok(Role::Planner) => {}
         Ok(Role::Plain) => return Vec::new(),
-        Err(e) => return vec![Failure::said(Class::Other, msg::planner_roles_unreadable(repo::ROLES_PATH, &e))],
+        Err(e) => {
+            return vec![Failure::said(
+                Class::Other,
+                msg::planner_roles_unreadable(repo::ROLES_PATH, &e),
+            )]
+        }
     }
     let prefix = format!("{}/", repo::ADRDOM_DIR);
     let outside: Vec<String> = match repo::staged_paths(root, true) {
-        Some(paths) => paths.into_iter().filter(|p| !p.starts_with(&prefix)).collect(),
-        None => return vec![Failure::said(Class::Other, msg::planner_staged_unreadable())],
+        Some(paths) => paths
+            .into_iter()
+            .filter(|p| !p.starts_with(&prefix))
+            .collect(),
+        None => {
+            return vec![Failure::said(
+                Class::Other,
+                msg::planner_staged_unreadable(),
+            )]
+        }
     };
     if outside.is_empty() {
         return Vec::new();
     }
-    vec![Failure::said(Class::Other, msg::planner_commit_outside(&outside, NAMED))]
+    vec![Failure::said(
+        Class::Other,
+        msg::planner_commit_outside(&outside, NAMED),
+    )]
 }

@@ -1,23 +1,26 @@
-use crate::rules::{Class, Command, Finding};
 use crate::actions;
 use crate::depends;
 use crate::ledger;
-use crate::rules;
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
-use crate::view;
 use crate::record;
 use crate::repo;
+use crate::rules;
+use crate::rules::{Class, Command, Finding};
 use crate::state;
 use crate::status;
 use crate::terms;
+use crate::view;
 use std::path::{Path, PathBuf};
 
 pub fn run(given: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Command::Ask, &msg::not_a_repo("ask", &[&given.display().to_string()], Actor::Agent));
+            out::eprint_stop(
+                Command::Ask,
+                &msg::not_a_repo("ask", &[&given.display().to_string()], Actor::Agent),
+            );
             return 1;
         }
     };
@@ -28,7 +31,10 @@ pub fn run(given: PathBuf) -> i32 {
     let rel = match state::given_rel(&root, &given) {
         Some(rel) if crate::rules::is_topic_file_path(&rel) => rel,
         rel => {
-            out::eprint_stop(Command::Ask, &msg::plan_not_a_topic_file(&rel.unwrap_or_else(|| given.display().to_string())));
+            out::eprint_stop(
+                Command::Ask,
+                &msg::plan_not_a_topic_file(&rel.unwrap_or_else(|| given.display().to_string())),
+            );
             return 1;
         }
     };
@@ -40,7 +46,14 @@ pub fn run(given: PathBuf) -> i32 {
     let loaded = record::load(&record_path);
     if loaded.is_ok() {
         if let Err(e) = crate::session::mark_planner(&root) {
-            out::eprint_stop(Command::Ask, &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner(msg::Act::Rewrites(repo::ROLES_PATH.to_string()))));
+            out::eprint_stop(
+                Command::Ask,
+                &msg::write_failed(
+                    repo::ROLES_PATH,
+                    &e,
+                    msg::Next::owner(msg::Act::Rewrites(repo::ROLES_PATH.to_string())),
+                ),
+            );
             return 1;
         }
     }
@@ -66,7 +79,10 @@ pub fn run(given: PathBuf) -> i32 {
             rf
         }
         Err(e) => {
-            out::eprint_stop(Command::Ask, &msg::read_failed(&rel, &e, msg::topic_file_unread("ask", &rel, &e)));
+            out::eprint_stop(
+                Command::Ask,
+                &msg::read_failed(&rel, &e, msg::topic_file_unread("ask", &rel, &e)),
+            );
             return 1;
         }
     };
@@ -135,11 +151,21 @@ pub fn run(given: PathBuf) -> i32 {
     );
     // A banned word in a question's text, the judgement show, plan and
     // approve read too (`rules::banned_in_questions`).
-    findings.extend(rules::banned_in_questions(&root, &rel, &rf, &terms_list, &led));
+    findings.extend(rules::banned_in_questions(
+        &root,
+        &rel,
+        &rf,
+        &terms_list,
+        &led,
+    ));
     // Each printed as the finding it is, under its own rule, as `show` and
     // `check` print it.
-    let shape: Vec<out::Line> =
-        findings.iter().filter(|r| r.class == Class::Parse).cloned().map(out::Line::Finding).collect();
+    let shape: Vec<out::Line> = findings
+        .iter()
+        .filter(|r| r.class == Class::Parse)
+        .cloned()
+        .map(out::Line::Finding)
+        .collect();
     if !shape.is_empty() {
         out::eprint(&shape);
         return 1;
@@ -149,8 +175,12 @@ pub fn run(given: PathBuf) -> i32 {
     // refusal (`rules::closed_findings`, in the judgement above): a closed
     // question edited since, a line no row backs, two standing answers. The
     // findings and moves `check` fails the file on, named the same way.
-    let closed: Vec<out::Line> =
-        findings.iter().filter(|f| f.class == Class::Answers).cloned().map(out::Line::Finding).collect();
+    let closed: Vec<out::Line> = findings
+        .iter()
+        .filter(|f| f.class == Class::Answers)
+        .cloned()
+        .map(out::Line::Finding)
+        .collect();
     if !closed.is_empty() {
         out::eprint(&closed);
         return 1;
@@ -162,18 +192,32 @@ pub fn run(given: PathBuf) -> i32 {
     let file_moves = || -> crate::moves::Report {
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
         let mut report = match all_records.iter().find(|f| f.rel == rel) {
-            Some(loaded) => crate::moves::of_topic_file_in(&root, loaded, &all_records, &terms_list, &led, &tests),
+            Some(loaded) => crate::moves::of_topic_file_in(
+                &root,
+                loaded,
+                &all_records,
+                &terms_list,
+                &led,
+                &tests,
+            ),
             None => crate::moves::Report::default(),
         };
         if report.findings.is_empty() && report.moves.is_empty() {
-            report.moves.push(crate::moves::Move::new(crate::moves::MoveKind::Approve { path: rel.clone() }));
+            report
+                .moves
+                .push(crate::moves::Move::new(crate::moves::MoveKind::Approve {
+                    path: rel.clone(),
+                }));
         }
         report
     };
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
         let status = crate::status::plan_status(&led, &rel, false);
         let report = file_moves();
-        let mut lines = vec![Line::Finding(Finding::said(Class::Plan, msg::plan_not_approved(&rel, status, &report)))];
+        let mut lines = vec![Line::Finding(Finding::said(
+            Class::Plan,
+            msg::plan_not_approved(&rel, status, &report),
+        ))];
         lines.extend(report.findings.into_iter().map(Line::Finding));
         out::eprint(&lines);
         return 1;
@@ -181,7 +225,10 @@ pub fn run(given: PathBuf) -> i32 {
     if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
         let status = crate::status::prose_status(&led, &rel, false);
         let report = file_moves();
-        let mut lines = vec![Line::Finding(Finding::said(Class::Plan, msg::context_not_approved(&rel, status, &report)))];
+        let mut lines = vec![Line::Finding(Finding::said(
+            Class::Plan,
+            msg::context_not_approved(&rel, status, &report),
+        ))];
         lines.extend(report.findings.into_iter().map(Line::Finding));
         out::eprint(&lines);
         return 1;
@@ -192,7 +239,11 @@ pub fn run(given: PathBuf) -> i32 {
     // row. Computed against the file exactly as loaded, before any
     // mutation, so the gates below (and any refusal) see the same file
     // the owner is looking at.
-    let candidate: Vec<bool> = rf.sections.iter().map(|sec| status::open_to_ask(&led, &rf, sec)).collect();
+    let candidate: Vec<bool> = rf
+        .sections
+        .iter()
+        .map(|sec| status::open_to_ask(&led, &rf, sec))
+        .collect();
 
     // Derive-error refusal (8.4/8.7): a derivation failure means `approve`
     // would also refuse on this same file, so the fix has to happen before
@@ -241,9 +292,15 @@ pub fn run(given: PathBuf) -> i32 {
         // `approve`, `check` and `answer` read too): the line freezes at ask,
         // so a candidate naming a target that is not current, leaving out a
         // decision standing on one, or standing on one refuses here.
-        refusals.extend(
-            rules::supersedes_refusals(&rel, &rf, &cross_file_headings, &names, &all_records, &led, Some(i)),
-        );
+        refusals.extend(rules::supersedes_refusals(
+            &rel,
+            &rf,
+            &cross_file_headings,
+            &names,
+            &all_records,
+            &led,
+            Some(i),
+        ));
 
         // Every rule the question breaks (`rules::record_refusals`, the
         // judgement `approve` and `check` read): a loaded phrase, a line
@@ -256,7 +313,6 @@ pub fn run(given: PathBuf) -> i32 {
                 refusals.push(f.clone());
             }
         }
-
     }
 
     if !refusals.is_empty() {
@@ -289,7 +345,10 @@ pub fn run(given: PathBuf) -> i32 {
             None => {
                 // Unreachable given refusal 6 above, but never silently
                 // drop a binding if it somehow happens.
-                out::eprint(&[Line::Finding(Finding::said(Class::Terms, msg::pairs_no_term_at_write(&rel, &sec.heading_text)))]);
+                out::eprint(&[Line::Finding(Finding::said(
+                    Class::Terms,
+                    msg::pairs_no_term_at_write(&rel, &sec.heading_text),
+                ))]);
                 return 1;
             }
         };
@@ -405,7 +464,10 @@ pub fn run(given: PathBuf) -> i32 {
         return 1;
     }
 
-    out::print_events(&actions::Outcome::of_rows(&new_rows, &view::heading_texts(std::slice::from_ref(&rf))).events);
+    out::print_events(
+        &actions::Outcome::of_rows(&new_rows, &view::heading_texts(std::slice::from_ref(&rf)))
+            .events,
+    );
     0
 }
 
@@ -423,7 +485,10 @@ fn find_prefixed_line(lines: &[String], start: usize, end: usize, prefix: &str) 
 /// nothing to re-ask without one), and `state::conflicting_rulings` finds
 /// two or more standing rulings for its id. Returns the section's own
 /// index and its id, for `do_conflict_reask`.
-fn find_conflicted_section(rf: &record::RecordFile, led: &ledger::Ledger) -> Option<(usize, String)> {
+fn find_conflicted_section(
+    rf: &record::RecordFile,
+    led: &ledger::Ledger,
+) -> Option<(usize, String)> {
     for (i, sec) in rf.sections.iter().enumerate() {
         let Some(id) = &sec.id else { continue };
         if sec.answer_line.is_none() {
@@ -436,7 +501,7 @@ fn find_conflicted_section(rf: &record::RecordFile, led: &ledger::Ledger) -> Opt
     None
 }
 
-/// Removes the `**Answer:**` line `finish_answer` (src/actions.rs) once
+/// Removes the `**Answer:**` line `finish_answer` (src/actions) once
 /// spliced in for section `idx`, and the blank line it inserted directly
 /// above it, leaving the section exactly as it looked before it was first
 /// answered: `finish_answer` always inserts exactly those two lines
@@ -486,11 +551,16 @@ fn do_conflict_reask(
     strip_answer_line(&mut rf, idx);
 
     if let Err(e) = record::save(&rf) {
-        out::eprint_stop(Command::Ask,
+        out::eprint_stop(
+            Command::Ask,
             &msg::write_failed(
                 &state::rel_path(root, record_path),
                 e,
-                msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &state::rel_path(root, record_path)])),
+                msg::after_fix_agent_runs(crate::moves::command(&[
+                    "adr",
+                    "ask",
+                    &state::rel_path(root, record_path),
+                ])),
             ),
         );
         return 1;
@@ -515,7 +585,9 @@ fn do_conflict_reask(
     for (di, set) in rf.dependents_of(idx) {
         let Some(set) = set else { continue };
         let dependent = &rf.sections[di];
-        let Some(dep_id) = dependent.id.clone() else { continue };
+        let Some(dep_id) = dependent.id.clone() else {
+            continue;
+        };
         new_rows.push(ledger::Row {
             time: write_time.clone(),
             event: "assumes".to_string(),
@@ -531,10 +603,24 @@ fn do_conflict_reask(
         if let Some(original) = &original {
             let _ = std::fs::write(record_path, original);
         }
-        out::eprint_stop(Command::Ask, &msg::update_failed("ledger", e, msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &state::rel_path(root, record_path)]))));
+        out::eprint_stop(
+            Command::Ask,
+            &msg::update_failed(
+                "ledger",
+                e,
+                msg::after_fix_agent_runs(crate::moves::command(&[
+                    "adr",
+                    "ask",
+                    &state::rel_path(root, record_path),
+                ])),
+            ),
+        );
         return 1;
     }
 
-    out::print_events(&actions::Outcome::of_rows(&new_rows, &view::heading_texts(std::slice::from_ref(&rf))).events);
+    out::print_events(
+        &actions::Outcome::of_rows(&new_rows, &view::heading_texts(std::slice::from_ref(&rf)))
+            .events,
+    );
     0
 }

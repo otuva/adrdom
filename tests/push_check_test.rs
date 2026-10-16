@@ -49,17 +49,26 @@ fn init_bare_remote() -> PathBuf {
 }
 
 fn current_branch(dir: &Path) -> String {
-    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"])).trim().to_string()
+    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 fn head_sha(dir: &Path) -> String {
-    stdout(&git_ok(dir, &["rev-parse", "HEAD"])).trim().to_string()
+    stdout(&git_ok(dir, &["rev-parse", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 fn commit_all(dir: &Path, msg: &str) {
     run_git(dir, &["add", "-A"]);
     let out = run_git(dir, &["commit", "-q", "-m", msg]);
-    assert!(out.status.success(), "commit '{}' failed: {}", msg, stderr(&out));
+    assert!(
+        out.status.success(),
+        "commit '{}' failed: {}",
+        msg,
+        stderr(&out)
+    );
 }
 
 /// A repo with `adr install`ed, its own state committed, and a bare
@@ -75,7 +84,11 @@ fn new_repo_with_remote() -> (PathBuf, PathBuf, String) {
     let remote = init_bare_remote();
     git_ok(&dir, &["remote", "add", "origin", remote.to_str().unwrap()]);
     let push = git_ok(&dir, &["push", "-u", "origin", &branch]);
-    assert!(push.status.success(), "initial push failed: {}", stderr(&push));
+    assert!(
+        push.status.success(),
+        "initial push failed: {}",
+        stderr(&push)
+    );
 
     (dir, remote, branch)
 }
@@ -92,7 +105,10 @@ fn a_install_writes_an_executable_pre_push_hook_check_holds_and_install_restores
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let hook_path = dir.join(".githooks/pre-push");
-    assert!(hook_path.is_file(), "pre-push hook must exist after install");
+    assert!(
+        hook_path.is_file(),
+        "pre-push hook must exist after install"
+    );
     assert!(
         adr::repo::hook_is_executable(&hook_path),
         "pre-push hook must be executable after install"
@@ -174,7 +190,10 @@ fn c_a_force_push_that_drops_a_remote_ledger_row_is_refused() {
     // commit -- a real rewrite, not a fast-forward.
     git_ok(&dir, &["reset", "--hard", "HEAD~1"]);
     std::fs::write(dir.join("unrelated.txt"), "unrelated change\n").unwrap();
-    commit_all(&dir, "an unrelated commit, replacing the one that banned a word");
+    commit_all(
+        &dir,
+        "an unrelated commit, replacing the one that banned a word",
+    );
 
     let forced = run_git(&dir, &["push", "--force", "origin", &branch]);
     assert!(
@@ -228,7 +247,10 @@ fn f_push_conflicts_with_staged() {
     commit_all(&dir, "install");
 
     let out = adr(&dir, &["check", "--push", "--staged"], &[], "");
-    assert!(!out.status.success(), "--push and --staged together must be refused");
+    assert!(
+        !out.status.success(),
+        "--push and --staged together must be refused"
+    );
     assert!(
         stderr(&out).contains("cannot be used with"),
         "{}",
@@ -251,7 +273,10 @@ fn f_push_conflicts_with_message() {
         &[],
         "",
     );
-    assert!(!out.status.success(), "--push and --message together must be refused");
+    assert!(
+        !out.status.success(),
+        "--push and --message together must be refused"
+    );
     assert!(
         stderr(&out).contains("cannot be used with"),
         "{}",
@@ -268,7 +293,10 @@ fn f_push_conflicts_with_since() {
     let since = head_sha(&dir);
 
     let out = adr(&dir, &["check", "--push", "--since", &since], &[], "");
-    assert!(!out.status.success(), "--push and --since together must be refused");
+    assert!(
+        !out.status.success(),
+        "--push and --since together must be refused"
+    );
     assert!(
         stderr(&out).contains("cannot be used with"),
         "{}",
@@ -323,12 +351,23 @@ fn g_a_force_push_that_edits_a_remote_reader_row_is_refused_and_one_that_drops_i
 
     // The row replaced by a copy with another word: refused.
     git_ok(&dir, &["reset", "--hard", "HEAD~1"]);
-    std::fs::write(dir.join("adrdom/state/reader.tsv"), row.replacen("\tsame\t", "\tdepends\t", 1)).unwrap();
+    std::fs::write(
+        dir.join("adrdom/state/reader.tsv"),
+        row.replacen("\tsame\t", "\tdepends\t", 1),
+    )
+    .unwrap();
     commit_all(&dir, "the row with another word");
     let forced = run_git(&dir, &["push", "--force", "origin", &branch]);
-    assert!(!forced.status.success(), "a push that edits a remote reader row must be refused");
+    assert!(
+        !forced.status.success(),
+        "a push that edits a remote reader row must be refused"
+    );
     let text = format!("{}{}", stdout(&forced), stderr(&forced));
-    assert!(text.contains("would change a reader row the remote's"), "{}", text);
+    assert!(
+        text.contains("would change a reader row the remote's"),
+        "{}",
+        text
+    );
     assert!(!text.contains("would drop ledger rows"), "{}", text);
 
     // The row gone whole: passes.
@@ -336,5 +375,10 @@ fn g_a_force_push_that_edits_a_remote_reader_row_is_refused_and_one_that_drops_i
     std::fs::write(dir.join("unrelated.txt"), "unrelated change\n").unwrap();
     commit_all(&dir, "an unrelated commit, replacing the one with the row");
     let forced = run_git(&dir, &["push", "--force", "origin", &branch]);
-    assert!(forced.status.success(), "a push that drops a remote reader row passes: {}{}", stdout(&forced), stderr(&forced));
+    assert!(
+        forced.status.success(),
+        "a push that drops a remote reader row passes: {}{}",
+        stdout(&forced),
+        stderr(&forced)
+    );
 }

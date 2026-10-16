@@ -46,7 +46,12 @@ fn assert_parity_with(dir: &std::path::Path, record: &std::path::Path, needle: &
     );
 
     let check_out = adr(dir, &["check"], &[], "");
-    assert_eq!(!check_out.status.success(), fails, "check exit: {}", stdout(&check_out));
+    assert_eq!(
+        !check_out.status.success(),
+        fails,
+        "check exit: {}",
+        stdout(&check_out)
+    );
     let check_text = stdout(&check_out);
     assert!(
         check_text.contains(needle),
@@ -65,11 +70,7 @@ fn parity_bad_depends_entry() {
     let content = "# Example\n\n### 1.1 Q?\ndepends: nosuchterm\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(
-        &dir,
-        &record,
-        "depends on \"nosuchterm\" which is no term",
-    );
+    assert_parity_note(&dir, &record, "depends on \"nosuchterm\" which is no term");
 }
 
 #[test]
@@ -81,7 +82,11 @@ fn parity_tell_in_heading() {
     let content = "# Example\n\nContext prose.\n\n### How many stores exist?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(&dir, &record, "the heading opens with \"how many\"; agent rewrites the heading");
+    assert_parity_note(
+        &dir,
+        &record,
+        "the heading opens with \"how many\"; agent rewrites the heading",
+    );
 }
 
 #[test]
@@ -216,5 +221,9 @@ fn approve_allows_a_two_sentence_definition() {
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_SENTENCE_DEFINITION);
 
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve should have allowed it: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve should have allowed it: {}",
+        stderr(&out)
+    );
 }

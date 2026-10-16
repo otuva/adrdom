@@ -26,7 +26,11 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
     // section of its own, it just sits as ordinary text inside 1.1's body,
     // which `ask` refuses as a stray line.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "ask should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains(&format!("stray line {}", stray_line_no)),
@@ -37,7 +41,10 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
     // Nothing written: the file is untouched, so certainly no id was ever
     // assigned to the P1 line (or anywhere else).
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, content, "ask must not modify the file when it refuses");
+    assert_eq!(
+        after, content,
+        "ask must not modify the file when it refuses"
+    );
     assert!(
         extract_ids(&after).is_empty(),
         "no id should have been assigned: {}",
@@ -87,7 +94,11 @@ fn a_question_needs_two_or_three_options() {
         approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(out.status.success(), "two options should be accepted: {}", stderr(&out));
+        assert!(
+            out.status.success(),
+            "two options should be accepted: {}",
+            stderr(&out)
+        );
     }
 
     // Three options: accepted.
@@ -100,7 +111,11 @@ fn a_question_needs_two_or_three_options() {
         approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(out.status.success(), "three options should be accepted: {}", stderr(&out));
+        assert!(
+            out.status.success(),
+            "three options should be accepted: {}",
+            stderr(&out)
+        );
     }
 }
 
@@ -121,8 +136,16 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-        assert!(stderr(&out).contains("missing Problem line"), "{}", stderr(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
+        assert!(
+            stderr(&out).contains("missing Problem line"),
+            "{}",
+            stderr(&out)
+        );
     }
 
     // Missing Standard: refused.
@@ -134,8 +157,16 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-        assert!(stderr(&out).contains("missing Standard line"), "{}", stderr(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
+        assert!(
+            stderr(&out).contains("missing Standard line"),
+            "{}",
+            stderr(&out)
+        );
     }
 
     // Both present: accepted.
@@ -148,7 +179,11 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(out.status.success(), "ask should have accepted it: {}", stderr(&out));
+        assert!(
+            out.status.success(),
+            "ask should have accepted it: {}",
+            stderr(&out)
+        );
     }
 }
 
@@ -167,8 +202,16 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-        assert!(stderr(&out).contains("option A missing Costs"), "{}", stderr(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
+        assert!(
+            stderr(&out).contains("option A missing Costs"),
+            "{}",
+            stderr(&out)
+        );
     }
 
     // Option A has no Why: refused.
@@ -180,8 +223,16 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-        assert!(stderr(&out).contains("option A missing Why"), "{}", stderr(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
+        assert!(
+            stderr(&out).contains("option A missing Why"),
+            "{}",
+            stderr(&out)
+        );
     }
 
     // Every option carries both: accepted.
@@ -194,7 +245,11 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(out.status.success(), "ask should have accepted it: {}", stderr(&out));
+        assert!(
+            out.status.success(),
+            "ask should have accepted it: {}",
+            stderr(&out)
+        );
     }
 }
 
@@ -225,7 +280,11 @@ fn a_problem_or_standard_value_stays_on_one_line() {
             + 1;
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
         assert!(
             stderr(&out).contains(&format!("stray line {}", stray_line_no)),
             "{}",
@@ -243,9 +302,21 @@ fn a_problem_or_standard_value_stays_on_one_line() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-        assert!(stderr(&out).contains("duplicate Problem line"), "{}", stderr(&out));
-        assert!(!stderr(&out).contains("missing Problem line"), "{}", stderr(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
+        assert!(
+            stderr(&out).contains("duplicate Problem line"),
+            "{}",
+            stderr(&out)
+        );
+        assert!(
+            !stderr(&out).contains("missing Problem line"),
+            "{}",
+            stderr(&out)
+        );
     }
 }
 
@@ -285,10 +356,18 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         let record = write_record(&dir, "adrdom/decisions/example.md", &clean("One."));
         approve_record(&dir, "adrdom/decisions/example.md");
         let approved = std::fs::read_to_string(&record).unwrap();
-        std::fs::write(&record, approved.replace("- A) One.\n", "- A) no terminator here\n")).unwrap();
+        std::fs::write(
+            &record,
+            approved.replace("- A) One.\n", "- A) no terminator here\n"),
+        )
+        .unwrap();
 
         let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!ask_out.status.success(), "ask should have refused: {}", stdout(&ask_out));
+        assert!(
+            !ask_out.status.success(),
+            "ask should have refused: {}",
+            stdout(&ask_out)
+        );
         assert!(
             stderr(&ask_out).contains("option A has no decision sentence"),
             "{}",
@@ -297,7 +376,11 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
 
         let check_out = adr(&dir, &["check"], &[], "");
         // The edited file awaits approval again: a note (912f4f3b-1213-435a-af0d-7617017fcff4).
-        assert!(check_out.status.success(), "check prints it as a note: {}", stdout(&check_out));
+        assert!(
+            check_out.status.success(),
+            "check prints it as a note: {}",
+            stdout(&check_out)
+        );
         assert!(
             stdout(&check_out).contains("option A has no decision sentence"),
             "{}",
@@ -320,7 +403,11 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         .unwrap();
 
         let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!ask_out.status.success(), "ask should have refused: {}", stdout(&ask_out));
+        assert!(
+            !ask_out.status.success(),
+            "ask should have refused: {}",
+            stdout(&ask_out)
+        );
         assert!(
             stderr(&ask_out).contains("option A decision text has 2 sentences, more than one"),
             "{}",
@@ -328,7 +415,11 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         );
 
         let check_out = adr(&dir, &["check"], &[], "");
-        assert!(check_out.status.success(), "check prints it as a note: {}", stdout(&check_out));
+        assert!(
+            check_out.status.success(),
+            "check prints it as a note: {}",
+            stdout(&check_out)
+        );
         assert!(
             stdout(&check_out).contains("option A decision text has 2 sentences, more than one"),
             "{}",
@@ -345,10 +436,18 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         approve_record(&dir, "adrdom/decisions/example.md");
 
         let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(ask_out.status.success(), "ask should have accepted it: {}", stderr(&ask_out));
+        assert!(
+            ask_out.status.success(),
+            "ask should have accepted it: {}",
+            stderr(&ask_out)
+        );
 
         let check_out = adr(&dir, &["check"], &[], "");
-        assert!(check_out.status.success(), "check should have accepted it too: {}", stdout(&check_out));
+        assert!(
+            check_out.status.success(),
+            "check should have accepted it too: {}",
+            stdout(&check_out)
+        );
     }
 }
 
@@ -370,8 +469,16 @@ fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-        assert!(stderr(&out).contains("option A has two Why lines"), "{}", stderr(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
+        assert!(
+            stderr(&out).contains("option A has two Why lines"),
+            "{}",
+            stderr(&out)
+        );
     }
 
     // Option A has two Costs lines: refused.
@@ -383,8 +490,16 @@ fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-        assert!(stderr(&out).contains("option A has two Costs lines"), "{}", stderr(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused: {}",
+            stdout(&out)
+        );
+        assert!(
+            stderr(&out).contains("option A has two Costs lines"),
+            "{}",
+            stderr(&out)
+        );
     }
 }
 
@@ -407,16 +522,35 @@ fn an_answer_line_before_the_rest_of_the_body_is_rejected_for_its_position() {
 
     let approved = std::fs::read_to_string(&record).unwrap();
     let broken = approved.replacen("\n\nProblem: p.", "\n\n**Answer:** A\n\nProblem: p.", 1);
-    assert_ne!(broken, approved, "the insertion point must exist in the approved file");
+    assert_ne!(
+        broken, approved,
+        "the insertion point must exist in the approved file"
+    );
     std::fs::write(&record, &broken).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-    assert!(stderr(&out).contains("answer line not last"), "{}", stderr(&out));
+    assert!(
+        !out.status.success(),
+        "ask should have refused: {}",
+        stdout(&out)
+    );
+    assert!(
+        stderr(&out).contains("answer line not last"),
+        "{}",
+        stderr(&out)
+    );
 
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(!check_out.status.success(), "check should have refused: {}", stdout(&check_out));
-    assert!(stdout(&check_out).contains("answer line not last"), "{}", stdout(&check_out));
+    assert!(
+        !check_out.status.success(),
+        "check should have refused: {}",
+        stdout(&check_out)
+    );
+    assert!(
+        stdout(&check_out).contains("answer line not last"),
+        "{}",
+        stdout(&check_out)
+    );
 }
 
 // adr: 0a742360-83c2-479d-b858-4bea646c9b36
@@ -441,7 +575,11 @@ fn a_lean_line_in_the_topic_file_is_stray() {
     let stray_line_no = content.lines().position(|l| l == "Lean: A.").unwrap() + 1;
 
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!ask_out.status.success(), "ask should have refused: {}", stdout(&ask_out));
+    assert!(
+        !ask_out.status.success(),
+        "ask should have refused: {}",
+        stdout(&ask_out)
+    );
     assert!(
         stderr(&ask_out).contains(&format!("stray line {}", stray_line_no)),
         "{}",
@@ -484,9 +622,7 @@ fn ledger_rows_for_ask_and_answer_carry_no_lean() {
 
     let after_ask = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&after_ask)[0].clone();
-    assert!(adr_answer(&dir, &question_id, "A")
-        .status
-        .success());
+    assert!(adr_answer(&dir, &question_id, "A").status.success());
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let asked_row = ledger

@@ -88,18 +88,14 @@ fn check_passes_when_the_dependent_heading_vanished() {
     write_record(&dir, "adrdom/decisions/colors.md", &content);
     append_ledger_row(&dir, "asked", TARGET_ID, "anyhash", "1.1 Which color?");
     let old_hash = assumes_hash(REMOVED_DEPENDENT_ID, "A");
-    append_ledger_row(
-        &dir,
-        "assumes",
-        TARGET_ID,
-        &old_hash,
-        REMOVED_DEPENDENT_ID,
-    );
+    append_ledger_row(&dir, "assumes", TARGET_ID, &old_hash, REMOVED_DEPENDENT_ID);
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        !text.lines().any(|l| l.starts_with("answers:") && l.contains("answer set")),
+        !text
+            .lines()
+            .any(|l| l.starts_with("answers:") && l.contains("answer set")),
         "a vanished dependent heading must not be flagged: {}",
         text
     );

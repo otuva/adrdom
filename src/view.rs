@@ -21,7 +21,6 @@ pub struct CheckReport {
     pub moves: Vec<crate::moves::Move>,
 }
 
-
 /// Every heading id of the topic files `records`, paired with its heading
 /// text (per "What does a reference in a topic file carry?"): what turns an identifier back into
 /// the heading it names.
@@ -127,7 +126,10 @@ mod tests {
     fn append_row_at(dir: &Path, event: &str, id: &str, hash: &str, detail: &str, time: &str) {
         let path = dir.join(repo::LEDGER_PATH);
         let mut existing = std::fs::read_to_string(&path).unwrap_or_default();
-        existing.push_str(&format!("{}\t{}\t{}\t{}\t{}\n", time, event, id, hash, detail));
+        existing.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}\n",
+            time, event, id, hash, detail
+        ));
         std::fs::write(&path, existing).unwrap();
     }
 
@@ -160,7 +162,10 @@ Standard: s2.\n\n\
             .iter()
             .find(|s| s.heading_text == "1.1 First question?")
             .unwrap();
-        assert_eq!(crate::status::question_status(&led, sec1), QuestionStatus::Asked);
+        assert_eq!(
+            crate::status::question_status(&led, sec1),
+            QuestionStatus::Asked
+        );
 
         // 2.1 has no id (never asked) but has a body -> Unasked.
         let sec2 = rf
@@ -168,7 +173,10 @@ Standard: s2.\n\n\
             .iter()
             .find(|s| s.heading_text == "2.1 Second question?")
             .unwrap();
-        assert_eq!(crate::status::question_status(&led, sec2), QuestionStatus::NotAsked);
+        assert_eq!(
+            crate::status::question_status(&led, sec2),
+            QuestionStatus::NotAsked
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -181,7 +189,14 @@ Standard: s2.\n\n\
         append_row_at(&dir, "answered", "id-a", "h", "A", "2024-01-01T00:00:01Z");
         append_row_at(&dir, "asked", "id-b", "h", "B?", "2024-01-01T00:00:02Z");
         append_row_at(&dir, "answered", "id-b", "h", "A", "2024-01-01T00:00:03Z");
-        append_row_at(&dir, "superseded", "id-b", "-", "id-c", "2024-01-01T00:00:04Z");
+        append_row_at(
+            &dir,
+            "superseded",
+            "id-b",
+            "-",
+            "id-c",
+            "2024-01-01T00:00:04Z",
+        );
         append_row_at(&dir, "asked", "id-d", "h", "D?", "2024-01-01T00:00:05Z");
         append_row_at(&dir, "withdrawn", "id-d", "-", "D?", "2024-01-01T00:00:06Z");
         let led = ledger::read(&led_path);
@@ -204,9 +219,18 @@ Standard: s2.\n\n\
             terms_line: None,
         };
 
-        assert_eq!(crate::status::question_status(&led, &mk("id-a")), QuestionStatus::Answered);
-        assert_eq!(crate::status::question_status(&led, &mk("id-b")), QuestionStatus::Superseded);
-        assert_eq!(crate::status::question_status(&led, &mk("id-d")), QuestionStatus::Withdrawn);
+        assert_eq!(
+            crate::status::question_status(&led, &mk("id-a")),
+            QuestionStatus::Answered
+        );
+        assert_eq!(
+            crate::status::question_status(&led, &mk("id-b")),
+            QuestionStatus::Superseded
+        );
+        assert_eq!(
+            crate::status::question_status(&led, &mk("id-d")),
+            QuestionStatus::Withdrawn
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -235,7 +259,10 @@ Standard: s2.\n\n\
             is_skeleton: false,
             terms_line: None,
         };
-        assert_eq!(crate::status::question_status(&led, &sec), QuestionStatus::Refused);
+        assert_eq!(
+            crate::status::question_status(&led, &sec),
+            QuestionStatus::Refused
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -247,7 +274,10 @@ Standard: s2.\n\n\
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join(repo::LEDGER_PATH));
-        assert_eq!(crate::status::question_status(&led, &rf.sections[0]), QuestionStatus::NoBody);
+        assert_eq!(
+            crate::status::question_status(&led, &rf.sections[0]),
+            QuestionStatus::NoBody
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 }

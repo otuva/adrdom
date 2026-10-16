@@ -70,7 +70,10 @@ pub fn parse_entries(content: &str) -> Vec<(String, Option<String>)> {
 /// (directly or through `terms_refusals`) reads the list this way; every
 /// other caller (`ban`, `unban`, `ask`, `approve`) keeps calling
 /// `read_entries`, which always wants the working tree.
-pub fn read_entries_via(root: &Path, source: &crate::repo::Source) -> Vec<(String, Option<String>)> {
+pub fn read_entries_via(
+    root: &Path,
+    source: &crate::repo::Source,
+) -> Vec<(String, Option<String>)> {
     parse_entries(&source.read(root, BAN_LIST).unwrap_or_default())
 }
 
@@ -121,7 +124,11 @@ pub fn hits(
                 continue;
             }
             let term = term_name(uuid_opt.as_deref(), terms);
-            out.push(Hit { line: i + 1, token: tok, term });
+            out.push(Hit {
+                line: i + 1,
+                token: tok,
+                term,
+            });
         }
     }
     out
@@ -144,7 +151,11 @@ pub fn first_hit(
                 continue;
             };
             let term = term_name(uuid_opt.as_deref(), terms);
-            return Some(Hit { line: i + 1, token: tok, term });
+            return Some(Hit {
+                line: i + 1,
+                token: tok,
+                term,
+            });
         }
     }
     None
@@ -171,7 +182,11 @@ pub fn currently_banned(led: &crate::ledger::Ledger) -> Vec<(String, Option<Stri
         .into_values()
         .filter(|row| row.event == "banned")
         .map(|row| {
-            let uuid = if row.detail.is_empty() { None } else { Some(row.detail.clone()) };
+            let uuid = if row.detail.is_empty() {
+                None
+            } else {
+                Some(row.detail.clone())
+            };
             (row.hash.clone(), uuid)
         })
         .collect()

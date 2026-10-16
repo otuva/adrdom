@@ -73,7 +73,12 @@ fn answer_names_the_topic_files_it_could_not_read() {
 fn check_fails_on_a_commit_message_file_it_cannot_read() {
     let dir = installed_repo();
 
-    let out = adr(&dir, &["check", "--message", "no-such-message-file"], &[], "");
+    let out = adr(
+        &dir,
+        &["check", "--message", "no-such-message-file"],
+        &[],
+        "",
+    );
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
         stdout(&out).contains("check: cannot read the commit message file no-such-message-file: "),
@@ -93,7 +98,9 @@ fn ban_with_a_term_says_the_terms_file_is_missing() {
     let out = adr(&dir, &["ban", "--term", "widget"], &[], "word\n");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stderr(&out).starts_with("ban: cannot look up \"widget\": adrdom/terms.md is missing or cannot be read; "),
+        stderr(&out).starts_with(
+            "ban: cannot look up \"widget\": adrdom/terms.md is missing or cannot be read; "
+        ),
         "{}",
         stderr(&out)
     );
@@ -129,7 +136,11 @@ fn install_fails_when_the_ledger_cannot_be_written() {
     set_mode(&state, 0o755);
 
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).starts_with("install: failed to write "), "{}", stderr(&out));
+    assert!(
+        stderr(&out).starts_with("install: failed to write "),
+        "{}",
+        stderr(&out)
+    );
     assert!(stderr(&out).contains("ledger.tsv"), "{}", stderr(&out));
 }
 
@@ -162,6 +173,10 @@ fn uninstall_fails_on_a_hook_it_cannot_remove() {
     set_mode(&hooks, 0o755);
 
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).starts_with("uninstall: failed to remove "), "{}", stderr(&out));
+    assert!(
+        stderr(&out).starts_with("uninstall: failed to remove "),
+        "{}",
+        stderr(&out)
+    );
     assert!(stderr(&out).contains("pre-commit"), "{}", stderr(&out));
 }

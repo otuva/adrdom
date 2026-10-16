@@ -69,15 +69,26 @@ impl Page {
             .spawn()
             .expect("adr serve should spawn");
         let mut line = String::new();
-        BufReader::new(child.stdout.as_mut().unwrap()).read_line(&mut line).unwrap();
-        let rest = line.trim().strip_prefix("open: http://127.0.0.1:").expect("open line");
+        BufReader::new(child.stdout.as_mut().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let rest = line
+            .trim()
+            .strip_prefix("open: http://127.0.0.1:")
+            .expect("open line");
         let (port, token) = rest.split_once("/?t=").expect("port and token");
-        Page { port: port.parse().unwrap(), token: token.to_string(), child }
+        Page {
+            port: port.parse().unwrap(),
+            token: token.to_string(),
+            child,
+        }
     }
 
     fn request(&self, head: &str, body: &str) -> (u16, String, String) {
         let mut stream = TcpStream::connect(("127.0.0.1", self.port)).unwrap();
-        stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
         let req = format!(
             "{}\r\nHost: 127.0.0.1\r\nConnection: close\r\nCookie: adr_t={}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             head,
@@ -89,7 +100,11 @@ impl Page {
         let mut raw = String::new();
         stream.read_to_string(&mut raw).unwrap();
         let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((raw.as_str(), ""));
-        let status = head.split_whitespace().nth(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let status = head
+            .split_whitespace()
+            .nth(1)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
         let location = head
             .lines()
             .find_map(|l| l.strip_prefix("Location: "))
@@ -126,10 +141,17 @@ impl Drop for Page {
 /// The lines `adr <args>` prints, each without its indent: standard output,
 /// or standard error with `err`.
 fn cli(dir: &Path, args: &[&str], owner: bool, err: bool) -> Vec<String> {
-    let env: &[(&str, &str)] = if owner { &[("ADR_OWNER_BYPASS", "1")] } else { &[] };
+    let env: &[(&str, &str)] = if owner {
+        &[("ADR_OWNER_BYPASS", "1")]
+    } else {
+        &[]
+    };
     let out = adr(dir, args, env, "");
     let text = if err { stderr(&out) } else { stdout(&out) };
-    text.lines().map(|l| l.trim_start().to_string()).filter(|l| !l.is_empty()).collect()
+    text.lines()
+        .map(|l| l.trim_start().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
 }
 
 /// Every line a command that writes nothing prints for the records of `dir`:
@@ -165,8 +187,14 @@ fn kind(l: &str) -> Kind {
 
 /// A status or a move as `show --all` prints it, not a line of a record.
 fn is_status_or_move(l: &str) -> bool {
-    let bare = l.strip_prefix("+ ").or_else(|| l.strip_prefix("- ")).unwrap_or(l);
-    bare.starts_with('[') || l.starts_with("agent ") || l.starts_with("not yet:") || is_owner_move(l)
+    let bare = l
+        .strip_prefix("+ ")
+        .or_else(|| l.strip_prefix("- "))
+        .unwrap_or(l);
+    bare.starts_with('[')
+        || l.starts_with("agent ")
+        || l.starts_with("not yet:")
+        || is_owner_move(l)
 }
 
 /// Every page shows only lines the terminal prints; the overview shows every
@@ -182,9 +210,19 @@ fn assert_page_is_terminal(dir: &Path, page: &Page) {
     for path in PAGES {
         let (status, _, body) = page.request(&format!("GET {} HTTP/1.1", path), "");
         assert_eq!(status, 200, "{}", body);
-        assert!(!body.contains("class=\"move owner\""), "{} shows an owner move as text", path);
+        assert!(
+            !body.contains("class=\"move owner\""),
+            "{} shows an owner move as text",
+            path
+        );
         for l in page_lines(&body) {
-            assert!(words.contains(&l), "{} shows {:?}, which no command prints: {:#?}", path, l, terminal);
+            assert!(
+                words.contains(&l),
+                "{} shows {:?}, which no command prints: {:#?}",
+                path,
+                l,
+                terminal
+            );
             every_page.push(l);
         }
         bodies.push_str(&body);
@@ -197,19 +235,35 @@ fn assert_page_is_terminal(dir: &Path, page: &Page) {
         match kind(&l) {
             Kind::Owner => assert_owner_move_shown(&l, &overview_body),
             Kind::Heading => {}
-            Kind::Text => assert!(overview.contains(&page_words(&l)), "/ lacks {:?}: {:#?}", l, overview),
+            Kind::Text => assert!(
+                overview.contains(&page_words(&l)),
+                "/ lacks {:?}: {:#?}",
+                l,
+                overview
+            ),
         }
     }
-    for l in cli(dir, &["show", "--all"], false, false).into_iter().filter(|l| is_status_or_move(l)) {
+    for l in cli(dir, &["show", "--all"], false, false)
+        .into_iter()
+        .filter(|l| is_status_or_move(l))
+    {
         match kind(&l) {
             Kind::Owner => assert_owner_move_shown(&l, &bodies),
-            _ => assert!(every_page.contains(&page_words(&l)), "no page shows {:?}: {:#?}", l, every_page),
+            _ => assert!(
+                every_page.contains(&page_words(&l)),
+                "no page shows {:?}: {:#?}",
+                l,
+                every_page
+            ),
         }
     }
 }
 
 fn ledger_rows(dir: &Path) -> usize {
-    std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default().lines().count()
+    std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv"))
+        .unwrap_or_default()
+        .lines()
+        .count()
 }
 
 /// A repository with the terms approved and the two questions written and
@@ -231,7 +285,11 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
 
     // A plan awaiting approval: the owner's approve move, and the change.
     let show = cli(&dir, &["show"], false, false);
-    assert!(show.contains(&format!("owner runs: adr approve {}", REL)), "{:?}", show);
+    assert!(
+        show.contains(&format!("owner runs: adr approve {}", REL)),
+        "{:?}",
+        show
+    );
     assert_page_is_terminal(&dir, &page);
 
     // Approved and asked: the owner's answer move, and what waits.
@@ -239,13 +297,25 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
     assert!(approve.status.success(), "{}", stderr(&approve));
     assert!(adr(&dir, &["ask", REL], &[], "").status.success());
     assert_page_is_terminal(&dir, &page);
-    assert!(page.lines("/next").iter().any(|l| l.starts_with("not yet: ")), "{:#?}", page.lines("/next"));
+    assert!(
+        page.lines("/next")
+            .iter()
+            .any(|l| l.starts_with("not yet: ")),
+        "{:#?}",
+        page.lines("/next")
+    );
 
     // Answered and untested: check's line with its move is on the page.
     let id = extract_ids(&std::fs::read_to_string(dir.join(REL)).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     let check = cli(&dir, &["check"], false, false);
-    assert!(check.iter().any(|l| l.contains("is answered and no tracked file holds its tie")), "{:?}", check);
+    assert!(
+        check
+            .iter()
+            .any(|l| l.contains("is answered and no tracked file holds its tie")),
+        "{:?}",
+        check
+    );
     assert_page_is_terminal(&dir, &page);
     let overview = page.lines("/");
     for l in &check {
@@ -258,8 +328,17 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
     let refused = adr_answer(&dir, &ids[1], "refuse");
     assert!(refused.status.success(), "{}", stderr(&refused));
     let show = cli(&dir, &["show", "--all"], false, false);
-    assert!(show.iter().any(|l| l.starts_with("[refused] ")), "{:?}", show);
-    assert!(show.iter().any(|l| l.starts_with("agent writes the plan change that drops or replaces ")), "{:?}", show);
+    assert!(
+        show.iter().any(|l| l.starts_with("[refused] ")),
+        "{:?}",
+        show
+    );
+    assert!(
+        show.iter()
+            .any(|l| l.starts_with("agent writes the plan change that drops or replaces ")),
+        "{:?}",
+        show
+    );
     assert_page_is_terminal(&dir, &page);
 
     // A finding: a loaded word in a new draft is check's note on the page.
@@ -286,25 +365,70 @@ fn an_act_from_the_page_shows_the_lines_the_command_prints() {
     let shown = page.act("/approve", &format!("file={}", REL));
     let printed = cli(&in_terminal, &["approve", REL], true, false);
     assert!(!printed.is_empty());
-    assert_eq!(&shown[..printed.len()], &printed[..], "the page leads with the act's lines");
-    assert_eq!(printed.len(), ledger_rows(&on_page) - before, "one line per ledger row written");
+    assert_eq!(
+        &shown[..printed.len()],
+        &printed[..],
+        "the page leads with the act's lines"
+    );
+    assert_eq!(
+        printed.len(),
+        ledger_rows(&on_page) - before,
+        "one line per ledger row written"
+    );
 
     assert!(adr(&on_page, &["ask", REL], &[], "").status.success());
     assert!(adr(&in_terminal, &["ask", REL], &[], "").status.success());
-    let id_of = |dir: &Path| extract_ids(&std::fs::read_to_string(dir.join(REL)).unwrap())[0].clone();
+    let id_of =
+        |dir: &Path| extract_ids(&std::fs::read_to_string(dir.join(REL)).unwrap())[0].clone();
     let (page_id, cli_id) = (id_of(&on_page), id_of(&in_terminal));
 
     let before = ledger_rows(&on_page);
-    let shown = page.act("/answer", &format!("id={}&v={}&answer=A", page_id, current_version(&on_page, &page_id)));
-    let printed = cli(&in_terminal, &["answer", &format!("{}@{}", cli_id, current_version(&in_terminal, &cli_id)), "A"], true, false);
+    let shown = page.act(
+        "/answer",
+        &format!(
+            "id={}&v={}&answer=A",
+            page_id,
+            current_version(&on_page, &page_id)
+        ),
+    );
+    let printed = cli(
+        &in_terminal,
+        &[
+            "answer",
+            &format!("{}@{}", cli_id, current_version(&in_terminal, &cli_id)),
+            "A",
+        ],
+        true,
+        false,
+    );
     assert_eq!(printed.len(), 1, "{:?}", printed);
     assert_eq!(&shown[..1], &printed[..]);
     assert_eq!(ledger_rows(&on_page) - before, 1);
 
     // A stop: the same answer again, the same findings both ways.
-    let shown = page.act("/answer", &format!("id={}&v={}&answer=B", page_id, current_version(&on_page, &page_id)));
-    let stopped = cli(&in_terminal, &["answer", &format!("{}@{}", cli_id, current_version(&in_terminal, &cli_id)), "B"], true, true);
+    let shown = page.act(
+        "/answer",
+        &format!(
+            "id={}&v={}&answer=B",
+            page_id,
+            current_version(&on_page, &page_id)
+        ),
+    );
+    let stopped = cli(
+        &in_terminal,
+        &[
+            "answer",
+            &format!("{}@{}", cli_id, current_version(&in_terminal, &cli_id)),
+            "B",
+        ],
+        true,
+        true,
+    );
     assert!(!stopped.is_empty());
-    let shown: Vec<String> = shown.into_iter().take(stopped.len()).map(|l| l.replace(&page_id, &cli_id)).collect();
+    let shown: Vec<String> = shown
+        .into_iter()
+        .take(stopped.len())
+        .map(|l| l.replace(&page_id, &cli_id))
+        .collect();
     assert_eq!(shown, stopped);
 }

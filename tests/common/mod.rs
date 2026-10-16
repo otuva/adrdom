@@ -59,7 +59,11 @@ pub struct OutsideDir(pub PathBuf);
 impl OutsideDir {
     pub fn new(tag: &str) -> OutsideDir {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        for base in [std::env::temp_dir(), PathBuf::from("/tmp"), PathBuf::from("/var/tmp")] {
+        for base in [
+            std::env::temp_dir(),
+            PathBuf::from("/tmp"),
+            PathBuf::from("/var/tmp"),
+        ] {
             if base.ancestors().any(|a| a.join(".git").exists()) {
                 continue;
             }
@@ -102,7 +106,10 @@ fn sweep_dead_test_repos() {
         };
         // The bare remotes and shallow clones some tests make carry a word
         // before the pid.
-        let rest = rest.strip_prefix("bare-").or_else(|| rest.strip_prefix("shallow-")).unwrap_or(rest);
+        let rest = rest
+            .strip_prefix("bare-")
+            .or_else(|| rest.strip_prefix("shallow-"))
+            .unwrap_or(rest);
         let Some(pid) = rest.split('-').next().filter(|p| p.parse::<u32>().is_ok()) else {
             continue;
         };
@@ -165,7 +172,13 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
 
 /// `adr` in the session `session` of an agent program: the session variable
 /// is set when `Some`, and never inherited from the shell that runs the tests.
-pub fn adr_as(dir: &Path, args: &[&str], envs: &[(&str, &str)], session: Option<&str>, stdin: &str) -> Output {
+pub fn adr_as(
+    dir: &Path,
+    args: &[&str],
+    envs: &[(&str, &str)],
+    session: Option<&str>,
+    stdin: &str,
+) -> Output {
     let mut cmd = scrubbed(Command::new(adr_bin()));
     cmd.current_dir(dir)
         .args(args)
@@ -212,7 +225,11 @@ pub fn adr_owner(dir: &Path, args: &[&str], stdin: &str) -> Output {
         && !args[1].contains("adrdom/blame/")
     {
         let p = Path::new(args[1]);
-        let abs = if p.is_absolute() { p.to_path_buf() } else { dir.join(p) };
+        let abs = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            dir.join(p)
+        };
         if let Ok(rel) = abs.strip_prefix(dir) {
             plan_record(dir, &rel.to_string_lossy());
         }
@@ -271,7 +288,7 @@ pub fn current_version(dir: &Path, id: &str) -> String {
                 None
             }
         })
-        .last()
+        .next_back()
         .unwrap_or_else(|| panic!("current_version: no asked row for id {}", id));
     hash[..8].to_string()
 }
@@ -306,7 +323,8 @@ pub fn line_with(text: &str, id: &str, what: &str) -> bool {
     text.lines().any(|l| match l.find(id) {
         Some(at) => {
             let rest = &l[at + id.len()..];
-            rest.starts_with(what) || (rest.starts_with(" (\"") && rest.contains(&format!("\"){}", what)))
+            rest.starts_with(what)
+                || (rest.starts_with(" (\"") && rest.contains(&format!("\"){}", what)))
         }
         None => false,
     })
@@ -339,12 +357,16 @@ pub fn write_record(dir: &Path, rel: &str, content: &str) -> PathBuf {
 }
 
 /// The two options every gate fixture question carries.
-pub const GATE_OPTIONS: &str = "- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+pub const GATE_OPTIONS: &str =
+    "- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
 
 /// A question that stands on the term `widget`, with `problem` as its
 /// Problem line: what a case puts a loaded word into.
 pub fn gate_question(heading: &str, problem: &str) -> String {
-    format!("### {}\ndepends: widget\n\nProblem: {}\n\nStandard: plain words.\n\n{}", heading, problem, GATE_OPTIONS)
+    format!(
+        "### {}\ndepends: widget\n\nProblem: {}\n\nStandard: plain words.\n\n{}",
+        heading, problem, GATE_OPTIONS
+    )
 }
 
 /// An installed repository with the term `widget` approved.
@@ -358,7 +380,12 @@ pub fn widget_repo() -> PathBuf {
 /// The owner's approve with nothing planned on the way: `adr_owner` plans
 /// a topic file first, which would write the very lines a case leaves out.
 pub fn approve_unplanned(dir: &Path, path: &Path) -> Output {
-    adr(dir, &["approve", path.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "")
+    adr(
+        dir,
+        &["approve", path.to_str().unwrap()],
+        &[("ADR_OWNER_BYPASS", "1")],
+        "",
+    )
 }
 
 /// The refusal lines a command printed, each with the command's own prefix
@@ -378,7 +405,11 @@ pub fn refusal_lines(out: &Output, prefix: &str) -> Vec<String> {
 /// marked or not.
 pub fn file_moves(dir: &Path, rel: &str) -> Vec<String> {
     let out = adr(dir, &["show", rel], &[], "");
-    stdout(&out).lines().filter(|l| !l.starts_with([' ', '[', '#', '+', '-'])).map(str::to_string).collect()
+    stdout(&out)
+        .lines()
+        .filter(|l| !l.starts_with([' ', '[', '#', '+', '-']))
+        .map(str::to_string)
+        .collect()
 }
 
 /// Returns every `id: <value>` found in a record, in file order.
@@ -495,16 +526,39 @@ pub fn write_blame_file(dir: &Path, rel: &str, origin: &str, blob: &str, rows: &
 
 /// Writes the origin `origin_rel` and a blame file `adrdom/blame/<name>.md`
 /// over it with `rows`; the blame file is not approved.
-pub fn blame_file(dir: &Path, name: &str, origin_rel: &str, origin_text: &str, rows: &str) -> PathBuf {
+pub fn blame_file(
+    dir: &Path,
+    name: &str,
+    origin_rel: &str,
+    origin_text: &str,
+    rows: &str,
+) -> PathBuf {
     let blob = write_origin(dir, origin_rel, origin_text);
-    write_blame_file(dir, &format!("adrdom/blame/{}.md", name), origin_rel, &blob, rows)
+    write_blame_file(
+        dir,
+        &format!("adrdom/blame/{}.md", name),
+        origin_rel,
+        &blob,
+        rows,
+    )
 }
 
 /// `blame_file`, approved by the owner.
-pub fn approved_blame_file(dir: &Path, name: &str, origin_rel: &str, origin_text: &str, rows: &str) -> PathBuf {
+pub fn approved_blame_file(
+    dir: &Path,
+    name: &str,
+    origin_rel: &str,
+    origin_text: &str,
+    rows: &str,
+) -> PathBuf {
     let path = blame_file(dir, name, origin_rel, origin_text, rows);
     let out = adr_owner(dir, &["approve", path.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve of the blame file {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve of the blame file {} failed: {}",
+        name,
+        stderr(&out)
+    );
     path
 }
 
@@ -523,8 +577,11 @@ pub fn id_line_of(path: &Path) -> String {
 /// `lines` (each ending in a newline) directly under its depends line: where
 /// a case puts a `blame:` line.
 pub fn gate_topic(heading: &str, lines: &str) -> String {
-    let question =
-        gate_question(heading, "the widget breaks.").replacen("depends: widget\n", &format!("depends: widget\n{}", lines), 1);
+    let question = gate_question(heading, "the widget breaks.").replacen(
+        "depends: widget\n",
+        &format!("depends: widget\n{}", lines),
+        1,
+    );
     format!("# Gate\n\nThe gate.\n\n{}", question)
 }
 
@@ -533,7 +590,7 @@ pub fn gate_topic(heading: &str, lines: &str) -> String {
 // `approve_via_ledger` below writes `content` to `rel` and loads it back
 // through `record::load` so the `approved`/`context` ledger rows it writes
 // carry the real `record::plan_hash`/`record::context_hash` of that file
-// (see src/record.rs), rather than a hand-rolled mirror of that logic.
+// (see src/record), rather than a hand-rolled mirror of that logic.
 
 /// Writes `approved`/`context` ledger rows for `content` as if `adr
 /// approve` had just run on `rel` (path relative to `dir`, forward
@@ -610,9 +667,15 @@ pub fn plan_record(dir: &Path, rel: &str) {
 pub fn lines_wanted(plan_stdout: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for l in plan_stdout.lines() {
-        let Some((left, right)) = l.split_once("\" is a neighbour of \"") else { continue };
-        let Some((_, name)) = left.rsplit_once(" \"") else { continue };
-        let Some((heading, _)) = right.split_once("\" and is on no line") else { continue };
+        let Some((left, right)) = l.split_once("\" is a neighbour of \"") else {
+            continue;
+        };
+        let Some((_, name)) = left.rsplit_once(" \"") else {
+            continue;
+        };
+        let Some((heading, _)) = right.split_once("\" and is on no line") else {
+            continue;
+        };
         let pair = (heading.to_string(), name.to_string());
         if !out.contains(&pair) {
             out.push(pair);
@@ -627,15 +690,22 @@ pub fn lines_wanted(plan_stdout: &str) -> Vec<(String, String)> {
 pub fn add_unrelated(text: &str, wanted: &[(String, String)]) -> String {
     let mut lines: Vec<String> = text.lines().map(String::from).collect();
     for (heading, name) in wanted {
-        let Some(h) = lines.iter().position(|l| l.strip_prefix("### ").map(str::trim) == Some(heading.as_str())) else {
+        let Some(h) = lines
+            .iter()
+            .position(|l| l.strip_prefix("### ").map(str::trim) == Some(heading.as_str()))
+        else {
             continue;
         };
-        let end = (h + 1..lines.len()).find(|&j| lines[j].starts_with("### ")).unwrap_or(lines.len());
+        let end = (h + 1..lines.len())
+            .find(|&j| lines[j].starts_with("### "))
+            .unwrap_or(lines.len());
         if let Some(j) = (h + 1..end).find(|&j| lines[j].starts_with("unrelated: ")) {
             lines[j].push_str(&format!(", {}", name));
             continue;
         }
-        let mut at = (h + 1..end).find(|&j| lines[j].starts_with("depends: ")).unwrap_or(h);
+        let mut at = (h + 1..end)
+            .find(|&j| lines[j].starts_with("depends: "))
+            .unwrap_or(h);
         while at + 1 < end && lines[at + 1].starts_with("supersedes: ") {
             at += 1;
         }
@@ -676,7 +746,14 @@ pub fn append_ledger_row(dir: &Path, event: &str, id: &str, hash: &str, detail: 
 /// row is "the latest" (e.g. an `asked` row and the `answered` row that
 /// follows it) needs each row to carry a time later than the one before
 /// it, not a shared one.
-pub fn append_ledger_row_at(dir: &Path, event: &str, id: &str, hash: &str, detail: &str, time: &str) {
+pub fn append_ledger_row_at(
+    dir: &Path,
+    event: &str,
+    id: &str,
+    hash: &str,
+    detail: &str,
+    time: &str,
+) {
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
     let row = ledger::Row {
@@ -717,7 +794,11 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
     let hash = terms::file_hash(&tf);
     append_ledger_row(dir, "terms", "-", &hash, "adrdom/terms.md");
     std::fs::create_dir_all(dir.join("adrdom/state")).unwrap();
-    std::fs::write(dir.join("adrdom/state/terms-brief.md"), terms::brief_text(&tf)).unwrap();
+    std::fs::write(
+        dir.join("adrdom/state/terms-brief.md"),
+        terms::brief_text(&tf),
+    )
+    .unwrap();
 }
 
 // --- Terms approval, without depending on `adr approve` -------------------
@@ -780,9 +861,12 @@ pub fn mirror_section_hash(section_text: &str) -> String {
     let content = format!("# Topic\n\n{}\n", section_text.trim_end_matches('\n'));
     let lines = record::split_lines(&content);
     let sections = record::parse_sections(&lines);
-    let sec = sections
-        .first()
-        .unwrap_or_else(|| panic!("mirror_section_hash: no section parsed from: {}", section_text));
+    let sec = sections.first().unwrap_or_else(|| {
+        panic!(
+            "mirror_section_hash: no section parsed from: {}",
+            section_text
+        )
+    });
     record::section_hash(&lines, sec)
 }
 
@@ -815,7 +899,11 @@ pub fn source_files() -> Vec<(String, String)> {
             if path.is_dir() {
                 dirs.push(path);
             } else if path.extension().is_some_and(|e| e == "rs") {
-                let rel = path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
+                let rel = path
+                    .strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 out.push((rel, std::fs::read_to_string(&path).unwrap()));
             }
         }
@@ -902,7 +990,11 @@ pub fn page_lines(body: &str) -> Vec<String> {
                 _ => {}
             }
         }
-        text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+        text.replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&amp;", "&")
     }
     let mut out = Vec::new();
     let mut rest = body;
@@ -911,18 +1003,23 @@ pub fn page_lines(body: &str) -> Vec<String> {
         let b = rest.find("<span class=\"st\">");
         match (p, b) {
             (None, None) => break,
-            (Some(i), j) if j.map_or(true, |j| i < j) => {
+            (Some(i), j) if j.is_none_or(|j| i < j) => {
                 let after = &rest[i..];
                 let class = after["<p class=\"".len()..].split('"').next().unwrap_or("");
                 let end = after.find("</p>").unwrap_or(after.len());
-                if ["record", "status", "finding", "move", "event"].contains(&class.split(' ').next().unwrap_or("")) {
+                if ["record", "status", "finding", "move", "event"]
+                    .contains(&class.split(' ').next().unwrap_or(""))
+                {
                     out.push(unhtml(&after[..end]).trim_start().to_string());
                 }
                 rest = &after[end..];
             }
             (_, Some(j)) => {
                 let after = &rest[j..];
-                let end = after.find("</span></span>").map(|e| e + "</span></span>".len()).unwrap_or(after.len());
+                let end = after
+                    .find("</span></span>")
+                    .map(|e| e + "</span></span>".len())
+                    .unwrap_or(after.len());
                 let block = &after[..end];
                 let name_start = block.find("<span class=\"badge").unwrap();
                 let name_html = &block[name_start..];
@@ -941,7 +1038,10 @@ pub fn page_lines(body: &str) -> Vec<String> {
 /// A line a command prints as the page words it: the mark of a change and the
 /// version of an asked question left off a status line.
 pub fn page_words(line: &str) -> String {
-    let bare = line.strip_prefix("+ ").or_else(|| line.strip_prefix("- ")).unwrap_or(line);
+    let bare = line
+        .strip_prefix("+ ")
+        .or_else(|| line.strip_prefix("- "))
+        .unwrap_or(line);
     if !bare.starts_with('[') {
         return line.to_string();
     }
@@ -979,12 +1079,21 @@ pub fn assert_owner_move_shown(line: &str, body: &str) {
             Some((f, e)) => (f, Some(e.trim_matches('\''))),
             None => (path, None),
         };
-        assert!(body.contains(&format!("name=\"file\" value=\"{}\"", file)), "no approve form for {:?}: {}", line, body);
+        assert!(
+            body.contains(&format!("name=\"file\" value=\"{}\"", file)),
+            "no approve form for {:?}: {}",
+            line,
+            body
+        );
         if let Some(e) = entry {
-            assert!(body.contains(&format!("name=\"entry\" value=\"{}\"", e)), "no entry approve form for {:?}: {}", line, body);
+            assert!(
+                body.contains(&format!("name=\"entry\" value=\"{}\"", e)),
+                "no entry approve form for {:?}: {}",
+                line,
+                body
+            );
         }
     } else {
         panic!("an owner move this test does not know: {:?}", line);
     }
 }
-

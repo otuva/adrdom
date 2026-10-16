@@ -1,8 +1,8 @@
-use crate::rules::Command;
 use crate::actions;
 use crate::msg::{self, Actor};
 use crate::out;
 use crate::repo;
+use crate::rules::Command;
 use std::io::Read;
 
 pub fn run() -> i32 {
@@ -21,7 +21,12 @@ pub fn run() -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint_stop(Command::Unban, &msg::stdin_read_failed(msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban"))));
+        out::eprint_stop(
+            Command::Unban,
+            &msg::stdin_read_failed(msg::after_fix_owner_runs(crate::moves::Cmd::fixed(
+                "adr unban",
+            ))),
+        );
         return 1;
     }
 

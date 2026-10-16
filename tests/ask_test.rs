@@ -186,9 +186,18 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     assert!(!moves.is_empty());
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();
-    assert!(lines[0].starts_with("adrdom/decisions/never.md: plan is new; "), "{}", err);
+    assert!(
+        lines[0].starts_with("adrdom/decisions/never.md: plan is new; "),
+        "{}",
+        err
+    );
     for m in &moves {
-        assert!(lines.iter().any(|l| l.ends_with(m.as_str())), "ask lacks {:?}:\n{}", m, err);
+        assert!(
+            lines.iter().any(|l| l.ends_with(m.as_str())),
+            "ask lacks {:?}:\n{}",
+            m,
+            err
+        );
     }
 
     // A heading added after approval: the owner approved only 1.1, then the
@@ -210,11 +219,24 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     // The new heading is not planned yet: the move is the agent's plan,
     // the same one `show` names, never the owner's approve.
     let err = stderr(&out);
-    assert!(err.starts_with("adrdom/decisions/example.md: plan is changed; "), "{}", err);
+    assert!(
+        err.starts_with("adrdom/decisions/example.md: plan is changed; "),
+        "{}",
+        err
+    );
     for m in file_moves(&dir, "adrdom/decisions/example.md") {
-        assert!(err.lines().any(|l| l.ends_with(m.as_str())), "ask lacks {:?}:\n{}", m, err);
+        assert!(
+            err.lines().any(|l| l.ends_with(m.as_str())),
+            "ask lacks {:?}:\n{}",
+            m,
+            err
+        );
     }
-    assert!(stderr(&out).contains("agent runs: adr plan adrdom/decisions/example.md"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("agent runs: adr plan adrdom/decisions/example.md"),
+        "{}",
+        stderr(&out)
+    );
 
     // Nothing written: no id minted for the new heading, no ledger row.
     let after = std::fs::read_to_string(&record).unwrap();
@@ -243,17 +265,32 @@ fn ask_refuses_a_question_with_one_option() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "ask should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(err.contains("1 options, at least two"), "{}", err);
     assert!(err.contains("agent rewrites the question"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, content, "ask must not modify the file when it refuses");
-    assert!(extract_ids(&after).is_empty(), "no id should have been assigned: {}", after);
+    assert_eq!(
+        after, content,
+        "ask must not modify the file when it refuses"
+    );
+    assert!(
+        extract_ids(&after).is_empty(),
+        "no id should have been assigned: {}",
+        after
+    );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert!(!ledger.contains("\tasked\t"), "no asked row should have been written: {}", ledger);
+    assert!(
+        !ledger.contains("\tasked\t"),
+        "no asked row should have been written: {}",
+        ledger
+    );
 }
 
 //
@@ -269,17 +306,32 @@ fn ask_refuses_a_question_with_four_options() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "ask should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(err.contains("4 options, at most three"), "{}", err);
     assert!(err.contains("agent rewrites the question"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, content, "ask must not modify the file when it refuses");
-    assert!(extract_ids(&after).is_empty(), "no id should have been assigned: {}", after);
+    assert_eq!(
+        after, content,
+        "ask must not modify the file when it refuses"
+    );
+    assert!(
+        extract_ids(&after).is_empty(),
+        "no id should have been assigned: {}",
+        after
+    );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert!(!ledger.contains("\tasked\t"), "no asked row should have been written: {}", ledger);
+    assert!(
+        !ledger.contains("\tasked\t"),
+        "no asked row should have been written: {}",
+        ledger
+    );
 }
 
 // --- terms wiring (3): missing/shape/approval refusals, banned, retired,
@@ -348,9 +400,11 @@ fn ask_refuses_on_a_banned_word_naming_the_heading_and_term() {
     approve_minimal_terms(&dir, "authority");
     // Ban the word before it appears anywhere: `ban` itself refuses an
     // already-in-use word, so the record has to come after.
-    assert!(adr(&dir, &["ban", "--term", "authority"], &[], "predecessors\n")
-        .status
-        .success());
+    assert!(
+        adr(&dir, &["ban", "--term", "authority"], &[], "predecessors\n")
+            .status
+            .success()
+    );
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
 
@@ -484,8 +538,16 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
         err
     );
     // The refusal names the next move, and it is the agent's to make.
-    assert!(err.contains("agent writes the depends line of \"1.1 Is this pass?\""), "{}", err);
-    assert!(err.contains("agent writes the term in adrdom/terms.md"), "{}", err);
+    assert!(
+        err.contains("agent writes the depends line of \"1.1 Is this pass?\""),
+        "{}",
+        err
+    );
+    assert!(
+        err.contains("agent writes the term in adrdom/terms.md"),
+        "{}",
+        err
+    );
     assert!(err.contains("agent "), "{}", err);
 
     // No terms line written to the record...
@@ -521,9 +583,8 @@ fn ask_writes_the_terms_line_with_an_explicit_alias_plural() {
 
     let content = std::fs::read_to_string(&record).unwrap();
     assert!(
-        content
-            .lines()
-            .any(|l| l.starts_with("terms: ") && l.contains("decisions=99999999-9999-9999-9999-999999999999")),
+        content.lines().any(|l| l.starts_with("terms: ")
+            && l.contains("decisions=99999999-9999-9999-9999-999999999999")),
         "expected the explicit alias to pair on the terms line: {}",
         content
     );
@@ -616,12 +677,12 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
     std::fs::write(&record, &garbage).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     assert!(
-        stderr(&out).contains("plan is changed"),
-        "{}",
-        stderr(&out)
+        !out.status.success(),
+        "ask should have refused: {}",
+        stdout(&out)
     );
+    assert!(stderr(&out).contains("plan is changed"), "{}", stderr(&out));
     let check_out = adr(&dir, &["check"], &[], "");
     // The edited file awaits approval again: check prints the finding as a note (912f4f3b-1213-435a-af0d-7617017fcff4).
     assert!(check_out.status.success());
@@ -641,7 +702,11 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
     std::fs::write(&record, &missing).unwrap();
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out2.status.success(), "ask should have refused: {}", stdout(&out2));
+    assert!(
+        !out2.status.success(),
+        "ask should have refused: {}",
+        stdout(&out2)
+    );
     assert!(
         stderr(&out2).contains("plan is changed"),
         "{}",

@@ -13,7 +13,9 @@ const ONE: &str = "Is the widget gate open?";
 
 fn commit_all(dir: &Path) {
     run_git(dir, &["add", "-A"]);
-    assert!(run_git(dir, &["commit", "-q", "-m", "step"]).status.success());
+    assert!(run_git(dir, &["commit", "-q", "-m", "step"])
+        .status
+        .success());
 }
 
 #[cfg(unix)]
@@ -29,7 +31,11 @@ fn set_mode(path: &Path, mode: u32) {
 #[test]
 fn approve_names_a_file_it_rewrote_with_no_row() {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
+    );
     approve_record(&dir, REL);
     let text = std::fs::read_to_string(&path).unwrap();
     // CRLF line ends: the hash reads the lines, the bytes differ.
@@ -46,16 +52,28 @@ fn approve_names_a_file_it_rewrote_with_no_row() {
 #[test]
 fn ask_writes_back_a_terms_line_and_names_the_file() {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
+    );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let text = std::fs::read_to_string(&path).unwrap();
-    let without: String = text.lines().filter(|l| !l.starts_with("terms: ")).map(|l| format!("{}\n", l)).collect();
+    let without: String = text
+        .lines()
+        .filter(|l| !l.starts_with("terms: "))
+        .map(|l| format!("{}\n", l))
+        .collect();
     std::fs::write(&path, without).unwrap();
     let out = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(stdout(&out), format!("written: {}\n", REL));
-    assert!(std::fs::read_to_string(&path).unwrap().contains("\nterms: "));
+    assert!(std::fs::read_to_string(&path)
+        .unwrap()
+        .contains("\nterms: "));
 }
 
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
@@ -66,7 +84,11 @@ fn ask_writes_back_a_terms_line_and_names_the_file() {
 #[test]
 fn ask_leaves_the_file_as_it_was_when_the_ledger_refuses() {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
+    );
     approve_record(&dir, REL);
     let before = std::fs::read_to_string(&path).unwrap();
     let ledger = dir.join("adrdom/state/ledger.tsv");
@@ -93,10 +115,17 @@ fn terms_approve_leaves_its_files_as_they_were_when_the_ledger_refuses() {
     std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
     let ledger = dir.join("adrdom/state/ledger.tsv");
     set_mode(&ledger, 0o444);
-    let out = adr_owner(&dir, &["approve", dir.join("adrdom/terms.md").to_str().unwrap()], "");
+    let out = adr_owner(
+        &dir,
+        &["approve", dir.join("adrdom/terms.md").to_str().unwrap()],
+        "",
+    );
     set_mode(&ledger, 0o644);
     assert!(!out.status.success());
-    assert_eq!(std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap(), terms);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap(),
+        terms
+    );
     assert!(!dir.join("adrdom/state/terms-brief.md").exists());
 }
 
@@ -107,19 +136,32 @@ fn terms_approve_leaves_its_files_as_they_were_when_the_ledger_refuses() {
 #[test]
 fn a_supersedes_line_naming_one_decision_twice_is_found() {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
+    );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let text = std::fs::read_to_string(&path).unwrap();
     let id = extract_ids(&text)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     let two = "Is the widget gate shut?";
-    let q2 = gate_question(two, "the widget breaks.")
-        .replacen("depends: widget\n", &format!("depends: widget\nsupersedes: {}, {}\n", ONE, id), 1);
+    let q2 = gate_question(two, "the widget breaks.").replacen(
+        "depends: widget\n",
+        &format!("depends: widget\nsupersedes: {}, {}\n", ONE, id),
+        1,
+    );
     let text = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, format!("{}\n{}", text, q2)).unwrap();
     let shown = stdout(&adr(&dir, &["show", REL], &[], ""));
-    assert!(shown.contains("names what an earlier entry of the line names"), "{}", shown);
+    assert!(
+        shown.contains("names what an earlier entry of the line names"),
+        "{}",
+        shown
+    );
 }
 
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
@@ -132,7 +174,11 @@ fn unban_counts_words_and_reads_the_ledger() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let out = adr_owner(&dir, &["unban"], "alpha beta\ngamma\n");
-    assert!(stderr(&out).contains("2 of the words given were not banned"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("2 of the words given were not banned"),
+        "{}",
+        stderr(&out)
+    );
 
     assert!(adr(&dir, &["ban"], &[], "zorblax\n").status.success());
     // The list loses the word by hand: the ledger still says it is banned.
@@ -156,7 +202,11 @@ fn ban_names_each_place_a_word_stands_with_its_move() {
     let out = adr(&dir, &["ban"], &[], "zorblax\n");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("notes.md:1: holds a word given; agent rewrites the line, then runs: adr ban"), "{}", err);
+    assert!(
+        err.contains("notes.md:1: holds a word given; agent rewrites the line, then runs: adr ban"),
+        "{}",
+        err
+    );
 }
 
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
@@ -171,7 +221,12 @@ fn ban_and_rebuild_bring_a_missing_list_back_alike() {
         std::fs::remove_file(dir.join("adrdom/state/banned.sha256")).unwrap();
         let out = adr(&dir, &args, &[], "");
         assert!(out.status.success(), "{:?}: {}", args, stderr(&out));
-        assert_eq!(stdout(&out), "written: adrdom/state/banned.sha256\n", "{:?}", args);
+        assert_eq!(
+            stdout(&out),
+            "written: adrdom/state/banned.sha256\n",
+            "{:?}",
+            args
+        );
         assert_eq!(stdout(&adr(&dir, &args, &[], "")), "", "{:?}", args);
     }
 }
@@ -185,13 +240,27 @@ fn ban_and_rebuild_bring_a_missing_list_back_alike() {
 fn install_and_uninstall_name_the_configuration_they_change() {
     let dir = init_repo();
     let out = adr(&dir, &["install"], &[], "");
-    assert!(stdout(&out).lines().any(|l| l == "set: core.hooksPath .githooks"), "{}", stdout(&out));
+    assert!(
+        stdout(&out)
+            .lines()
+            .any(|l| l == "set: core.hooksPath .githooks"),
+        "{}",
+        stdout(&out)
+    );
     let again = adr(&dir, &["install"], &[], "");
-    assert!(!stdout(&again).contains("core.hooksPath"), "{}", stdout(&again));
+    assert!(
+        !stdout(&again).contains("core.hooksPath"),
+        "{}",
+        stdout(&again)
+    );
 
     let out = adr_owner(&dir, &["uninstall"], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).lines().any(|l| l == "unset: core.hooksPath"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).lines().any(|l| l == "unset: core.hooksPath"),
+        "{}",
+        stdout(&out)
+    );
 
     // A hook edited by hand is left, and so is the configuration that runs it.
     let dir = init_repo();
@@ -233,9 +302,17 @@ fn a_crlf_hook_is_written_again_and_a_crlf_brief_is_found() {
     let text = std::fs::read_to_string(&hook).unwrap();
     std::fs::write(&hook, text.replace('\n', "\r\n")).unwrap();
     let check = adr(&dir, &["check"], &[], "");
-    assert!(stdout(&check).contains(".githooks/pre-push differs from what install writes"), "{}", stdout(&check));
+    assert!(
+        stdout(&check).contains(".githooks/pre-push differs from what install writes"),
+        "{}",
+        stdout(&check)
+    );
     let out = adr(&dir, &["install"], &[], "");
-    assert!(stdout(&out).contains("written: .githooks/pre-push"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("written: .githooks/pre-push"),
+        "{}",
+        stdout(&out)
+    );
 
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     std::fs::write(dir.join("AGENTS.md"), agents.replace('\n', "\r\n")).unwrap();

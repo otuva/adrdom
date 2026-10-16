@@ -15,7 +15,12 @@ fn banned_lines(dir: &std::path::Path) -> Vec<String> {
 fn assert_sorted(lines: &[String]) {
     let mut sorted = lines.to_vec();
     sorted.sort();
-    assert_eq!(lines, sorted.as_slice(), "banned.sha256 is not sorted by hash: {:?}", lines);
+    assert_eq!(
+        lines,
+        sorted.as_slice(),
+        "banned.sha256 is not sorted by hash: {:?}",
+        lines
+    );
 }
 
 // "Does the tool write the ban list in one fixed order?": ban writes the
@@ -63,7 +68,11 @@ fn file_stays_sorted_after_an_unban() {
     // comment); removing it forces a real re-sort of what remains, not
     // just dropping the last line.
     let unban_out = adr_owner(&dir, &["unban"], "wordone\n");
-    assert!(unban_out.status.success(), "unban failed: {}", stderr(&unban_out));
+    assert!(
+        unban_out.status.success(),
+        "unban failed: {}",
+        stderr(&unban_out)
+    );
     let lines = banned_lines(&dir);
     assert_eq!(lines.len(), 2, "{:?}", lines);
     assert_sorted(&lines);
@@ -123,7 +132,9 @@ fn resolve_ours_then_theirs(content: &str) -> String {
 }
 
 fn current_branch(dir: &Path) -> String {
-    stdout(&run_git(dir, &["rev-parse", "--abbrev-ref", "HEAD"])).trim().to_string()
+    stdout(&run_git(dir, &["rev-parse", "--abbrev-ref", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 #[test]
@@ -145,10 +156,18 @@ fn ban_on_two_branches_merges_banned_sha256_with_no_conflict() {
                        basewordfive\nbasewordsix\nbasewordseven\nbasewordeight\n\
                        basewordnine\nbasewordten\n";
     let base_out = adr(&dir, &["ban"], &[], base_words);
-    assert!(base_out.status.success(), "base ban failed: {}", stderr(&base_out));
+    assert!(
+        base_out.status.success(),
+        "base ban failed: {}",
+        stderr(&base_out)
+    );
     run_git(&dir, &["add", "-A"]);
     let commit_out = run_git(&dir, &["commit", "-q", "-m", "base: ban ten words"]);
-    assert!(commit_out.status.success(), "base commit failed: {}", stderr(&commit_out));
+    assert!(
+        commit_out.status.success(),
+        "base commit failed: {}",
+        stderr(&commit_out)
+    );
     let base_branch = current_branch(&dir);
 
     run_git(&dir, &["checkout", "-b", "a"]);
@@ -156,7 +175,11 @@ fn ban_on_two_branches_merges_banned_sha256_with_no_conflict() {
     assert!(a_out.status.success(), "a ban failed: {}", stderr(&a_out));
     run_git(&dir, &["add", "-A"]);
     let a_commit = run_git(&dir, &["commit", "-q", "-m", "a: ban a new word"]);
-    assert!(a_commit.status.success(), "a commit failed: {}", stderr(&a_commit));
+    assert!(
+        a_commit.status.success(),
+        "a commit failed: {}",
+        stderr(&a_commit)
+    );
 
     run_git(&dir, &["checkout", &base_branch]);
     run_git(&dir, &["checkout", "-b", "b"]);
@@ -164,14 +187,20 @@ fn ban_on_two_branches_merges_banned_sha256_with_no_conflict() {
     assert!(b_out.status.success(), "b ban failed: {}", stderr(&b_out));
     run_git(&dir, &["add", "-A"]);
     let b_commit = run_git(&dir, &["commit", "-q", "-m", "b: ban another new word"]);
-    assert!(b_commit.status.success(), "b commit failed: {}", stderr(&b_commit));
+    assert!(
+        b_commit.status.success(),
+        "b commit failed: {}",
+        stderr(&b_commit)
+    );
 
     run_git(&dir, &["checkout", "a"]);
     let merge_out = run_git(&dir, &["merge", "--no-ff", "--no-edit", "b"]);
 
     let conflicted = stdout(&run_git(&dir, &["diff", "--name-only", "--diff-filter=U"]));
     assert!(
-        !conflicted.lines().any(|l| l == "adrdom/state/banned.sha256"),
+        !conflicted
+            .lines()
+            .any(|l| l == "adrdom/state/banned.sha256"),
         "banned.sha256 must merge with no conflict: conflicted files = {:?}, merge stderr = {}",
         conflicted,
         stderr(&merge_out)
@@ -193,11 +222,20 @@ fn ban_on_two_branches_merges_banned_sha256_with_no_conflict() {
             run_git(&dir, &["add", "adrdom/state/ledger.tsv"]);
         }
         let commit_out = run_git(&dir, &["commit", "--no-edit"]);
-        assert!(commit_out.status.success(), "merge commit failed: {}", stderr(&commit_out));
+        assert!(
+            commit_out.status.success(),
+            "merge commit failed: {}",
+            stderr(&commit_out)
+        );
     }
 
     let lines = banned_lines(&dir);
-    assert_eq!(lines.len(), 12, "expected 10 base + 2 merged words: {:?}", lines);
+    assert_eq!(
+        lines.len(),
+        12,
+        "expected 10 base + 2 merged words: {:?}",
+        lines
+    );
     assert_sorted(&lines);
 
     let hash_a = record::sha256_hex("mergeeight");
@@ -223,7 +261,10 @@ fn same_hash_two_uuids_keeps_the_same_one_regardless_of_input_order() {
     let dir = init_repo();
     let same_hash = record::sha256_hex("sharedword");
     let entry_none: (String, Option<String>) = (same_hash.clone(), None);
-    let entry_uuid: (String, Option<String>) = (same_hash.clone(), Some("11111111-1111-1111-1111-111111111111".to_string()));
+    let entry_uuid: (String, Option<String>) = (
+        same_hash.clone(),
+        Some("11111111-1111-1111-1111-111111111111".to_string()),
+    );
 
     let path_a = dir.join("order-a.sha256");
     banned::write_sorted(&path_a, vec![entry_none.clone(), entry_uuid.clone()]).unwrap();
@@ -233,7 +274,10 @@ fn same_hash_two_uuids_keeps_the_same_one_regardless_of_input_order() {
     banned::write_sorted(&path_b, vec![entry_uuid, entry_none]).unwrap();
     let content_b = std::fs::read_to_string(&path_b).unwrap();
 
-    assert_eq!(content_a, content_b, "write_sorted's result depends on input order");
+    assert_eq!(
+        content_a, content_b,
+        "write_sorted's result depends on input order"
+    );
     // Pinned to the actual rule (uuid absent sorts first, so the no-uuid
     // entry survives the dedup): if this ever needs to change, the test
     // should change with it, not just the equality check above.

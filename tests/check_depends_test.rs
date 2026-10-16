@@ -42,7 +42,11 @@ fn check_fails_a_malformed_depends_line() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(text.contains("depends: bad set syntax, line 4"), "{}", text);
-    assert!(text.contains("; agent rewrites the depends line"), "{}", text);
+    assert!(
+        text.contains("; agent rewrites the depends line"),
+        "{}",
+        text
+    );
 }
 
 const QUESTION_BODY: &str = "\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
@@ -95,10 +99,7 @@ fn check_fails_a_depends_entry_that_resolves_no_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
-    let content = format!(
-        "# Topic\n\n### 1.1 Q?\ndepends: widget{}",
-        QUESTION_BODY
-    );
+    let content = format!("# Topic\n\n### 1.1 Q?\ndepends: widget{}", QUESTION_BODY);
     write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
 
@@ -143,8 +144,18 @@ fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"), "{}", text);
-    assert!(text.contains("not yet: commit, after the owner approves adrdom/terms.md"), "{}", text);
+    assert!(
+        text.contains(
+            "adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"
+        ),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("not yet: commit, after the owner approves adrdom/terms.md"),
+        "{}",
+        text
+    );
     assert!(!text.contains("no term"), "{}", text);
 }
 
@@ -205,9 +216,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains(&format!(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent rewrites the entry to name a term that is not retired"
-        )),
+        text.contains(&"adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent rewrites the entry to name a term that is not retired".to_string()),
         "{}",
         text
     );
@@ -250,7 +259,11 @@ fn check_passes_a_depends_entry_on_a_retired_term_once_the_section_is_superseded
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!text.contains("which names no term and no question of this file"), "{}", text);
+    assert!(
+        !text.contains("which names no term and no question of this file"),
+        "{}",
+        text
+    );
     assert!(!text.contains("no term"), "{}", text);
 }
 
@@ -275,11 +288,29 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
     );
     write_record(&dir, "adrdom/decisions/notes.md", &content);
     approve_via_ledger(&dir, "adrdom/decisions/notes.md", &content);
-    append_ledger_row_at(&dir, "asked", question_id, "h1", "Is the tool keep tags?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", question_id, "h1", "A", "2024-01-01T00:00:01Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        question_id,
+        "h1",
+        "Is the tool keep tags?",
+        "2024-01-01T00:00:00Z",
+    );
+    append_ledger_row_at(
+        &dir,
+        "answered",
+        question_id,
+        "h1",
+        "A",
+        "2024-01-01T00:00:01Z",
+    );
 
     // Retire the term by editing the file only; check reads it as it is.
-    std::fs::write(dir.join("adrdom/terms.md"), format!("{}retired: yes\n", approved)).unwrap();
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        format!("{}retired: yes\n", approved),
+    )
+    .unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
@@ -288,7 +319,11 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
         "{}",
         text
     );
-    assert!(!text.contains("which names no term and no question of this file"), "{}", text);
+    assert!(
+        !text.contains("which names no term and no question of this file"),
+        "{}",
+        text
+    );
 }
 
 #[test]
@@ -297,7 +332,10 @@ fn check_fails_a_depends_entry_on_a_decision_that_is_not_current() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
     let other_id = "22222222-2222-2222-2222-222222222222";
-    let content = format!("# Topic\n\n### 1.1 Q?\ndepends: {}{}", other_id, QUESTION_BODY);
+    let content = format!(
+        "# Topic\n\n### 1.1 Q?\ndepends: {}{}",
+        other_id, QUESTION_BODY
+    );
     write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
     // `other_id` never asked/answered: not a current decision.
@@ -321,9 +359,26 @@ fn check_passes_a_depends_entry_on_a_current_decision() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
     let other_id = "33333333-3333-3333-3333-333333333333";
-    append_ledger_row_at(&dir, "asked", other_id, "h1", "old heading", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", other_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let content = format!("# Topic\n\n### 1.1 Q?\ndepends: {}{}", other_id, QUESTION_BODY);
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        other_id,
+        "h1",
+        "old heading",
+        "2024-01-01T00:00:00Z",
+    );
+    append_ledger_row_at(
+        &dir,
+        "answered",
+        other_id,
+        "h1",
+        "A",
+        "2024-01-01T00:00:01Z",
+    );
+    let content = format!(
+        "# Topic\n\n### 1.1 Q?\ndepends: {}{}",
+        other_id, QUESTION_BODY
+    );
     write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
 

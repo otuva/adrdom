@@ -127,22 +127,47 @@ fn main() {
     let matches = Cli::command().version(shown).get_matches();
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     let code = match cli.command {
-        Command::Install { claude, codex, planning } => commands::install::run(claude, codex, planning),
+        Command::Install {
+            claude,
+            codex,
+            planning,
+        } => commands::install::run(claude, codex, planning),
         Command::Uninstall => commands::uninstall::run(),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Plan { topic_file } => commands::plan::run(topic_file),
         Command::Read => commands::read::run(),
         Command::Approve { file, entry } => commands::approve::run(file, entry),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file, all, neighbours, dependents, unrelated, questions, reader, superseded } => commands::show::run(
+        Command::Show {
             topic_file,
             all,
-            commands::show::Views { neighbours, dependents, unrelated, questions, reader, superseded },
+            neighbours,
+            dependents,
+            unrelated,
+            questions,
+            reader,
+            superseded,
+        } => commands::show::run(
+            topic_file,
+            all,
+            commands::show::Views {
+                neighbours,
+                dependents,
+                unrelated,
+                questions,
+                reader,
+                superseded,
+            },
         ),
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
-        Command::Check { staged, message, since, push } => commands::check::run(staged, message, since, push),
+        Command::Check {
+            staged,
+            message,
+            since,
+            push,
+        } => commands::check::run(staged, message, since, push),
     };
     std::process::exit(code);
 }

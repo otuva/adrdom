@@ -39,9 +39,17 @@ fn answer_all(dir: &Path, rel: &str, ids: &[String]) {
 fn assert_refused(dir: &Path, rel: &str, before: usize, heading: &str) {
     let path = dir.join(rel);
     let out = adr_owner(dir, &["approve", path.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
-    assert!(err.contains(heading), "stderr should name the section: {}", err);
+    assert!(
+        err.contains(heading),
+        "stderr should name the section: {}",
+        err
+    );
     assert!(err.contains("text changed since being answered"), "{}", err);
     assert_eq!(approved_rows(dir), before, "no approved row on refusal");
 }
@@ -52,7 +60,10 @@ fn assert_refused(dir: &Path, rel: &str, before: usize, heading: &str) {
 fn approve_refuses_a_swapped_uuid_entry_in_an_answered_section() {
     let dir = setup();
     let rel = "adrdom/decisions/topic-a.md";
-    let content = format!("# Topic A\n\n### Is A do a thing?\ndepends: decision\n\n{}", body("1"));
+    let content = format!(
+        "# Topic A\n\n### Is A do a thing?\ndepends: decision\n\n{}",
+        body("1")
+    );
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
@@ -64,7 +75,11 @@ fn approve_refuses_a_swapped_uuid_entry_in_an_answered_section() {
         "depends: 99999991-9999-9999-9999-999999999999",
         1,
     );
-    assert_ne!(cur, swapped, "fixture: the term id should be in the file: {}", cur);
+    assert_ne!(
+        cur, swapped,
+        "fixture: the term id should be in the file: {}",
+        cur
+    );
     std::fs::write(&path, swapped).unwrap();
     let before = approved_rows(&dir);
     assert_refused(&dir, rel, before, "Is A do a thing?");
@@ -84,7 +99,10 @@ fn approve_refuses_a_swapped_uuid_entry_in_an_answered_section() {
 fn approve_refuses_a_deleted_entry_in_an_answered_section() {
     let dir = setup();
     let rel = "adrdom/decisions/topic-a.md";
-    let content = format!("# Topic A\n\n### Is A do a thing?\ndepends: decision, other\n\n{}", body("1"));
+    let content = format!(
+        "# Topic A\n\n### Is A do a thing?\ndepends: decision, other\n\n{}",
+        body("1")
+    );
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
@@ -114,17 +132,27 @@ fn approve_refuses_a_deleted_entry_in_an_answered_section() {
 fn approve_accepts_an_untouched_answered_section_with_a_new_heading() {
     let dir = setup();
     let rel = "adrdom/decisions/topic-a.md";
-    let content = format!("# Topic A\n\n### Is A do a thing?\ndepends: decision, other\n\n{}", body("1"));
+    let content = format!(
+        "# Topic A\n\n### Is A do a thing?\ndepends: decision, other\n\n{}",
+        body("1")
+    );
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
     answer_all(&dir, rel, &ids);
 
     let mut cur = std::fs::read_to_string(&path).unwrap();
-    cur.push_str(&format!("\n### Is B do a thing?\ndepends: decision\n\n{}", body("2")));
+    cur.push_str(&format!(
+        "\n### Is B do a thing?\ndepends: decision\n\n{}",
+        body("2")
+    ));
     std::fs::write(&path, cur).unwrap();
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve should accept: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve should accept: {}",
+        stderr(&out)
+    );
 }
 
 // Only the answer set on an answered section changes: check fails it as

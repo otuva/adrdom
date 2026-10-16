@@ -10,26 +10,32 @@ mod overview;
 mod terms;
 mod words;
 
-use crate::rules::Command;
 use crate::actions;
+use crate::commands::show::Records;
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
 use crate::repo;
-use crate::commands::show::Records;
+use crate::rules::Command;
 use std::collections::HashMap;
 use std::path::Path;
 use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop(Command::Serve, &msg::owner_refusal("serve", &["--port", &port.to_string()]));
+        out::eprint_stop(
+            Command::Serve,
+            &msg::owner_refusal("serve", &["--port", &port.to_string()]),
+        );
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Command::Serve, &msg::not_a_repo("serve", &["--port", &port.to_string()], Actor::Owner));
+            out::eprint_stop(
+                Command::Serve,
+                &msg::not_a_repo("serve", &["--port", &port.to_string()], Actor::Owner),
+            );
             return 1;
         }
     };
@@ -56,7 +62,10 @@ pub fn run(port: u16) -> i32 {
 
     // Per "What does the ui require before an owner act?": the token,
     // printed once per start.
-    out::print(&[Line::Record { depth: 0, text: format!("open: http://127.0.0.1:{}/?t={}", bound_port, token) }]);
+    out::print(&[Line::Record {
+        depth: 0,
+        text: format!("open: http://127.0.0.1:{}/?t={}", bound_port, token),
+    }]);
 
     // What each act printed, kept under a key of its own that its redirect
     // carries, and shown once on the page that redirect leads to: two tabs
@@ -152,7 +161,10 @@ fn handle(mut request: Request, root: &Path, token: &str, acts: &mut Acts) {
             return;
         }
         let mut s = String::new();
-        let _ = std::io::Read::read_to_string(&mut std::io::Read::take(request.as_reader(), BODY_LIMIT), &mut s);
+        let _ = std::io::Read::read_to_string(
+            &mut std::io::Read::take(request.as_reader(), BODY_LIMIT),
+            &mut s,
+        );
         s
     } else {
         String::new()
@@ -166,20 +178,32 @@ fn handle(mut request: Request, root: &Path, token: &str, acts: &mut Acts) {
     let reply = match (method, path.as_str()) {
         (Method::Get, "/") => {
             let last = acts.take(query.get("r"));
-            Reply::Html(200, overview::render_index(&Records::load(root.to_path_buf()), &last, token))
+            Reply::Html(
+                200,
+                overview::render_index(&Records::load(root.to_path_buf()), &last, token),
+            )
         }
         (Method::Get, "/next") => {
             let last = acts.take(query.get("r"));
             let r = Records::load(root.to_path_buf());
-            Reply::Html(200, answer::render_next(&r, &last, query.get("after"), query.get("show"), token))
+            Reply::Html(
+                200,
+                answer::render_next(&r, &last, query.get("after"), query.get("show"), token),
+            )
         }
         (Method::Get, "/decisions") => {
             let last = acts.take(query.get("r"));
-            Reply::Html(200, decisions::render_decisions(&Records::load(root.to_path_buf()), &last))
+            Reply::Html(
+                200,
+                decisions::render_decisions(&Records::load(root.to_path_buf()), &last),
+            )
         }
         (Method::Get, "/terms") => {
             let last = acts.take(query.get("r"));
-            Reply::Html(200, terms::render_terms(&Records::load(root.to_path_buf()), &last, token))
+            Reply::Html(
+                200,
+                terms::render_terms(&Records::load(root.to_path_buf()), &last, token),
+            )
         }
         (Method::Post, "/approve") => {
             let key = acts.keep(handle_approve(root, &form));
@@ -193,7 +217,10 @@ fn handle(mut request: Request, root: &Path, token: &str, acts: &mut Acts) {
             let wrote = lines.iter().any(|l| matches!(l, Line::Event(_)));
             let key = acts.keep(lines);
             let place = if wrote { "after" } else { "show" };
-            Reply::Redirect(format!("/next?r={}&{}={}", key, place, percent_encode(&id)), None)
+            Reply::Redirect(
+                format!("/next?r={}&{}={}", key, place, percent_encode(&id)),
+                None,
+            )
         }
         (Method::Post, "/unban") => {
             let key = acts.keep(handle_unban(root, &form));
@@ -253,7 +280,10 @@ fn act_lines(result: Result<actions::Outcome, actions::Stops>) -> Vec<Line> {
 fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     let file = form.get("file").cloned().unwrap_or_default();
     // The one entry of the terms file a control approves (da0dc8b1).
-    let entry = form.get("entry").map(String::as_str).filter(|e| !e.is_empty());
+    let entry = form
+        .get("entry")
+        .map(String::as_str)
+        .filter(|e| !e.is_empty());
     act_lines(actions::do_approve(root, &root.join(&file), entry))
 }
 
@@ -265,7 +295,10 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     // own form, only from a hand-crafted POST) never matches a real
     // section's hash and so refuses the same way a stale one does.
     let version = form.get("v").cloned().unwrap_or_default();
-    let value = form.get("answer").map(|s| s.trim().to_string()).unwrap_or_default();
+    let value = form
+        .get("answer")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
 
     // The Refuse button posts `answer=refuse`; everything else is a letter.
     if value == "refuse" {
@@ -278,8 +311,14 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     // message, since there is nothing malformed to name.
     match actions::parse_letter(&value) {
         Some(letter) => act_lines(actions::do_answer(root, &id, &version, letter)),
-        None if value.is_empty() => out::stop(Command::Answer, &msg::missing_answer_selection(&id, &version)),
-        None => out::stop(Command::Answer, &msg::invalid_letter(&value, &format!("{}@{}", id, version))),
+        None if value.is_empty() => out::stop(
+            Command::Answer,
+            &msg::missing_answer_selection(&id, &version),
+        ),
+        None => out::stop(
+            Command::Answer,
+            &msg::invalid_letter(&value, &format!("{}@{}", id, version)),
+        ),
     }
 }
 
@@ -379,7 +418,9 @@ fn percent_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.as_bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
             _ => out.push_str(&format!("%{:02X}", b)),
         }
     }

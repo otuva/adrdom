@@ -22,7 +22,11 @@ pub(super) fn render_index(r: &Records, last: &[Line], token: &str) -> String {
     // only the ones no card holds.
     let mut shown: Vec<String> = Vec::new();
 
-    let open = files.iter().flat_map(|f| &f.qs).filter(|q| q.listed()).count();
+    let open = files
+        .iter()
+        .flat_map(|f| &f.qs)
+        .filter(|q| q.listed())
+        .count();
     let answerable = files.iter().flat_map(|f| &f.qs).any(|q| q.answerable());
     body.push_str("<header class=\"lead\">\n<h1>Overview</h1>\n");
     body.push_str(&format!(
@@ -39,7 +43,10 @@ pub(super) fn render_index(r: &Records, last: &[Line], token: &str) -> String {
     unreadable.extend(r.terms_unreadable_finding());
     if !unreadable.is_empty() {
         shown.extend(unreadable.iter().map(out::text));
-        body.push_str(&format!("<div class=\"failures\">\n{}</div>\n", lines(&unreadable)));
+        body.push_str(&format!(
+            "<div class=\"failures\">\n{}</div>\n",
+            lines(&unreadable)
+        ));
     }
 
     for f in &files {
@@ -54,7 +61,11 @@ pub(super) fn render_index(r: &Records, last: &[Line], token: &str) -> String {
         body.push_str("<article class=\"topic\">\n<h2>Other files</h2>\n");
         for l in &rest {
             shown.push(out::text(l));
-            if let Line::Move(Move { kind: MoveKind::Approve { path }, .. }) = l {
+            if let Line::Move(Move {
+                kind: MoveKind::Approve { path },
+                ..
+            }) = l
+            {
                 body.push_str(&approve_block(r, path, None, "Approve", token));
             } else {
                 body.push_str(&format!("{}\n", out::html(l)));
@@ -75,13 +86,21 @@ pub(super) fn render_index(r: &Records, last: &[Line], token: &str) -> String {
 fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> String {
     let rf = f.rf;
     let mut s = String::from("<article class=\"topic\">\n");
-    let topic = rf.topic.as_deref().filter(|t| !t.is_empty()).unwrap_or(&rf.rel);
+    let topic = rf
+        .topic
+        .as_deref()
+        .filter(|t| !t.is_empty())
+        .unwrap_or(&rf.rel);
     s.push_str(&format!("<h2>{}</h2>\n", esc(topic)));
     let status = show::topic_file_status_line(&r.led, rf);
     let file_st = crate::status::topic_file_status(&r.led, rf);
     s.push_str(&format!(
         "<div class=\"path state {}\">{}</div>\n",
-        if file_st.awaits_approval() { "waiting" } else { "done" },
+        if file_st.awaits_approval() {
+            "waiting"
+        } else {
+            "done"
+        },
         st(&status, false, None)
     ));
 
@@ -91,7 +110,13 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
         _ => None,
     });
     if let Some(path) = &approve {
-        s.push_str(&approve_block(r, path, Some(rf), &format!("Approve {}", topic), token));
+        s.push_str(&approve_block(
+            r,
+            path,
+            Some(rf),
+            &format!("Approve {}", topic),
+            token,
+        ));
     } else {
         // Questions of the plan with no body or not asked yet, as the file
         // form prints their status lines (a question new since the file's
@@ -103,7 +128,10 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
                 matches!(
                     l,
                     Line::Status {
-                        status: Status::Question { status: QuestionStatus::NoBody | QuestionStatus::NotAsked, .. },
+                        status: Status::Question {
+                            status: QuestionStatus::NoBody | QuestionStatus::NotAsked,
+                            ..
+                        },
                         ..
                     }
                 )
@@ -123,15 +151,29 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
     let placed = |q: &Q| open_like(q) || q.status == QuestionStatus::Refused;
     let moves = data::unplaced(f, &placed);
     let move_lines = |keep: &dyn Fn(&Move) -> bool| -> Vec<Line> {
-        moves.iter().filter(|m| keep(m)).map(|m| Line::Move((*m).clone())).collect()
+        moves
+            .iter()
+            .filter(|m| keep(m))
+            .map(|m| Line::Move((*m).clone()))
+            .collect()
     };
     let builds = move_lines(&|m| matches!(m.kind, MoveKind::Build { .. }));
-    let others = move_lines(&|m| !matches!(m.kind, MoveKind::Build { .. }) && m.actor() != Mover::Owner);
-    let findings: Vec<Line> = f.report.findings.iter().cloned().map(Line::Finding).collect();
+    let others =
+        move_lines(&|m| !matches!(m.kind, MoveKind::Build { .. }) && m.actor() != Mover::Owner);
+    let findings: Vec<Line> = f
+        .report
+        .findings
+        .iter()
+        .cloned()
+        .map(Line::Finding)
+        .collect();
     shown.extend(findings.iter().map(out::text));
     s.push_str(&lines(&builds));
     if !findings.is_empty() {
-        s.push_str(&format!("<div class=\"failures\">\n{}</div>\n", lines(&findings)));
+        s.push_str(&format!(
+            "<div class=\"failures\">\n{}</div>\n",
+            lines(&findings)
+        ));
     }
     s.push_str(&lines(&others));
 
@@ -145,7 +187,10 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
         }
         s.push_str("</ol>\n");
     }
-    let refused: Vec<&Q> = f.qs.iter().filter(|q| q.status == QuestionStatus::Refused).collect();
+    let refused: Vec<&Q> =
+        f.qs.iter()
+            .filter(|q| q.status == QuestionStatus::Refused)
+            .collect();
     if !refused.is_empty() {
         s.push_str("<ul class=\"refused-list\">\n");
         for q in refused {
@@ -160,7 +205,10 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
 
     // Decisions: the heading and the option picked, as `adr show` lists them.
     let answered = show::decision_lines(rf, &r.led);
-    let count = answered.iter().filter(|l| matches!(l, Line::Record { depth: 1, .. })).count();
+    let count = answered
+        .iter()
+        .filter(|l| matches!(l, Line::Record { depth: 1, .. }))
+        .count();
     if count > 0 {
         s.push_str(&format!(
             "<details class=\"answered\"><summary>{}</summary>\n<dl>\n",
@@ -177,12 +225,21 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
     let gone: Vec<&Q> = f
         .qs
         .iter()
-        .filter(|q| matches!(q.status, QuestionStatus::Superseded | QuestionStatus::Withdrawn | QuestionStatus::Dropped))
+        .filter(|q| {
+            matches!(
+                q.status,
+                QuestionStatus::Superseded | QuestionStatus::Withdrawn | QuestionStatus::Dropped
+            )
+        })
         .collect();
     if !gone.is_empty() {
         s.push_str(&format!(
             "<details class=\"answered\"><summary>{}</summary>\n",
-            plural(gone.len(), "question out of the plan", "questions out of the plan")
+            plural(
+                gone.len(),
+                "question out of the plan",
+                "questions out of the plan"
+            )
         ));
         for q in gone {
             s.push_str(&format!("<div>{}</div>\n", st(&q.line, false, None)));
@@ -196,7 +253,13 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
 /// The moves that name a question and are not the owner's: what it waits
 /// on, the agent's next step. The owner's answer is the link or the form.
 pub(super) fn notes(q: &Q) -> String {
-    let moves: Vec<Line> = q.moves.iter().filter(|m| m.actor() != Mover::Owner).cloned().map(Line::Move).collect();
+    let moves: Vec<Line> = q
+        .moves
+        .iter()
+        .filter(|m| m.actor() != Mover::Owner)
+        .cloned()
+        .map(Line::Move)
+        .collect();
     lines(&moves)
 }
 
@@ -207,7 +270,12 @@ pub(super) fn open_item(q: &Q, current: bool) -> String {
     let class = if current { " class=\"current\"" } else { "" };
     if q.answerable() {
         let href = format!("/next?show={}", percent_encode(q.id()));
-        format!("<li{}>{}\n{}</li>\n", class, st(&q.line, false, Some(&href)), notes(q))
+        format!(
+            "<li{}>{}\n{}</li>\n",
+            class,
+            st(&q.line, false, Some(&href)),
+            notes(q)
+        )
     } else {
         format!(
             "<li{}><span class=\"label waiting\">waiting</span> {}\n{}</li>\n",
@@ -222,13 +290,26 @@ fn terms_card(r: &Records, token: &str, shown: &mut Vec<String>) -> Option<Strin
     let tf = r.terms_file.as_ref()?;
     let (_, report) = show::terms_report(r, tf);
     let mut s = String::from("<article class=\"topic\">\n<h2>Terms</h2>\n");
-    s.push_str(&format!("<p class=\"path\">{}</p>\n", esc(repo::TERMS_PATH)));
+    s.push_str(&format!(
+        "<p class=\"path\">{}</p>\n",
+        esc(repo::TERMS_PATH)
+    ));
     let status = crate::status::terms_file_status(&r.led, tf);
-    let unpaired = tf.terms.iter().filter(|t| !t.retired && show::term_dependents(r, t).is_empty()).count();
+    let unpaired = tf
+        .terms
+        .iter()
+        .filter(|t| !t.retired && show::term_dependents(r, t).is_empty())
+        .count();
     s.push_str("<div class=\"summary-card\">");
-    s.push_str(&format!("<span class=\"count\">{}</span>", plural(tf.terms.len(), "term", "terms")));
+    s.push_str(&format!(
+        "<span class=\"count\">{}</span>",
+        plural(tf.terms.len(), "term", "terms")
+    ));
     if unpaired > 0 {
-        s.push_str(&format!("<span class=\"muted\">{} paired by nothing</span>", unpaired));
+        s.push_str(&format!(
+            "<span class=\"muted\">{} paired by nothing</span>",
+            unpaired
+        ));
     }
     s.push_str("<a class=\"more\" href=\"/terms\">Open the terms &rarr;</a></div>\n");
     let st_line = Line::Status {
@@ -238,12 +319,21 @@ fn terms_card(r: &Records, token: &str, shown: &mut Vec<String>) -> Option<Strin
     };
     s.push_str(&format!(
         "<div class=\"state {}\">{}</div>\n",
-        if status.awaits_approval() { "waiting" } else { "done" },
+        if status.awaits_approval() {
+            "waiting"
+        } else {
+            "done"
+        },
         st(&st_line, false, None)
     ));
     s.push_str(&terms_moves(r, tf, &report.moves, "Approve terms", token));
     if !report.findings.is_empty() {
-        shown.extend(report.findings.iter().map(|f| out::text(&Line::Finding(f.clone()))));
+        shown.extend(
+            report
+                .findings
+                .iter()
+                .map(|f| out::text(&Line::Finding(f.clone()))),
+        );
         let fl: Vec<Line> = report.findings.iter().cloned().map(Line::Finding).collect();
         s.push_str(&format!("<div class=\"failures\">\n{}</div>\n", lines(&fl)));
     }
@@ -253,20 +343,37 @@ fn terms_card(r: &Records, token: &str, shown: &mut Vec<String>) -> Option<Strin
 
 /// What `adr check` prints that no card above holds: failures, then notes.
 fn check_card(r: &Records, files: &[File], shown: &[String]) -> String {
-    let report = crate::commands::check::collect_from(r, &files.iter().map(|f| f.judged.as_slice()).collect::<Vec<_>>());
+    let report = crate::commands::check::collect_from(
+        r,
+        &files
+            .iter()
+            .map(|f| f.judged.as_slice())
+            .collect::<Vec<_>>(),
+    );
     let fresh = |fs: Vec<Finding>| -> Vec<Line> {
-        fs.into_iter().map(Line::Finding).filter(|l| !shown.contains(&out::text(l))).collect()
+        fs.into_iter()
+            .map(Line::Finding)
+            .filter(|l| !shown.contains(&out::text(l)))
+            .collect()
     };
     // One group in the one order `adr check` prints: failures and notes are
     // not told apart on the terminal, so they are not on the page.
-    let mut found: Vec<Line> =
-        report.stops.iter().map(|m| out::refusal(crate::rules::Command::Check, m)).collect();
-    found.extend(fresh(report.failures.into_iter().chain(report.notes).collect()));
+    let mut found: Vec<Line> = report
+        .stops
+        .iter()
+        .map(|m| out::refusal(crate::rules::Command::Check, m))
+        .collect();
+    found.extend(fresh(
+        report.failures.into_iter().chain(report.notes).collect(),
+    ));
     if found.is_empty() {
         return String::new();
     }
     let mut s = String::from("<article class=\"topic check\">\n<h2>Check</h2>\n");
-    s.push_str(&format!("<div class=\"failures\">\n{}</div>\n", lines(&found)));
+    s.push_str(&format!(
+        "<div class=\"failures\">\n{}</div>\n",
+        lines(&found)
+    ));
     s.push_str("</article>\n");
     s
 }
@@ -276,7 +383,13 @@ fn check_card(r: &Records, files: &[File], shown: &[String]) -> String {
 /// offers to approve what it does not show (per "Does show print what a file
 /// holds past its latest approval?"). `rf` is the topic file, whose
 /// questions carry their neighbours under them.
-pub(super) fn approve_block(r: &Records, path: &str, rf: Option<&RecordFile>, label: &str, token: &str) -> String {
+pub(super) fn approve_block(
+    r: &Records,
+    path: &str,
+    rf: Option<&RecordFile>,
+    label: &str,
+    token: &str,
+) -> String {
     let mut s = change_block(r, path, rf);
     s.push_str(&format!(
         "<form method=\"post\" action=\"/approve\" class=\"inline\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">{}</button></form>\n",
@@ -293,7 +406,13 @@ pub(super) fn approve_block(r: &Records, path: &str, rf: Option<&RecordFile>, la
 /// that entry (per "What does approve take for a terms file holding several
 /// entries that wait?", da0dc8b1 A); the file's own control, labelled
 /// `label`, only when no entry waits.
-pub(super) fn terms_moves(r: &Records, tf: &crate::terms::TermsFile, moves: &[Move], label: &str, token: &str) -> String {
+pub(super) fn terms_moves(
+    r: &Records,
+    tf: &crate::terms::TermsFile,
+    moves: &[Move],
+    label: &str,
+    token: &str,
+) -> String {
     let mut s = String::new();
     let mut change_shown = false;
     for m in moves {
@@ -338,7 +457,9 @@ fn entry_approve_form(tf: &crate::terms::TermsFile, name: &str, token: &str) -> 
 /// heading, the neighbours of a question folded under it, and the lines of
 /// the change folded under "show the change".
 fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
-    let Ok(all) = show::file_form_lines(r, path, Views::default()) else { return String::new() };
+    let Ok(all) = show::file_form_lines(r, path, Views::default()) else {
+        return String::new();
+    };
     struct Group {
         head: Option<Line>,
         records: Vec<Line>,
@@ -351,26 +472,47 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
     let mut first = true;
     // Lines before the first status line after the file's own: the file's
     // change as a whole.
-    let mut cur = Group { head: None, records: Vec::new(), words: Vec::new(), keep: false, question: None };
+    let mut cur = Group {
+        head: None,
+        records: Vec::new(),
+        words: Vec::new(),
+        keep: false,
+        question: None,
+    };
     for l in all {
         match l {
             Line::Move(_) | Line::Finding(_) => {}
-            Line::Status { ref subject, ref status, ref mark } => {
+            Line::Status {
+                ref subject,
+                ref status,
+                ref mark,
+            } => {
                 if first {
                     // The file's own status line, shown on the card.
                     first = false;
                     continue;
                 }
-                groups.push(std::mem::replace(&mut cur, Group { head: None, records: Vec::new(), words: Vec::new(), keep: false, question: None }));
+                groups.push(std::mem::replace(
+                    &mut cur,
+                    Group {
+                        head: None,
+                        records: Vec::new(),
+                        words: Vec::new(),
+                        keep: false,
+                        question: None,
+                    },
+                ));
                 cur.keep = mark.is_some()
                     || match status {
                         Status::Question { status, .. } => {
                             matches!(status, QuestionStatus::NoBody | QuestionStatus::NotAsked)
                         }
                         Status::File(s) => *s != FileStatus::Approved,
-                        Status::Term(t) => {
-                            !matches!(t, crate::status::TermStatus::Approved | crate::status::TermStatus::Retired)
-                        }
+                        Status::Term(t) => !matches!(
+                            t,
+                            crate::status::TermStatus::Approved
+                                | crate::status::TermStatus::Retired
+                        ),
                     };
                 if let Status::Question { .. } = status {
                     cur.question = Some(subject.clone());
@@ -399,17 +541,28 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
         s.push_str("<div class=\"chg\">");
         if let Some(h) = &g.head {
             let chip = match h {
-                Line::Status { mark: Some(crate::approval::Side::Added), .. } => "+",
-                Line::Status { mark: Some(crate::approval::Side::Removed), .. } => "\u{2212}",
+                Line::Status {
+                    mark: Some(crate::approval::Side::Added),
+                    ..
+                } => "+",
+                Line::Status {
+                    mark: Some(crate::approval::Side::Removed),
+                    ..
+                } => "\u{2212}",
                 _ => "changed",
             };
-            s.push_str(&format!("<span class=\"chip\">{}</span> {}", chip, st(h, false, None)));
+            s.push_str(&format!(
+                "<span class=\"chip\">{}</span> {}",
+                chip,
+                st(h, false, None)
+            ));
         } else {
             s.push_str("<span class=\"chip\">changed</span> <span class=\"subject\">the file as a whole</span>");
         }
-        s.push_str("\n");
+        s.push('\n');
         if let (Some(rf), Some(q)) = (rf, &g.question) {
-            let map: &HashMap<String, Vec<String>> = neighbours_of_file.get_or_init(|| show::neighbours_map(r, rf));
+            let map: &HashMap<String, Vec<String>> =
+                neighbours_of_file.get_or_init(|| show::neighbours_map(r, rf));
             if let Some(n) = map.get(q).filter(|n| !n.is_empty()) {
                 s.push_str(&neighbours(n));
             }
@@ -418,7 +571,10 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
             s.push_str(&lines(&g.words));
         }
         if !g.records.is_empty() {
-            s.push_str(&format!("<details class=\"chgd\"><summary>show the change</summary>\n{}</details>\n", lines(&g.records)));
+            s.push_str(&format!(
+                "<details class=\"chgd\"><summary>show the change</summary>\n{}</details>\n",
+                lines(&g.records)
+            ));
         }
         s.push_str("</div>\n");
     }

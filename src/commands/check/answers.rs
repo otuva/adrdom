@@ -1,8 +1,8 @@
-use crate::rules::Class;
 use super::Failure;
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
+use crate::rules::Class;
 use crate::state;
 use crate::terms::Term;
 use std::path::Path;
@@ -40,18 +40,38 @@ pub(super) fn check_answers(
             // asked before is edited after asking. The move is the one `show` names for its file.
             let asked_open = sec.answer_line.is_none()
                 && (state::is_open_again(led, id)
-                    || !led.rows.iter().any(|r| (r.event == "answered" || r.event == "refused") && &r.id == id));
+                    || !led
+                        .rows
+                        .iter()
+                        .any(|r| (r.event == "answered" || r.event == "refused") && &r.id == id));
             if asked_open {
                 if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
                     if latest_asked_hash != cur {
                         let moves = file_report.get_or_init(|| {
                             let loaded = rf;
-                            let index =
-                                index.get_or_init(|| crate::rules::RepoIndex::new_via(root, records, terms_list, led, source));
-                            let j = crate::moves::Judging { root, all: records, terms_list, led, index };
-                            crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false)
+                            let index = index.get_or_init(|| {
+                                crate::rules::RepoIndex::new_via(
+                                    root, records, terms_list, led, source,
+                                )
+                            });
+                            let j = crate::moves::Judging {
+                                root,
+                                all: records,
+                                terms_list,
+                                led,
+                                index,
+                            };
+                            crate::moves::of_unasked_question_in(
+                                &j,
+                                loaded,
+                                &sec.heading_text,
+                                false,
+                            )
                         });
-                        out.push(Failure::said(Class::Answers, msg::edited_after_asking(&rf.rel, &sec.heading_text, moves)));
+                        out.push(Failure::said(
+                            Class::Answers,
+                            msg::edited_after_asking(&rf.rel, &sec.heading_text, moves),
+                        ));
                     }
                 }
             }
@@ -107,7 +127,10 @@ fn check_frozen_sets(
             None => record::sha256_hex(&format!("{}=", dep_id)),
         };
         if expected != row.hash {
-            out.push(Failure::said(Class::Answers, msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text)));
+            out.push(Failure::said(
+                Class::Answers,
+                msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text),
+            ));
         }
     }
     out

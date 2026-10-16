@@ -58,7 +58,9 @@ fn ban_writes_two_column_lines_with_term() {
 
     let banned = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
     assert!(
-        banned.lines().any(|l| l.ends_with(&format!(" {}", term_id))),
+        banned
+            .lines()
+            .any(|l| l.ends_with(&format!(" {}", term_id))),
         "expected a two-column line carrying the term uuid: {}",
         banned
     );
@@ -143,11 +145,20 @@ fn check_banned_scanner_names_the_term() {
     let ban_out = adr(&dir, &["ban", "--term", "widget"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
     let ban_out2 = adr(&dir, &["ban"], &[], "plainword\n");
-    assert!(ban_out2.status.success(), "ban failed: {}", stderr(&ban_out2));
+    assert!(
+        ban_out2.status.success(),
+        "ban failed: {}",
+        stderr(&ban_out2)
+    );
 
     // Both words live in the one ban list file.
     let banned = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
-    assert_eq!(banned.lines().count(), 2, "expected one list, two lines: {}", banned);
+    assert_eq!(
+        banned.lines().count(),
+        2,
+        "expected one list, two lines: {}",
+        banned
+    );
 
     std::fs::write(
         dir.join("notes.txt"),
@@ -164,14 +175,9 @@ fn check_banned_scanner_names_the_term() {
         .filter(|l| l.starts_with("notes.txt:1: banned word"))
         .collect();
     assert_eq!(hits.len(), 2, "expected one hit per word: {}", text);
+    assert!(hits.iter().any(|l| l.contains("(term widget)")), "{}", text);
     assert!(
-        hits.iter().any(|l| l.contains("(term widget)")),
-        "{}",
-        text
-    );
-    assert!(
-        hits
-            .iter()
+        hits.iter()
             .any(|l| l.starts_with("notes.txt:1: banned word;")),
         "{}",
         text

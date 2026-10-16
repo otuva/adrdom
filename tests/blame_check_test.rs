@@ -27,8 +27,16 @@ fn check_fails_when_the_origin_was_edited_after_approval() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("adrdom/blame/x.md: blob no longer matches docs/x.md"), "{}", text);
-    assert!(text.contains("owner runs: adr approve adrdom/blame/x.md"), "{}", text);
+    assert!(
+        text.contains("adrdom/blame/x.md: blob no longer matches docs/x.md"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("owner runs: adr approve adrdom/blame/x.md"),
+        "{}",
+        text
+    );
 }
 
 // adr: 6f6e7f4a-d733-4f3a-99f9-6a47fec5db70
@@ -52,14 +60,22 @@ fn check_passes_after_the_blob_line_is_updated_and_reapproved() {
     std::fs::write(dir.join("docs/x.md"), "one\ntwo-edited\n").unwrap();
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
-    assert!(stdout(&out).contains("no longer matches"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("no longer matches"),
+        "{}",
+        stdout(&out)
+    );
 
     // The agent updates the blob line to the edited content's current hash,
     // in place, so the file keeps the id line the first approve wrote.
     let new_blob_out = run_git(&dir, &["hash-object", "docs/x.md"]);
     let new_blob = stdout(&new_blob_out).trim().to_string();
     let content = std::fs::read_to_string(&path).unwrap();
-    let updated = content.replacen(&format!("blob: {}", blob), &format!("blob: {}", new_blob), 1);
+    let updated = content.replacen(
+        &format!("blob: {}", blob),
+        &format!("blob: {}", new_blob),
+        1,
+    );
     std::fs::write(&path, &updated).unwrap();
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
@@ -67,8 +83,16 @@ fn check_passes_after_the_blob_line_is_updated_and_reapproved() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(!stdout(&out).contains("no longer matches"), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("no longer matches"),
+        "{}",
+        stdout(&out)
+    );
+    assert!(
+        !stdout(&out).contains("awaiting approval"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 // adr: 6f6e7f4a-d733-4f3a-99f9-6a47fec5db70
@@ -79,7 +103,13 @@ fn check_passes_after_the_blob_line_is_updated_and_reapproved() {
 fn a_blob_mismatch_on_a_draft_is_a_note() {
     let dir = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdetail\n2-2\tdetail\n");
+    write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdetail\n2-2\tdetail\n",
+    );
     // Never approved. The origin is edited after the blob line was written,
     // with the same line count, so the blob is the only finding.
     std::fs::write(dir.join("docs/x.md"), "one\ntwo-edited\n").unwrap();
@@ -93,11 +123,19 @@ fn a_blob_mismatch_on_a_draft_is_a_note() {
     );
 
     let approve = adr_owner(&dir, &["approve", "adrdom/blame/x.md"], "");
-    assert!(!approve.status.success(), "approve takes a blob that differs from its origin");
+    assert!(
+        !approve.status.success(),
+        "approve takes a blob that differs from its origin"
+    );
     let refused = refusal_lines(&approve, "approve: ");
     assert!(!refused.is_empty(), "{}", stderr(&approve));
     for line in &refused {
-        assert!(stdout(&out).contains(line.as_str()), "approve refuses with {:?}, check prints:\n{}", line, stdout(&out));
+        assert!(
+            stdout(&out).contains(line.as_str()),
+            "approve refuses with {:?}, check prints:\n{}",
+            line,
+            stdout(&out)
+        );
     }
     assert_eq!(blame_row_count(&dir), 0);
 }
@@ -184,15 +222,29 @@ fn check_staged_compares_an_origin_written_with_a_leading_dot_slash() {
     assert!(stdout(&plain_out).contains(line), "{}", stdout(&plain_out));
     let staged_out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(!staged_out.status.success(), "{}", stdout(&staged_out));
-    assert!(stdout(&staged_out).contains(line), "{}", stdout(&staged_out));
+    assert!(
+        stdout(&staged_out).contains(line),
+        "{}",
+        stdout(&staged_out)
+    );
 
     // A draft whose origin is written with a doubled slash finds its staged
     // origin: no `is missing` line.
     let blob = write_origin(&dir, "docs/y.md", "one\n");
-    write_blame_file(&dir, "adrdom/blame/y.md", "docs//y.md", &blob, "1-1\tdetail\n");
+    write_blame_file(
+        &dir,
+        "adrdom/blame/y.md",
+        "docs//y.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
     run_git(&dir, &["add", "-A"]);
     let staged_out = adr(&dir, &["check", "--staged"], &[], "");
-    assert!(!stdout(&staged_out).contains("is missing"), "{}", stdout(&staged_out));
+    assert!(
+        !stdout(&staged_out).contains("is missing"),
+        "{}",
+        stdout(&staged_out)
+    );
 }
 
 //
@@ -222,7 +274,11 @@ fn check_staged_reads_the_blame_file_from_the_index_not_the_working_tree() {
     // (fe14991d, 05141f49): printed, failing nothing.
     let staged_out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(staged_out.status.success(), "{}", stdout(&staged_out));
-    assert!(stdout(&staged_out).contains("not a row"), "{}", stdout(&staged_out));
+    assert!(
+        stdout(&staged_out).contains("not a row"),
+        "{}",
+        stdout(&staged_out)
+    );
 
     let plain_out = adr(&dir, &["check"], &[], "");
     assert!(
@@ -253,7 +309,11 @@ fn check_is_silent_on_a_gone_origin_once_its_blame_file_is_approved() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("adrdom/blame/x.md"),
+        "{}",
+        stdout(&out)
+    );
     assert!(!stdout(&out).contains("docs/x.md"), "{}", stdout(&out));
 
     // Show says nothing of it either: no line in the listing, and no finding
@@ -290,8 +350,16 @@ fn check_staged_passes_the_commit_that_deletes_an_approved_origin() {
     assert!(out.status.success(), "{}", stderr(&out));
 
     let out = adr(&dir, &["check", "--staged"], &[], "");
-    assert!(out.status.success(), "check --staged should pass: {}", stdout(&out));
-    assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{}", stdout(&out));
+    assert!(
+        out.status.success(),
+        "check --staged should pass: {}",
+        stdout(&out)
+    );
+    assert!(
+        !stdout(&out).contains("adrdom/blame/x.md"),
+        "{}",
+        stdout(&out)
+    );
 
     let out = run_git(&dir, &["commit", "-q", "-m", "delete the origin"]);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
@@ -318,8 +386,15 @@ fn check_names_an_origin_gone_while_its_blame_file_awaits_approval() {
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
 
     let approve = adr_owner(&dir, &["approve", "adrdom/blame/x.md"], "");
-    assert!(!approve.status.success(), "approve takes a file whose origin is gone");
-    assert!(refusal_lines(&approve, "approve: ").contains(&line.to_string()), "{}", stderr(&approve));
+    assert!(
+        !approve.status.success(),
+        "approve takes a file whose origin is gone"
+    );
+    assert!(
+        refusal_lines(&approve, "approve: ").contains(&line.to_string()),
+        "{}",
+        stderr(&approve)
+    );
     assert_eq!(blame_row_count(&dir), 0);
 }
 
@@ -367,9 +442,21 @@ fn check_notes_a_gone_origin_while_the_blame_file_is_unapproved() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("adrdom/blame/x.md: origin docs/x.md is missing"), "{}", text);
-    assert!(text.contains("is missing while the blame file is new"), "{}", text);
-    assert!(text.contains("agent restores docs/x.md from git"), "{}", text);
+    assert!(
+        text.contains("adrdom/blame/x.md: origin docs/x.md is missing"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("is missing while the blame file is new"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("agent restores docs/x.md from git"),
+        "{}",
+        text
+    );
 }
 
 // --- d2851ea1 A: a row says decision or detail -------------------------
@@ -394,7 +481,11 @@ fn an_old_destination_row_fails_check_on_an_approved_file() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     let text = stdout(&out);
-    for (n, form) in [(4, "decision: Is this pass?"), (5, "term: pass"), (6, "dropped: dead")] {
+    for (n, form) in [
+        (4, "decision: Is this pass?"),
+        (5, "term: pass"),
+        (6, "dropped: dead"),
+    ] {
         let found = format!(
             "adrdom/blame/x.md: line {}: row value \"{}\" is neither decision nor detail",
             n, form
@@ -426,16 +517,28 @@ fn check_is_silent_on_a_decision_row_no_question_names() {
 
     // No question anywhere names the rows; ask and answer run all the same.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should not stop for the rows: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask should not stop for the rows: {}",
+        stderr(&out)
+    );
     let content = std::fs::read_to_string(&record).unwrap();
     let id1 = extract_ids(&content)[0].clone();
     let out = adr_answer(&dir, &id1, "A");
-    assert!(out.status.success(), "answer should not stop for the rows: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "answer should not stop for the rows: {}",
+        stderr(&out)
+    );
     write_test_comment(&dir, &id1);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("adrdom/blame/x.md"),
+        "{}",
+        stdout(&out)
+    );
     assert_eq!(file_moves(&dir, "adrdom/blame/x.md"), Vec::<String>::new());
 }
 
@@ -456,7 +559,11 @@ fn check_passes_an_unapproved_blame_file_and_prints_nothing_of_it() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("adrdom/blame/x.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 //
@@ -483,12 +590,20 @@ fn ask_and_answer_ignore_an_unapproved_blame_file() {
     // Never approved -- a draft the whole time.
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should ignore blame files: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask should ignore blame files: {}",
+        stderr(&out)
+    );
 
     let content = std::fs::read_to_string(&record).unwrap();
     let id1 = extract_ids(&content)[0].clone();
     let out = adr_answer(&dir, &id1, "A");
-    assert!(out.status.success(), "answer should ignore blame files: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "answer should ignore blame files: {}",
+        stderr(&out)
+    );
 }
 
 // A blame file's shape error on a file awaiting approval: approve refuses
@@ -500,7 +615,13 @@ fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     // The origin is there: the shape fault is the file's only finding.
     write_origin(&dir, "docs/x.md", "one\n");
-    write_blame_file(&dir, "adrdom/blame/bad.md", "docs/x.md", "not-a-blob", "1-1\tdetail\n");
+    write_blame_file(
+        &dir,
+        "adrdom/blame/bad.md",
+        "docs/x.md",
+        "not-a-blob",
+        "1-1\tdetail\n",
+    );
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
@@ -510,10 +631,18 @@ fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
         stdout(&out)
     );
     let approve = adr_owner(&dir, &["approve", "adrdom/blame/bad.md"], "");
-    assert!(!approve.status.success(), "approve takes a blame file with a shape fault");
+    assert!(
+        !approve.status.success(),
+        "approve takes a blame file with a shape fault"
+    );
     for line in stderr(&approve).lines() {
         let finding = line;
-        assert!(stdout(&out).contains(finding), "approve refuses with {:?}, check prints:\n{}", finding, stdout(&out));
+        assert!(
+            stdout(&out).contains(finding),
+            "approve refuses with {:?}, check prints:\n{}",
+            finding,
+            stdout(&out)
+        );
     }
 }
 
@@ -540,7 +669,11 @@ fn check_prints_the_shape_failure_not_missing_origin_for_a_directory() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("is not a regular file outside adrdom"), "{}", text);
+    assert!(
+        text.contains("is not a regular file outside adrdom"),
+        "{}",
+        text
+    );
     assert!(!text.contains("is missing"), "{}", text);
 }
 
@@ -554,13 +687,25 @@ fn check_fails_naming_a_blame_file_that_cannot_be_read() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     std::fs::create_dir_all(dir.join("adrdom/blame")).unwrap();
-    std::fs::write(dir.join("adrdom/blame/binary.md"), [0x66, 0x6f, 0xff, 0xfe, 0x0a]).unwrap();
+    std::fs::write(
+        dir.join("adrdom/blame/binary.md"),
+        [0x66, 0x6f, 0xff, 0xfe, 0x0a],
+    )
+    .unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("adrdom/blame/binary.md: cannot be read"), "{}", text);
-    assert!(text.contains("agent rewrites adrdom/blame/binary.md"), "{}", text);
+    assert!(
+        text.contains("adrdom/blame/binary.md: cannot be read"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("agent rewrites adrdom/blame/binary.md"),
+        "{}",
+        text
+    );
 }
 
 //
@@ -593,7 +738,13 @@ fn check_fails_a_present_unreadable_origin_as_its_own_failure() {
     std::fs::create_dir_all(dir.join("docs")).unwrap();
     std::fs::write(dir.join("docs/binary.md"), [0x66, 0x6f, 0xff, 0xfe, 0x0a]).unwrap();
     let rows = "1-1\tdetail\n";
-    write_blame_file(&dir, "adrdom/blame/binary.md", "docs/binary.md", "0".repeat(40).as_str(), rows);
+    write_blame_file(
+        &dir,
+        "adrdom/blame/binary.md",
+        "docs/binary.md",
+        "0".repeat(40).as_str(),
+        rows,
+    );
     // Never approved.
 
     let out = adr(&dir, &["check"], &[], "");
@@ -620,18 +771,36 @@ fn check_show_and_approve_print_the_same_line_for_a_bad_row_value() {
     assert!(check.status.success(), "{}", stdout(&check));
     assert!(show.status.success(), "{}", stderr(&show));
     let blame_lines = |text: &str| -> Vec<String> {
-        let mut v: Vec<String> = text.lines().filter(|l| l.starts_with("adrdom/blame/")).map(str::to_string).collect();
+        let mut v: Vec<String> = text
+            .lines()
+            .filter(|l| l.starts_with("adrdom/blame/"))
+            .map(str::to_string)
+            .collect();
         v.sort();
         v
     };
     let from_check = blame_lines(&stdout(&check));
     let from_show = blame_lines(&stdout(&show));
     let line = "adrdom/blame/x.md: line 5: row value \"decision: Is nothing here at all?\" is neither decision nor detail; agent writes decision or detail after the tab";
-    assert_eq!(from_check, vec![line.to_string()], "check:\n{}", stdout(&check));
-    assert_eq!(from_check, from_show, "check:\n{}\nshow:\n{}", stdout(&check), stdout(&show));
+    assert_eq!(
+        from_check,
+        vec![line.to_string()],
+        "check:\n{}",
+        stdout(&check)
+    );
+    assert_eq!(
+        from_check,
+        from_show,
+        "check:\n{}\nshow:\n{}",
+        stdout(&check),
+        stdout(&show)
+    );
     // approve refuses the file on that same finding.
     let approve = adr_owner(&dir, &["approve", "adrdom/blame/x.md"], "");
-    assert!(!approve.status.success(), "approve takes a row with a bad value");
+    assert!(
+        !approve.status.success(),
+        "approve takes a row with a bad value"
+    );
     let mut from_approve = refusal_lines(&approve, "approve: ");
     from_approve.sort();
     assert_eq!(from_approve, from_check, "approve:\n{}", stderr(&approve));
@@ -657,7 +826,9 @@ fn of_two_drafts_sharing_an_id_the_first_by_path_keeps_it() {
     let line = "adrdom/blame/b.md: its id line holds the identifier of adrdom/blame/a.md; agent removes the id line from adrdom/blame/b.md";
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
     assert!(
-        !stdout(&out).lines().any(|l| l.starts_with("adrdom/blame/a.md") && l.contains("holds the identifier of")),
+        !stdout(&out)
+            .lines()
+            .any(|l| l.starts_with("adrdom/blame/a.md") && l.contains("holds the identifier of")),
         "{}",
         stdout(&out)
     );
@@ -674,13 +845,27 @@ fn check_staged_refuses_a_staged_symlink_origin_as_check_does() {
     write_origin(&dir, "docs/x.md", "a\nb\n");
     std::os::unix::fs::symlink("x.md", dir.join("docs/link.md")).unwrap();
     run_git(&dir, &["add", "docs"]);
-    let blob = String::from_utf8(run_git(&dir, &["rev-parse", ":docs/link.md"]).stdout).unwrap().trim().to_string();
-    write_blame_file(&dir, "adrdom/blame/l.md", "docs/link.md", &blob, "1-1\tdetail\n");
+    let blob = String::from_utf8(run_git(&dir, &["rev-parse", ":docs/link.md"]).stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    write_blame_file(
+        &dir,
+        "adrdom/blame/l.md",
+        "docs/link.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
     run_git(&dir, &["add", "adrdom/blame/l.md"]);
     let line = "adrdom/blame/l.md: \"docs/link.md\" is not a regular file outside adrdom; agent rewrites the origin line";
     for args in [&["check", "--staged"][..], &["check"][..]] {
         let out = adr(&dir, args, &[], "");
-        assert!(stdout(&out).lines().any(|l| l == line), "{:?}: {}", args, stdout(&out));
+        assert!(
+            stdout(&out).lines().any(|l| l == line),
+            "{:?}: {}",
+            args,
+            stdout(&out)
+        );
     }
 }
 
@@ -696,15 +881,34 @@ fn a_blob_of_a_converted_origin_matches_in_both_sources() {
     std::fs::create_dir_all(dir.join("docs")).unwrap();
     std::fs::write(dir.join("docs/x.md"), "a\r\nb\r\n").unwrap();
     run_git(&dir, &["add", "docs/x.md"]);
-    let blob = String::from_utf8(run_git(&dir, &["rev-parse", ":docs/x.md"]).stdout).unwrap().trim().to_string();
-    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-2\tdetail\n");
+    let blob = String::from_utf8(run_git(&dir, &["rev-parse", ":docs/x.md"]).stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-2\tdetail\n",
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     run_git(&dir, &["add", "-A"]);
     for args in [&["check", "--staged"][..], &["check"][..]] {
         let out = adr(&dir, args, &[], "");
-        assert!(!stdout(&out).contains("no longer matches"), "{:?}: {}", args, stdout(&out));
-        assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{:?}: {}", args, stdout(&out));
+        assert!(
+            !stdout(&out).contains("no longer matches"),
+            "{:?}: {}",
+            args,
+            stdout(&out)
+        );
+        assert!(
+            !stdout(&out).contains("adrdom/blame/x.md"),
+            "{:?}: {}",
+            args,
+            stdout(&out)
+        );
     }
 }
 
@@ -732,7 +936,12 @@ fn a_hand_edited_id_makes_an_approved_file_a_draft_check_notes_it_and_approve_re
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert_eq!(refusal_lines(&out, "approve: "), vec![line], "{}", stderr(&out));
+    assert_eq!(
+        refusal_lines(&out, "approve: "),
+        vec![line],
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5

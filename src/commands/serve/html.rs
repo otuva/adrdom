@@ -26,7 +26,10 @@ pub(super) fn plural(n: usize, one: &str, many: &str) -> String {
 pub(super) fn lines(lines: &[Line]) -> String {
     let mut s = String::new();
     for (group, run) in out::groups(&out::present(lines)) {
-        let body: String = run.into_iter().map(|l| format!("{}\n", out::html(l))).collect();
+        let body: String = run
+            .into_iter()
+            .map(|l| format!("{}\n", out::html(l)))
+            .collect();
         match group.header() {
             Some(h) => s.push_str(&format!(
                 "<section class=\"group {}\"><h3>{}</h3>\n{}</section>\n",
@@ -44,7 +47,12 @@ pub(super) fn lines(lines: &[Line]) -> String {
 /// question left off unless `version`) and the subject, which is `link`ed
 /// when an href is given. Same words as the line `out::text` prints.
 pub(super) fn st(line: &Line, version: bool, href: Option<&str>) -> String {
-    let Line::Status { subject, status, .. } = line else { return out::html(line) };
+    let Line::Status {
+        subject, status, ..
+    } = line
+    else {
+        return out::html(line);
+    };
     let mut name = status.name();
     if !version {
         if let Some((n, _)) = name.split_once(" @") {
@@ -72,14 +80,19 @@ pub(super) fn banner(last: &[Line]) -> String {
         return String::new();
     }
     let stopped = !last.iter().any(|l| matches!(l, Line::Event(_)));
-    format!("<div class=\"banner{}\">\n{}</div>\n", if stopped { " refused" } else { "" }, lines(last))
+    format!(
+        "<div class=\"banner{}\">\n{}</div>\n",
+        if stopped { " refused" } else { "" },
+        lines(last)
+    )
 }
 
 /// The neighbour lines of a question, folded under a summary that counts
 /// them; the line that says no records exist stays outside the fold.
 pub(super) fn neighbours(lines: &[String]) -> String {
     let none = crate::msg::show_no_records();
-    let (plain, folded): (Vec<&str>, Vec<&str>) = lines.iter().map(|l| l.trim()).partition(|l| *l == none);
+    let (plain, folded): (Vec<&str>, Vec<&str>) =
+        lines.iter().map(|l| l.trim()).partition(|l| *l == none);
     let mut out = String::new();
     if !folded.is_empty() {
         out.push_str(&format!(

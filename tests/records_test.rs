@@ -38,10 +38,18 @@ fn approve_refuses_a_heading_with_a_loaded_opening() {
     let record = write_record(&dir, "adrdom/decisions/example.md", HEADING_TELL_RECORD);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     let text = stderr(&out);
     assert!(text.contains("\"which\""), "{}", text);
-    assert!(text.contains("the heading opens with \"which\"; agent rewrites the heading"), "{}", text);
+    assert!(
+        text.contains("the heading opens with \"which\"; agent rewrites the heading"),
+        "{}",
+        text
+    );
     assert!(text.contains("agent rewrites the heading"), "{}", text);
 }
 
@@ -76,7 +84,11 @@ fn approve_refuses_a_context_line_with_a_provenance_tell() {
     let record = write_record(&dir, "adrdom/decisions/example.md", CONTEXT_TELL_RECORD);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     let text = stderr(&out);
     assert!(text.contains("\"claude\""), "{}", text);
     assert!(text.contains("names who said it"), "{}", text);
@@ -114,15 +126,30 @@ fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
     approve_record(&dir, "adrdom/decisions/example.md");
     // Approve cannot take the loaded word, so it is put back after it and
     // the approval rows are written by hand: ask is the second stop.
-    let loaded = std::fs::read_to_string(&record)
-        .unwrap()
-        .replace("the team built the store", "the team already built the store");
+    let loaded = std::fs::read_to_string(&record).unwrap().replace(
+        "the team built the store",
+        "the team already built the store",
+    );
     std::fs::write(&record, &loaded).unwrap();
     let rf = adr::record::load(&record).unwrap();
     let rel = "adrdom/decisions/example.md";
     let later = "2099-01-01T00:00:00Z";
-    append_ledger_row_at(&dir, "approved", "-", &adr::record::plan_hash(&rf), rel, later);
-    append_ledger_row_at(&dir, "context", "-", &adr::record::context_hash(&rf), rel, later);
+    append_ledger_row_at(
+        &dir,
+        "approved",
+        "-",
+        &adr::record::plan_hash(&rf),
+        rel,
+        later,
+    );
+    append_ledger_row_at(
+        &dir,
+        "context",
+        "-",
+        &adr::record::context_hash(&rf),
+        rel,
+        later,
+    );
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should refuse: {}", stdout(&out));
@@ -169,13 +196,19 @@ fn check_reports_a_tell_in_an_unfrozen_heading_and_in_context_prose() {
     assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
     assert!(text.contains("\"how many\""), "{}", text);
-    assert!(text.contains("the heading opens with \"how many\"; agent rewrites the heading"), "{}", text);
+    assert!(
+        text.contains("the heading opens with \"how many\"; agent rewrites the heading"),
+        "{}",
+        text
+    );
     assert!(text.contains("\"said\""), "{}", text);
     assert!(text.contains("names who said it"), "{}", text);
 
     let tells_lines: Vec<&str> = text
         .lines()
-        .filter(|l| l.contains("the heading opens with \"how many\"") || l.contains("names who said it"))
+        .filter(|l| {
+            l.contains("the heading opens with \"how many\"") || l.contains("names who said it")
+        })
         .collect();
     assert_eq!(
         tells_lines.len(),
@@ -252,7 +285,13 @@ fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     // The answered row carries the section's real hash, as `answer` writes it.
-    append_ledger_row(&dir, "answered", FROZEN_TELL_ID, &mirror_section_hash(&frozen), "A");
+    append_ledger_row(
+        &dir,
+        "answered",
+        FROZEN_TELL_ID,
+        &mirror_section_hash(&frozen),
+        "A",
+    );
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
@@ -302,12 +341,24 @@ fn approve_and_check_report_a_tell_and_a_bad_depends_entry_together() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
-    let record = write_record(&dir, "adrdom/decisions/example.md", TELL_AND_BAD_DEPENDS_RECORD);
+    let record = write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        TELL_AND_BAD_DEPENDS_RECORD,
+    );
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
-    assert!(err.contains("the heading opens with \"which\"; agent rewrites the heading"), "{}", err);
+    assert!(
+        err.contains("the heading opens with \"which\"; agent rewrites the heading"),
+        "{}",
+        err
+    );
     assert!(
         err.contains("depends on \"nosuchterm\" which is no term"),
         "{}",

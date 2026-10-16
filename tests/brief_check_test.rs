@@ -16,7 +16,9 @@ fn repo_with_decision() -> (std::path::PathBuf, String) {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     (dir, id)
@@ -38,14 +40,21 @@ fn a_fully_marked_brief_passes_and_headings_blanks_fences_and_imports_need_no_co
     put_brief(&dir, &text);
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("assets/brief.md"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("assets/brief.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 // adr: de5ed5b1-3a83-4403-8953-941cb7e94390
 #[test]
 fn a_sentence_line_with_no_from_comment_fails_check_at_its_line() {
     let (dir, id) = repo_with_decision();
-    put_brief(&dir, &format!("# Brief\n\nMarked. <!-- from: {id} -->\nNot marked.\n"));
+    put_brief(
+        &dir,
+        &format!("# Brief\n\nMarked. <!-- from: {id} -->\nNot marked.\n"),
+    );
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
@@ -53,7 +62,11 @@ fn a_sentence_line_with_no_from_comment_fails_check_at_its_line() {
         "{}",
         stdout(&out)
     );
-    assert!(!stdout(&out).contains("assets/brief.md:3"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("assets/brief.md:3"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 // adr: de5ed5b1-3a83-4403-8953-941cb7e94390
@@ -71,9 +84,23 @@ fn an_unknown_uuid_a_non_uuid_and_a_misplaced_comment_fail_check() {
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);
     assert!(text.contains(&format!("assets/brief.md:2 holds \"{ghost}\" in its from-comment, which names no decision or term; agent rewrites")), "{}", text);
-    assert!(text.contains("assets/brief.md:3 holds \"nonsense\" in its from-comment, which is no identifier"), "{}", text);
-    assert!(text.contains("assets/brief.md:4 holds a from-comment that is empty"), "{}", text);
-    assert!(text.contains("assets/brief.md:5 holds a from-comment that does not end the line"), "{}", text);
+    assert!(
+        text.contains(
+            "assets/brief.md:3 holds \"nonsense\" in its from-comment, which is no identifier"
+        ),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("assets/brief.md:4 holds a from-comment that is empty"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("assets/brief.md:5 holds a from-comment that does not end the line"),
+        "{}",
+        text
+    );
 }
 
 // adr: de5ed5b1-3a83-4403-8953-941cb7e94390
@@ -85,7 +112,9 @@ fn a_superseded_decision_in_a_from_comment_is_a_note_with_the_successor_move() {
     content.push_str(&Q2.replace("OLD", &old_id));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let new_id = extract_ids(&std::fs::read_to_string(&record).unwrap())
         .into_iter()
         .find(|i| i != &old_id)
@@ -96,8 +125,16 @@ fn a_superseded_decision_in_a_from_comment_is_a_note_with_the_successor_move() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(out.status.success(), "{}", text);
-    assert!(text.contains(&format!("assets/brief.md:1 names {old_id}")), "{}", text);
-    assert!(text.contains("not a current decision; agent rewrites the from-comment to"), "{}", text);
+    assert!(
+        text.contains(&format!("assets/brief.md:1 names {old_id}")),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("not a current decision; agent rewrites the from-comment to"),
+        "{}",
+        text
+    );
     assert!(text.contains(&new_id), "{}", text);
 }
 
@@ -107,12 +144,20 @@ fn no_brief_asset_or_one_with_no_from_comment_is_left_alone() {
     let (dir, _) = repo_with_decision();
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("assets/brief.md"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("assets/brief.md"),
+        "{}",
+        stdout(&out)
+    );
 
     put_brief(&dir, "# Someone else's brief\n\nNo comments here.\n");
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("assets/brief.md"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("assets/brief.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 // adr: de5ed5b1-3a83-4403-8953-941cb7e94390
@@ -127,10 +172,17 @@ fn every_sentence_line_of_this_repositorys_brief_names_a_decision_or_term() {
         if fenced || line.trim().is_empty() || line.starts_with('#') || line.starts_with('@') {
             continue;
         }
-        let at = line.find(" <!-- from: ").unwrap_or_else(|| panic!("line {} has no from-comment: {}", i + 1, line));
+        let at = line
+            .find(" <!-- from: ")
+            .unwrap_or_else(|| panic!("line {} has no from-comment: {}", i + 1, line));
         assert!(line.ends_with(" -->"), "line {}: {}", i + 1, line);
         let ids = &line[at + " <!-- from: ".len()..line.len() - " -->".len()];
-        assert!(ids.split(", ").all(|id| id.len() == 36), "line {}: {}", i + 1, line);
+        assert!(
+            ids.split(", ").all(|id| id.len() == 36),
+            "line {}: {}",
+            i + 1,
+            line
+        );
     }
     assert!(!adr::commands::install::brief().contains("<!--"));
 }

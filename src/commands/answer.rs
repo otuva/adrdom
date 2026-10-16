@@ -1,19 +1,25 @@
-use crate::rules::Command;
 use crate::actions;
 use crate::msg::{self, Actor};
 use crate::out;
 use crate::repo;
+use crate::rules::Command;
 
 pub fn run(id_arg: String, letter: String) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop(Command::Answer, &msg::owner_refusal("answer", &[id_arg.as_str(), letter.as_str()]));
+        out::eprint_stop(
+            Command::Answer,
+            &msg::owner_refusal("answer", &[id_arg.as_str(), letter.as_str()]),
+        );
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Command::Answer, &msg::not_a_repo("answer", &[id_arg.as_str(), letter.as_str()], Actor::Owner));
+            out::eprint_stop(
+                Command::Answer,
+                &msg::not_a_repo("answer", &[id_arg.as_str(), letter.as_str()], Actor::Owner),
+            );
             return 1;
         }
     };
@@ -34,12 +40,21 @@ pub fn run(id_arg: String, letter: String) -> i32 {
                     .find(|s| s.id.as_deref() == Some(id_arg.as_str()))
                     .filter(|s| {
                         let hash = crate::record::section_hash(&rf.lines, s);
-                        s.answer_line.is_none() && crate::state::asked_text_stands(&led, &id_arg, &hash)
+                        s.answer_line.is_none()
+                            && crate::state::asked_text_stands(&led, &id_arg, &hash)
                     })
-                    .map(|s| (s.heading_text.clone(), crate::record::version_of(&rf.lines, s)))
+                    .map(|s| {
+                        (
+                            s.heading_text.clone(),
+                            crate::record::version_of(&rf.lines, s),
+                        )
+                    })
             });
             let asked = found.as_ref().map(|(h, v)| (h.as_str(), v.as_str()));
-            out::eprint_stop(Command::Answer, &msg::answer_missing_version(&id_arg, asked));
+            out::eprint_stop(
+                Command::Answer,
+                &msg::answer_missing_version(&id_arg, asked),
+            );
             return 1;
         }
     };
@@ -47,7 +62,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
     // `adr answer <id>@<version> refuse` (per "Does the owner answer a
     // question with a refusal?") shares this command's owner gate and
     // dispatch with the letter path; only `do_answer`/`do_refuse` in
-    // src/actions.rs differ.
+    // src/actions differ.
     let outcome = if letter == "refuse" {
         actions::do_refuse(&root, id, version)
     } else {

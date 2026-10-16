@@ -66,7 +66,12 @@ Standard: clear yes or no.
 fn line(time: &str, event: &str, id: &str, hash: &str, detail: &str) -> String {
     format!(
         "{}\t{}\t{}\t{}\t{}\t{}\n",
-        time, event, id, hash, detail, adr::version::VERSION
+        time,
+        event,
+        id,
+        hash,
+        detail,
+        adr::version::VERSION
     )
 }
 
@@ -77,8 +82,7 @@ fn last_row_time(dir: &std::path::Path, needle: &str) -> String {
     let content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let row = content
         .lines()
-        .filter(|l| l.contains(needle))
-        .next_back()
+        .rfind(|l| l.contains(needle))
         .unwrap_or_else(|| panic!("no row matching {} in: {}", needle, content));
     row.split('\t').next().unwrap().to_string()
 }
@@ -145,7 +149,11 @@ fn two_commands_run_back_to_back_write_different_times() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &id, "A");
-    assert!(answer_out.status.success(), "answer failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer failed: {}",
+        stderr(&answer_out)
+    );
     let answered_time = last_row_time(&dir, "\tanswered\t");
 
     assert_ne!(
@@ -177,13 +185,18 @@ fn one_commands_rows_share_one_time() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
 
-    let content = std::fs::read_to_string(&dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let times: Vec<&str> = content
         .lines()
         .filter(|l| l.contains("\tasked\t"))
         .map(|l| l.split('\t').next().unwrap())
         .collect();
-    assert_eq!(times.len(), 2, "both questions should have been asked: {}", content);
+    assert_eq!(
+        times.len(),
+        2,
+        "both questions should have been asked: {}",
+        content
+    );
     assert_eq!(
         times[0], times[1],
         "both asked rows from the one run must carry the same time"

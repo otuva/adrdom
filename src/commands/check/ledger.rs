@@ -1,19 +1,26 @@
-use crate::rules::Class;
 use super::Failure;
 use crate::ledger::{Ledger, Row};
 use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::repo;
+use crate::rules::Class;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// The state-row events `check_same_time_competition`'s rule (1) matches
 /// (ce19c883-c61d-477b-a6d4-fee5134c6e9a T): the same set `Ledger::latest_state`
 /// already reads a question's state from.
-const COMPETING_STATE_EVENTS: [&str; 6] = ["asked", "answered", "refused", "superseded", "withdrawn", "dropped"];
+const COMPETING_STATE_EVENTS: [&str; 6] = [
+    "asked",
+    "answered",
+    "refused",
+    "superseded",
+    "withdrawn",
+    "dropped",
+];
 
 /// The events rule (3) matches: every event whose `detail` column carries a
-/// file path (src/actions.rs's `approved`, `context`, `terms` and `blame`
+/// file path (src/actions's `approved`, `context`, `terms` and `blame`
 /// writers), per the dry run this decision's build asked for.
 const COMPETING_PATH_EVENTS: [&str; 4] = ["approved", "context", "terms", "blame"];
 
@@ -27,10 +34,20 @@ pub(super) fn check_ledger(
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
-        out.push(Failure::said(Class::Ledger, msg::malformed_ledger_row(*lineno, raw)));
+        out.push(Failure::said(
+            Class::Ledger,
+            msg::malformed_ledger_row(*lineno, raw),
+        ));
     }
 
-    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, Class::Ledger, stops));
+    out.extend(check_held(
+        root,
+        repo::LEDGER_PATH,
+        ledger_content,
+        since,
+        Class::Ledger,
+        stops,
+    ));
 
     out.extend(check_same_time_competition(led));
     out.extend(check_dropped(led, records, root));
@@ -43,10 +60,13 @@ pub(super) fn check_ledger(
                 .iter()
                 .any(|r| r.event == "asked" && r.id == row.id && r.hash == row.hash);
             if !has_match {
-                out.push(Failure::said(Class::Ledger, msg::ledger_answered_without_asked(
+                out.push(Failure::said(
+                    Class::Ledger,
+                    msg::ledger_answered_without_asked(
                         &row.id,
                         led.latest_asked(&row.id).map(|r| r.detail.as_str()),
-                    )));
+                    ),
+                ));
             }
         }
     }
@@ -61,7 +81,11 @@ fn check_superseded_struck(led: &Ledger, records: &[RecordFile]) -> Vec<Failure>
     let mut out = Vec::new();
     for rf in records {
         for sec in &rf.sections {
-            if sec.id.as_deref().is_some_and(|id| crate::state::is_superseded(led, id)) {
+            if sec
+                .id
+                .as_deref()
+                .is_some_and(|id| crate::state::is_superseded(led, id))
+            {
                 out.push(Failure::said(
                     Class::Ledger,
                     msg::ledger_superseded_still_in_file(&sec.heading_text, &rf.rel),
@@ -84,7 +108,12 @@ fn check_superseded_struck(led: &Ledger, records: &[RecordFile]) -> Vec<Failure>
 fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
     let fail = |said: msg::Said| Failure::said(Class::Ledger, said);
-    for (at, row) in led.rows.iter().enumerate().filter(|(_, r)| r.event == "dropped") {
+    for (at, row) in led
+        .rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.event == "dropped")
+    {
         // Per "Does a decision change after it is answered?": a question
         // that was answered or refused is never removed. `led.rows` is
         // ordered by time when read (per "Does the tool take the order of
@@ -110,7 +139,10 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
                 .rows
                 .iter()
                 .any(|r| r.event == "answered" && r.id == cause_id && r.detail == l.to_string()),
-            None => led.rows.iter().any(|r| r.event == "dropped" && r.id == cause_id),
+            None => led
+                .rows
+                .iter()
+                .any(|r| r.event == "dropped" && r.id == cause_id),
         };
         if !cause_ok {
             let what = match letter {
@@ -128,7 +160,11 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
             out.push(fail(msg::ledger_dropped_not_approved(&row.id)));
         }
         for rf in records {
-            if rf.sections.iter().any(|s| s.id.as_deref() == Some(row.id.as_str())) {
+            if rf
+                .sections
+                .iter()
+                .any(|s| s.id.as_deref() == Some(row.id.as_str()))
+            {
                 out.push(fail(msg::ledger_dropped_still_in_file(&row.id, &rf.rel)));
             }
         }
@@ -137,8 +173,16 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
             let Some(content) = repo::git(root, &["show", &format!("HEAD:{}", a.detail)]) else {
                 continue;
             };
-            let head = record::build(root.join(&a.detail), a.detail.clone(), record::split_lines(&content));
-            let Some(sec) = head.sections.iter().find(|s| s.id.as_deref() == Some(row.id.as_str())) else {
+            let head = record::build(
+                root.join(&a.detail),
+                a.detail.clone(),
+                record::split_lines(&content),
+            );
+            let Some(sec) = head
+                .sections
+                .iter()
+                .find(|s| s.id.as_deref() == Some(row.id.as_str()))
+            else {
                 continue;
             };
             if record::question_hash(&head, sec) != row.hash {
@@ -155,7 +199,10 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
                         .iter()
                         .any(|d| matches!(d.set(), Some(record::AnswerSet::Letters(ls)) if !ls.contains(&l)));
                     if !lacks {
-                        out.push(fail(msg::ledger_dropped_set_holds_letter(&row.id, &l.to_string())));
+                        out.push(fail(msg::ledger_dropped_set_holds_letter(
+                            &row.id,
+                            &l.to_string(),
+                        )));
                     }
                 }
                 None => {
@@ -289,7 +336,12 @@ pub(super) fn check_held(
 /// missing, never a failure. `pub(super)`: the one comparison shared by the
 /// HEAD test above, the merge tests, `since`, and `push.rs`'s own presence
 /// test.
-pub(super) fn ref_ledger_has_rows_missing(root: &Path, path: &str, refname: &str, present: &HashSet<&str>) -> bool {
+pub(super) fn ref_ledger_has_rows_missing(
+    root: &Path,
+    path: &str,
+    refname: &str,
+    present: &HashSet<&str>,
+) -> bool {
     let Some(other_content) = repo::git(root, &["show", &format!("{}:{}", refname, path)]) else {
         return false;
     };
@@ -307,7 +359,9 @@ pub(super) fn ref_ledger_has_rows_missing(root: &Path, path: &str, refname: &str
 /// read itself, without going through `ref_ledger_has_rows_missing`'s own
 /// `git show`.
 pub(super) fn lines_missing(other_content: &str, present: &HashSet<&str>) -> bool {
-    other_content.lines().any(|l| !l.is_empty() && !present.contains(l))
+    other_content
+        .lines()
+        .any(|l| !l.is_empty() && !present.contains(l))
 }
 
 /// The `parent <sha>` lines of HEAD's own raw commit object, in order --
@@ -392,8 +446,12 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
 
     let mut by_path: HashMap<(&str, &str), Vec<&Row>> = HashMap::new();
     for r in &led.rows {
-        if (r.id == "-" || r.event == "blame") && COMPETING_PATH_EVENTS.contains(&r.event.as_str()) {
-            by_path.entry((r.event.as_str(), r.detail.as_str())).or_default().push(r);
+        if (r.id == "-" || r.event == "blame") && COMPETING_PATH_EVENTS.contains(&r.event.as_str())
+        {
+            by_path
+                .entry((r.event.as_str(), r.detail.as_str()))
+                .or_default()
+                .push(r);
         }
     }
     for ((event, detail), rows) in &by_path {
@@ -405,7 +463,12 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
     subjects.sort();
     subjects
         .into_iter()
-        .map(|(time, subject)| Failure::said(Class::Ledger, msg::ledger_same_time_competition(&time, &subject)))
+        .map(|(time, subject)| {
+            Failure::said(
+                Class::Ledger,
+                msg::ledger_same_time_competition(&time, &subject),
+            )
+        })
         .collect()
 }
 
@@ -437,7 +500,11 @@ fn competing_at_latest_time(rows: &[&Row]) -> Option<String> {
 /// which is the same test for any row that parsed cleanly (`time` is
 /// already equal, both rows coming from the same time-bucket).
 fn rows_identical(a: &Row, b: &Row) -> bool {
-    a.event == b.event && a.id == b.id && a.hash == b.hash && a.detail == b.detail && a.version == b.version
+    a.event == b.event
+        && a.id == b.id
+        && a.hash == b.hash
+        && a.detail == b.detail
+        && a.version == b.version
 }
 
 /// A hash's first 12 hex characters, the same prefix length

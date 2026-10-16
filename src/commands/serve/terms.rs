@@ -15,27 +15,57 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
         // The finding `show` prints for a terms file that cannot be read.
         match r.terms_unreadable_finding() {
             Some(l) => body.push_str(&format!("{}\n", out::html(&l))),
-            None => body.push_str(&format!("{}\n", out::html(&out::refusal(
-                crate::rules::Command::Show,
-                &crate::msg::read_failed(repo::TERMS_PATH, "no such file", crate::msg::Next::agent(crate::msg::Act::Rewrites("the file name to a file that exists".to_string()))),
-            )))),
+            None => body.push_str(&format!(
+                "{}\n",
+                out::html(&out::refusal(
+                    crate::rules::Command::Show,
+                    &crate::msg::read_failed(
+                        repo::TERMS_PATH,
+                        "no such file",
+                        crate::msg::Next::agent(crate::msg::Act::Rewrites(
+                            "the file name to a file that exists".to_string()
+                        ))
+                    ),
+                ))
+            )),
         }
         body.push_str("</header>\n");
         return page("Terms", "/terms", &body, false);
     };
 
     let (file_status, report) = show::terms_report(r, tf);
-    let dependents: Vec<usize> = tf.terms.iter().map(|t| show::term_dependents(r, t).len()).collect();
-    let unpaired = tf.terms.iter().zip(&dependents).filter(|(t, n)| !t.retired && **n == 0).count();
-    let mut summary = format!("{} in {}.", plural(tf.terms.len(), "term", "terms"), esc(repo::TERMS_PATH));
+    let dependents: Vec<usize> = tf
+        .terms
+        .iter()
+        .map(|t| show::term_dependents(r, t).len())
+        .collect();
+    let unpaired = tf
+        .terms
+        .iter()
+        .zip(&dependents)
+        .filter(|(t, n)| !t.retired && **n == 0)
+        .count();
+    let mut summary = format!(
+        "{} in {}.",
+        plural(tf.terms.len(), "term", "terms"),
+        esc(repo::TERMS_PATH)
+    );
     if unpaired > 0 {
         summary.push_str(&format!(" {} paired by nothing.", unpaired));
     }
     body.push_str(&format!("<p class=\"summary\">{}</p>\n", summary));
-    let st_line = Line::Status { subject: repo::TERMS_PATH.to_string(), status: Status::File(file_status), mark: None };
+    let st_line = Line::Status {
+        subject: repo::TERMS_PATH.to_string(),
+        status: Status::File(file_status),
+        mark: None,
+    };
     body.push_str(&format!(
         "<div class=\"state {}\">{}</div>\n",
-        if file_status.awaits_approval() { "waiting" } else { "done" },
+        if file_status.awaits_approval() {
+            "waiting"
+        } else {
+            "done"
+        },
         st(&st_line, false, None)
     ));
 
@@ -44,12 +74,21 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
         "<input class=\"filter\" type=\"search\" placeholder=\"Filter by word, alias, or definition\" aria-label=\"Filter terms\">",
     );
     body.push_str("</div>\n");
-    body.push_str(&super::overview::terms_moves(r, tf, &report.moves, "Approve the terms", token));
+    body.push_str(&super::overview::terms_moves(
+        r,
+        tf,
+        &report.moves,
+        "Approve the terms",
+        token,
+    ));
     body.push_str("</header>\n");
 
     if !report.findings.is_empty() {
         let fl: Vec<Line> = report.findings.iter().cloned().map(Line::Finding).collect();
-        body.push_str(&format!("<div class=\"failures\">\n{}</div>\n", super::html::lines(&fl)));
+        body.push_str(&format!(
+            "<div class=\"failures\">\n{}</div>\n",
+            super::html::lines(&fl)
+        ));
     }
 
     body.push_str("<ul class=\"terms-list\" id=\"terms\">\n");
@@ -68,7 +107,10 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
         body.push_str("</div><div>");
         body.push_str(&format!("<p class=\"def\">{}</p>", esc(&t.definition)));
         if *n > 0 {
-            body.push_str(&format!("<p class=\"use\">Paired by <a href=\"/decisions\">{}</a></p>", plural(*n, "decision", "decisions")));
+            body.push_str(&format!(
+                "<p class=\"use\">Paired by <a href=\"/decisions\">{}</a></p>",
+                plural(*n, "decision", "decisions")
+            ));
         } else {
             body.push_str("<p class=\"use\">Paired by nothing yet</p>");
         }

@@ -49,8 +49,16 @@ fn show_of_a_topic_file_prints_an_unreadable_terms_file_and_offers_no_approve() 
 
     let out = adr(&dir, &["show", "adrdom/decisions/example.md"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(text.contains("show: ") && text.contains("adrdom/terms.md"), "{}", text);
-    assert!(!text.contains("owner runs: adr approve adrdom/decisions/example.md"), "{}", text);
+    assert!(
+        text.contains("show: ") && text.contains("adrdom/terms.md"),
+        "{}",
+        text
+    );
+    assert!(
+        !text.contains("owner runs: adr approve adrdom/decisions/example.md"),
+        "{}",
+        text
+    );
     assert!(!text.contains("adr ask"), "{}", text);
 }
 
@@ -65,13 +73,23 @@ fn show_of_a_blame_file_prints_an_unreadable_origin_and_offers_no_approve() {
     std::fs::write(dir.join("docs/x.md"), [0xffu8, 0xfe, 0x00, 0xff]).unwrap();
     let out = run_git(&dir, &["hash-object", "-w", "docs/x.md"]);
     let blob = stdout(&out).trim().to_string();
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdetail\n");
+    write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
 
     let out = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
     assert!(text.contains("cannot be read as text"), "{}", text);
     assert!(text.contains("agent rewrites docs/x.md"), "{}", text);
-    assert!(!text.contains("owner runs: adr approve adrdom/blame/x.md"), "{}", text);
+    assert!(
+        !text.contains("owner runs: adr approve adrdom/blame/x.md"),
+        "{}",
+        text
+    );
 }
 
 // adr: 7c306235-6243-4d79-b9aa-08ed19662779
@@ -87,15 +105,27 @@ fn the_terms_file_errors_name_both_entries_and_the_repeated_identifier_rule() {
         "adrdom/terms.md",
         "# Terms\n\n## one\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A thing.\naliases: shared\n\n## two\nid: 22222222-2222-2222-2222-222222222222\ndefinition: Another thing.\naliases: shared\n",
     );
-    let text = format!("{}{}", stdout(&adr(&dir, &["check"], &[], "")), stderr(&adr(&dir, &["check"], &[], "")));
-    assert!(text.contains("used in both \"one\" (line 3) and \"two\" (line 8)"), "{}", text);
+    let text = format!(
+        "{}{}",
+        stdout(&adr(&dir, &["check"], &[], "")),
+        stderr(&adr(&dir, &["check"], &[], ""))
+    );
+    assert!(
+        text.contains("used in both \"one\" (line 3) and \"two\" (line 8)"),
+        "{}",
+        text
+    );
 
     write_record(
         &dir,
         "adrdom/terms.md",
         "# Terms\n\n## one\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A thing.\naliases: \n\n## two\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Another thing.\naliases: \n",
     );
-    let text = format!("{}{}", stdout(&adr(&dir, &["check"], &[], "")), stderr(&adr(&dir, &["check"], &[], "")));
+    let text = format!(
+        "{}{}",
+        stdout(&adr(&dir, &["check"], &[], "")),
+        stderr(&adr(&dir, &["check"], &[], ""))
+    );
     assert!(text.contains("duplicate id \"11111111-1111-1111-1111-111111111111\" (also used at line 4); agent rewrites the entry"), "{}", text);
     assert!(!text.contains("missing field"), "{}", text);
 }
@@ -109,17 +139,32 @@ fn identical_finding_lines_print_once() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/terms.md", TERMS_PASS);
     approve_record(&dir, "adrdom/terms.md");
-    let twice = format!("{}\n{}", PASS_RECORD.replace("depends: pass\n", ""), PASS_RECORD.replace("# Example\n\n", "").replace("depends: pass\n", ""));
+    let twice = format!(
+        "{}\n{}",
+        PASS_RECORD.replace("depends: pass\n", ""),
+        PASS_RECORD
+            .replace("# Example\n\n", "")
+            .replace("depends: pass\n", "")
+    );
     write_record(&dir, "adrdom/decisions/example.md", &twice);
     for args in [vec!["check"], vec!["show", "adrdom/decisions/example.md"]] {
         let out = adr(&dir, &args, &[], "");
         let text = format!("{}{}", stdout(&out), stderr(&out));
-        let lines: Vec<&str> = text.lines().filter(|l| l.contains("has no depends line")).collect();
+        let lines: Vec<&str> = text
+            .lines()
+            .filter(|l| l.contains("has no depends line"))
+            .collect();
         let mut uniq = lines.clone();
         uniq.dedup();
         assert!(!lines.is_empty(), "{:?}: {}", args, text);
         for l in &lines {
-            assert_eq!(lines.iter().filter(|x| *x == l).count(), 1, "{:?}: {}", args, text);
+            assert_eq!(
+                lines.iter().filter(|x| *x == l).count(),
+                1,
+                "{:?}: {}",
+                args,
+                text
+            );
         }
     }
 }
@@ -151,17 +196,31 @@ impl Page {
             .spawn()
             .expect("adr serve should spawn");
         let mut line = String::new();
-        BufReader::new(child.stdout.as_mut().unwrap()).read_line(&mut line).unwrap();
-        let rest = line.trim().strip_prefix("open: http://127.0.0.1:").expect("open line");
+        BufReader::new(child.stdout.as_mut().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let rest = line
+            .trim()
+            .strip_prefix("open: http://127.0.0.1:")
+            .expect("open line");
         let (port, token) = rest.split_once("/?t=").expect("port and token");
-        Page { port: port.parse().unwrap(), token: token.to_string(), child }
+        Page {
+            port: port.parse().unwrap(),
+            token: token.to_string(),
+            child,
+        }
     }
 
     /// The lines of the page at `/`.
     fn lines(&self) -> Vec<String> {
         let mut stream = TcpStream::connect(("127.0.0.1", self.port)).unwrap();
-        stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        let req = format!("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nCookie: adr_t={}\r\n\r\n", self.token);
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let req = format!(
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nCookie: adr_t={}\r\n\r\n",
+            self.token
+        );
         stream.write_all(req.as_bytes()).unwrap();
         let mut raw = String::new();
         stream.read_to_string(&mut raw).unwrap();
@@ -211,12 +270,22 @@ fn draft_repo(record: &str) -> std::path::PathBuf {
 }
 
 fn all_lines(out: &std::process::Output) -> Vec<String> {
-    format!("{}\n{}", stdout(out), stderr(out)).lines().map(str::to_string).collect()
+    format!("{}\n{}", stdout(out), stderr(out))
+        .lines()
+        .map(str::to_string)
+        .collect()
 }
 
 fn assert_no_repeats(lines: &[String], what: &str) {
     for l in lines.iter().filter(|l| l.contains("; ")) {
-        assert_eq!(lines.iter().filter(|x| *x == l).count(), 1, "{}: {}\n{}", what, l, lines.join("\n"));
+        assert_eq!(
+            lines.iter().filter(|x| *x == l).count(),
+            1,
+            "{}: {}\n{}",
+            what,
+            l,
+            lines.join("\n")
+        );
     }
 }
 
@@ -225,14 +294,28 @@ fn assert_no_repeats(lines: &[String], what: &str) {
 // A finding line prints once on standard error and on the page too.
 #[test]
 fn identical_finding_lines_print_once_on_standard_error_and_on_the_page() {
-    let twice = format!("{}\n{}", PASS_RECORD.replace("depends: pass\n", ""), PASS_RECORD.replace("# Example\n\n", "").replace("depends: pass\n", ""));
+    let twice = format!(
+        "{}\n{}",
+        PASS_RECORD.replace("depends: pass\n", ""),
+        PASS_RECORD
+            .replace("# Example\n\n", "")
+            .replace("depends: pass\n", "")
+    );
     let dir = draft_repo(&twice);
     let ask = adr(&dir, &["ask", REL], &[], "");
     let err: Vec<String> = stderr(&ask).lines().map(str::to_string).collect();
-    assert!(err.iter().any(|l| l.contains("has no depends line")), "{:?}", err);
+    assert!(
+        err.iter().any(|l| l.contains("has no depends line")),
+        "{:?}",
+        err
+    );
     assert_no_repeats(&err, "ask");
     let page = Page::start(&dir).lines();
-    assert!(page.iter().any(|l| l.contains("has no depends line")), "{:?}", page);
+    assert!(
+        page.iter().any(|l| l.contains("has no depends line")),
+        "{:?}",
+        page
+    );
     assert_no_repeats(&page, "page");
 }
 
@@ -248,7 +331,11 @@ fn generic_moves_name_an_act_on_a_thing() {
     use adr::rules::Finding;
     let held = Report {
         stops: Vec::new(),
-        findings: vec![Finding::new(&adr::rule::TERMS_FILE_EXISTS, "x".to_string(), adr::msg::Next::agent(adr::msg::Act::Writes("y".into())))],
+        findings: vec![Finding::new(
+            &adr::rule::TERMS_FILE_EXISTS,
+            "x".to_string(),
+            adr::msg::Next::agent(adr::msg::Act::Writes("y".into())),
+        )],
         moves: Vec::new(),
     };
     let said = [
@@ -257,10 +344,23 @@ fn generic_moves_name_an_act_on_a_thing() {
         msg::plan_not_approved("x.md", adr::status::FileStatus::New, &held).text(),
         msg::context_not_approved("x.md", adr::status::FileStatus::New, &held).text(),
         msg::terms_missing().text(),
-        msg::update_failed("adrdom/ledger.tsv", "boom", msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr ask x.md"))),
-        msg::read_failed("x.md", "boom", msg::after_fix_owner_runs(adr::moves::Cmd::fixed("adr approve x.md"))),
-        msg::stdin_read_failed(msg::after_fix_owner_runs(adr::moves::Cmd::fixed("adr unban"))),
-        msg::hooks_path_failed("set", msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr install"))),
+        msg::update_failed(
+            "adrdom/ledger.tsv",
+            "boom",
+            msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr ask x.md")),
+        ),
+        msg::read_failed(
+            "x.md",
+            "boom",
+            msg::after_fix_owner_runs(adr::moves::Cmd::fixed("adr approve x.md")),
+        ),
+        msg::stdin_read_failed(msg::after_fix_owner_runs(adr::moves::Cmd::fixed(
+            "adr unban",
+        ))),
+        msg::hooks_path_failed(
+            "set",
+            msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr install")),
+        ),
     ];
     let wants = [
         "agent runs: adr ask 'adrdom/decisions/a b.md'",
@@ -275,7 +375,12 @@ fn generic_moves_name_an_act_on_a_thing() {
     ];
     for (got, want) in said.iter().zip(wants) {
         assert!(got.ends_with(want), "{} should end with {}", got, want);
-        for bad in ["clears the findings below", "fixes what the error names", "writes it", "\u{1}"] {
+        for bad in [
+            "clears the findings below",
+            "fixes what the error names",
+            "writes it",
+            "\u{1}",
+        ] {
             assert!(!got.contains(bad), "{}", got);
         }
     }
@@ -283,12 +388,30 @@ fn generic_moves_name_an_act_on_a_thing() {
         "H?",
         "x.md",
         vec![
-            Waits::Unwritten { heading: "A?".into(), report: held.clone() },
-            Waits::Asking { heading: "B?".into(), report: held.clone() },
+            Waits::Unwritten {
+                heading: "A?".into(),
+                report: held.clone(),
+            },
+            Waits::Asking {
+                heading: "B?".into(),
+                report: held.clone(),
+            },
         ],
     );
-    assert!(waits.0.next.render().contains("agent writes the body of \"A?\", agent rewrites \"B?\""), "{}", waits.0.next);
-    assert!(!waits.0.next.render().contains("clears the findings"), "{}", waits.0.next);
+    assert!(
+        waits
+            .0
+            .next
+            .render()
+            .contains("agent writes the body of \"A?\", agent rewrites \"B?\""),
+        "{}",
+        waits.0.next
+    );
+    assert!(
+        !waits.0.next.render().contains("clears the findings"),
+        "{}",
+        waits.0.next
+    );
 }
 
 // adr: 50b31713-4fea-4aa3-842a-79c2750660ba
@@ -299,11 +422,20 @@ fn generic_moves_name_an_act_on_a_thing() {
 fn the_same_findings_print_in_the_same_order_in_every_command_and_on_the_page() {
     let dir = draft_repo(TWO_BARE);
     let shared = |lines: &[String]| -> Vec<String> {
-        lines.iter().filter(|l| l.contains("has no depends line") || l.contains("uses no term")).cloned().collect()
+        lines
+            .iter()
+            .filter(|l| l.contains("has no depends line") || l.contains("uses no term"))
+            .cloned()
+            .collect()
     };
     let reference = shared(&all_lines(&adr(&dir, &["check"], &[], "")));
     assert_eq!(reference.len(), 4, "{:?}", reference);
-    assert!(reference[0].contains("Is the second one passing?") && reference[1].contains("Is the second one passing?"), "{:?}", reference);
+    assert!(
+        reference[0].contains("Is the second one passing?")
+            && reference[1].contains("Is the second one passing?"),
+        "{:?}",
+        reference
+    );
     for args in [vec!["show", REL], vec!["plan", REL], vec!["ask", REL]] {
         let got = shared(&all_lines(&adr(&dir, &args, &[], "")));
         assert_eq!(got, reference, "{:?}", args);

@@ -13,8 +13,7 @@ fn unban_removes_hash_and_writes_row() {
     let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
 
-    let banned_before =
-        std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    let banned_before = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
     assert!(!banned_before.trim().is_empty());
 
     let out = adr_owner(&dir, &["unban"], "forbiddenword\n");
@@ -23,8 +22,7 @@ fn unban_removes_hash_and_writes_row() {
     // writes print?", 069a6b4a A).
     assert_eq!(stdout(&out), "unbanned: a word\n", "{}", stdout(&out));
 
-    let banned_after =
-        std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    let banned_after = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
     assert!(
         banned_after.trim().is_empty(),
         "expected hash removed: {}",
@@ -67,15 +65,19 @@ fn unban_rewrites_two_column_lines() {
     );
     std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
 
-    assert!(adr(&dir, &["ban", "--term", "widget"], &[], "forbiddenword\n")
-        .status
-        .success());
+    assert!(
+        adr(&dir, &["ban", "--term", "widget"], &[], "forbiddenword\n")
+            .status
+            .success()
+    );
     assert!(adr(&dir, &["ban"], &[], "plainword\n").status.success());
 
     let before = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
     assert_eq!(before.lines().count(), 2, "{}", before);
     assert!(
-        before.lines().any(|l| l.ends_with(&format!(" {}", term_id))),
+        before
+            .lines()
+            .any(|l| l.ends_with(&format!(" {}", term_id))),
         "expected a two-column line before unban: {}",
         before
     );
@@ -123,8 +125,7 @@ fn unban_refuses_without_an_interactive_terminal() {
         stderr(&out)
     );
 
-    let banned_after =
-        std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    let banned_after = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
     assert!(
         !banned_after.trim().is_empty(),
         "unban must not have modified the banned list without owner authorization: {}",

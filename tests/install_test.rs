@@ -30,7 +30,9 @@ const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "uninst
 #[test]
 fn install_claude_flag_derives_claude_files_from_owner_commands() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     let claude_md = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
     assert!(
@@ -39,10 +41,9 @@ fn install_claude_flag_derives_claude_files_from_owner_commands() {
         claude_md
     );
 
-    let settings: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
-    )
-    .unwrap();
+    let settings: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap())
+            .unwrap();
     let deny: Vec<&str> = settings["permissions"]["deny"]
         .as_array()
         .unwrap()
@@ -95,10 +96,9 @@ fn install_creates_layout_and_is_idempotent() {
     let hooks_cfg = run_git(&dir, &["config", "core.hooksPath"]);
     assert_eq!(stdout(&hooks_cfg).trim(), ".githooks");
 
-    let settings: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
-    )
-    .unwrap();
+    let settings: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap())
+            .unwrap();
     let deny: Vec<&str> = settings["permissions"]["deny"]
         .as_array()
         .unwrap()
@@ -168,10 +168,9 @@ fn install_preserves_existing_settings_content() {
     let out = adr(&dir, &["install", "--claude"], &[], "");
     assert!(out.status.success(), "install failed: {}", stderr(&out));
 
-    let settings: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
-    )
-    .unwrap();
+    let settings: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap())
+            .unwrap();
     assert_eq!(settings["otherKey"], "value");
     let deny: Vec<&str> = settings["permissions"]["deny"]
         .as_array()
@@ -247,7 +246,10 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
-    assert_eq!(commit_msg, "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n");
+    assert_eq!(
+        commit_msg,
+        "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n"
+    );
     let first = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let second = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
@@ -348,7 +350,8 @@ fn install_appends_a_single_blank_line_when_owner_file_already_ends_with_one() {
 
     let content = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(
-        content.starts_with("# My repo\n\nSome owner-written notes.\n\n<!-- adrdom brief begin -->"),
+        content
+            .starts_with("# My repo\n\nSome owner-written notes.\n\n<!-- adrdom brief begin -->"),
         "expected exactly one blank line before the brief, got: {:?}",
         &content[..content.len().min(120)]
     );
@@ -380,7 +383,11 @@ fn install_writes_the_tag_to_agents_md_and_the_brief_to_state() {
     let dir = init_repo();
     let out = adr(&dir, &["install"], &[], "");
     assert!(out.status.success(), "install failed: {}", stderr(&out));
-    assert!(stdout(&out).contains("written: adrdom/state/brief.md"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("written: adrdom/state/brief.md"),
+        "{}",
+        stdout(&out)
+    );
 
     assert_eq!(
         std::fs::read_to_string(dir.join("AGENTS.md")).unwrap(),
@@ -458,7 +465,9 @@ fn install_claude_appends_import_to_an_existing_claude_md_and_is_idempotent() {
     );
 
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nSome text.\n").unwrap();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     let content = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
     assert!(content.starts_with("# Notes\n\nSome text.\n"));
@@ -466,7 +475,9 @@ fn install_claude_appends_import_to_an_existing_claude_md_and_is_idempotent() {
     assert!(content.contains("adrdom: the next line imports the agent brief"));
 
     let first = std::fs::read(dir.join("CLAUDE.md")).unwrap();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     let second = std::fs::read(dir.join("CLAUDE.md")).unwrap();
     assert_eq!(
         first, second,
@@ -491,10 +502,14 @@ fn install_does_nothing_when_claude_md_already_imports_agents_md() {
 #[test]
 fn install_claude_creates_claude_md_and_uninstall_deletes_it() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     let created = std::fs::read(dir.join("CLAUDE.md")).unwrap();
 
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     assert_eq!(
         std::fs::read(dir.join("CLAUDE.md")).unwrap(),
         created,
@@ -541,7 +556,9 @@ fn install_codex_writes_rules_file_and_is_idempotent() {
     let out = adr(&dir, &["install", "--codex"], &[], "");
     assert!(out.status.success(), "install failed: {}", stderr(&out));
     assert!(
-        stdout(&out).lines().any(|l| l == "written: .codex/rules/adrdom.rules"),
+        stdout(&out)
+            .lines()
+            .any(|l| l == "written: .codex/rules/adrdom.rules"),
         "{}",
         stdout(&out)
     );
@@ -558,10 +575,22 @@ fn install_codex_writes_rules_file_and_is_idempotent() {
     }
 
     let out2 = adr(&dir, &["install", "--codex"], &[], "");
-    assert!(out2.status.success(), "second install failed: {}", stderr(&out2));
-    assert_eq!(stdout(&out2), "", "a second install writes nothing: {}", stdout(&out2));
+    assert!(
+        out2.status.success(),
+        "second install failed: {}",
+        stderr(&out2)
+    );
+    assert_eq!(
+        stdout(&out2),
+        "",
+        "a second install writes nothing: {}",
+        stdout(&out2)
+    );
     let rules_after = std::fs::read_to_string(dir.join(".codex/rules/adrdom.rules")).unwrap();
-    assert_eq!(rules, rules_after, "second install --codex must not change the file");
+    assert_eq!(
+        rules, rules_after,
+        "second install --codex must not change the file"
+    );
 }
 
 #[test]
@@ -628,7 +657,10 @@ fn check_fails_when_the_state_brief_differs_or_is_missing_and_install_restores_i
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains(&format!("adrdom/state/brief.md differs from this binary's brief{}", tail)),
+        stdout(&out).contains(&format!(
+            "adrdom/state/brief.md differs from this binary's brief{}",
+            tail
+        )),
         "{}",
         stdout(&out)
     );
@@ -666,7 +698,11 @@ fn a_crlf_brief_file_is_current_to_check_and_install() {
     assert!(out.status.success(), "{}", stdout(&out));
     let again = adr(&dir, &["install"], &[], "");
     assert!(again.status.success());
-    assert!(!stdout(&again).contains("adrdom/state/brief.md"), "{}", stdout(&again));
+    assert!(
+        !stdout(&again).contains("adrdom/state/brief.md"),
+        "{}",
+        stdout(&again)
+    );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), crlf);
 }
 
@@ -721,9 +757,22 @@ fn a_commit_names_the_installed_files_it_lacks_as_not_staged() {
     run_git(&dir, &["add", "b.txt"]);
     let out = run_git(&dir, &["commit", "-q", "-m", "b"]);
     assert!(!out.status.success(), "the commit is refused");
-    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    assert!(text.contains("AGENTS.md not staged;") && text.contains("agent runs: git add AGENTS.md"), "{}", text);
-    assert!(text.contains(".githooks/pre-commit not staged;") && text.contains("agent runs: git add .githooks/pre-commit"), "{}", text);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("AGENTS.md not staged;") && text.contains("agent runs: git add AGENTS.md"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains(".githooks/pre-commit not staged;")
+            && text.contains("agent runs: git add .githooks/pre-commit"),
+        "{}",
+        text
+    );
     assert!(!text.contains("agent runs: adr install"), "{}", text);
 }
 
@@ -735,7 +784,9 @@ fn a_commit_names_the_installed_files_it_lacks_as_not_staged() {
 #[test]
 fn uninstall_refuses_without_owner_authorization() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     let out = adr(&dir, &["uninstall"], &[], "");
     assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
@@ -753,7 +804,9 @@ fn uninstall_refuses_without_owner_authorization() {
 #[test]
 fn uninstall_removes_everything_install_wrote_outside_adrdom() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     // Layer install onto owner-written AGENTS.md/CLAUDE.md content, the
     // same way a real repo would look after the owner added their own
@@ -839,7 +892,9 @@ fn uninstall_removes_claude_md_pair_but_keeps_a_bare_agents_import() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nSome text.\n").unwrap();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     let with_pair = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
     assert!(with_pair.lines().any(|l| l == "@AGENTS.md"));
 
@@ -870,7 +925,9 @@ fn uninstall_removes_claude_md_pair_but_keeps_a_bare_agents_import() {
 #[test]
 fn uninstall_deletes_settings_json_that_held_only_the_deny_entries() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     assert!(dir.join(".claude/settings.json").is_file());
 
     let out = adr_owner(&dir, &["uninstall"], "");
@@ -907,7 +964,9 @@ fn uninstall_keeps_settings_json_with_other_content() {
 "#,
     )
     .unwrap();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     let out = adr_owner(&dir, &["uninstall"], "");
     assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
@@ -916,10 +975,9 @@ fn uninstall_keeps_settings_json_with_other_content() {
         dir.join(".claude/settings.json").is_file(),
         "settings.json with other content must not be deleted"
     );
-    let settings: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
-    )
-    .unwrap();
+    let settings: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap())
+            .unwrap();
     assert_eq!(settings["model"], "opus");
     let deny: Vec<&str> = settings["permissions"]["deny"]
         .as_array()
@@ -938,10 +996,16 @@ fn uninstall_keeps_settings_json_with_other_content() {
 #[test]
 fn uninstall_is_idempotent() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     let first = adr_owner(&dir, &["uninstall"], "");
-    assert!(first.status.success(), "uninstall failed: {}", stderr(&first));
+    assert!(
+        first.status.success(),
+        "uninstall failed: {}",
+        stderr(&first)
+    );
 
     let second = adr_owner(&dir, &["uninstall"], "");
     assert!(
@@ -977,14 +1041,28 @@ fn install_prints_one_line_per_file_written_and_nothing_else() {
             .unwrap_or_else(|| panic!("a line that names no file written: {:?} in {}", line, text));
         assert!(dir.join(path).is_file(), "{} is not a file: {}", path, text);
     }
-    assert!(text.lines().any(|l| l == "set: core.hooksPath .githooks"), "{}", text);
+    assert!(
+        text.lines().any(|l| l == "set: core.hooksPath .githooks"),
+        "{}",
+        text
+    );
     let paths: std::collections::HashSet<&str> = text.lines().collect();
-    assert_eq!(paths.len(), text.lines().count(), "a file printed twice: {}", text);
+    assert_eq!(
+        paths.len(),
+        text.lines().count(),
+        "a file printed twice: {}",
+        text
+    );
     // And every file install left in the repository has its line.
     let status = run_git(&dir, &["status", "--porcelain", "-uall"]);
     for line in String::from_utf8_lossy(&status.stdout).lines() {
         let path = line[3..].trim();
-        assert!(paths.contains(format!("written: {}", path).as_str()), "{} was written with no line: {}", path, text);
+        assert!(
+            paths.contains(format!("written: {}", path).as_str()),
+            "{} was written with no line: {}",
+            path,
+            text
+        );
     }
 
     let again = adr(&dir, &["install", "--claude", "--codex"], &[], "");
@@ -999,9 +1077,15 @@ fn install_writes_the_brief_without_its_tie_comments() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let written = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
-    assert_eq!(written, adr::commands::install::strip_ties(include_str!("../assets/brief.md")));
+    assert_eq!(
+        written,
+        adr::commands::install::strip_ties(include_str!("../assets/brief.md"))
+    );
     assert!(!written.contains("<!--"), "{}", written);
-    assert_eq!(adr::commands::install::strip_ties("a <!-- from: x -->\r\nb\nc <!-- keep -->\n"), "a\r\nb\nc <!-- keep -->\n");
+    assert_eq!(
+        adr::commands::install::strip_ties("a <!-- from: x -->\r\nb\nc <!-- keep -->\n"),
+        "a\r\nb\nc <!-- keep -->\n"
+    );
     // A fenced line keeps its comment, as check leaves fenced lines unread.
     assert_eq!(
         adr::commands::install::strip_ties("```\nx <!-- from: y -->\n```\nz <!-- from: w -->\n"),
