@@ -30,6 +30,7 @@ Behaviour no current decision covers is a question for the owner before it is bu
 ### Build
 
 Build a decision when a move names it, and not before; never one whose question this session wrote.
+A decision's id is on the `id:` line under its heading; `adr show --ids` prints it.
 A decision is built once a test outside `adrdom/` carries the comment `adr: <id>` and shows the code follows it; write the test if none exists. One test may carry several `adr:` comments.
 `adr check` reports each untested current decision until a test names it. A test whose `adr: <id>` names a decision that is not current is reported and fails nothing: point the tie at the decision that took its place, or remove it.
 Code that follows a decision may carry the comment `adr-code: <id>`, found by search; it ties no test and no rule judges it.
@@ -77,7 +78,6 @@ Standard: the named practice for this, stated flat.
 ```
 
 Two or three options. Under a heading that opens with Does, an option is one word with its full stop, `- A) Yes.`; the Why and Costs lines carry the rest. Two options that answer the heading the same way are one option.
-After approval each heading carries an `id:` line; that id is the decision's, and `adr show` prints none.
 A decision binds by its option sentence; Why and Costs explain it, and on a clash the option holds.
 A question holds nothing that ties it to the day it was written: no word on what the code does now ("already", "currently", "as built", "unchanged"), who said what ("agreed", "decided", "in chat", an agent's name), or a date.
 
@@ -91,8 +91,8 @@ A question holds nothing that ties it to the day it was written: no word on what
 5. Say the plan is ready, post `owner runs: adr approve <file>` and stop.
 
 A question stands on what it loses its meaning without: a term, or a question of the same file; a depends line names at most two questions. Before approval an entry on any line is the term's name or the heading of the question or decision; approve turns them into ids. An entry on an open question carries its answer set, `=A`, `=A|B` or `=*`: the letters under which the question still makes sense.
-A question that replaces a current decision names it on `supersedes:`, with every current decision standing on it, to the last; each leaves force once the question is answered.
-`closes <letter>` says the record leaves only that option of the question standing: the question is decided, strike the heading. Write the neighbour on `supersedes:` instead only when the question is there to change that decision; a supersedes line reaches every decision standing on the one it names. Under `inconsistent`, write it on `supersedes:` or reword the question so the two agree. A line kept against the reader's word is said in chat, with why.
+A question that replaces a current decision names it on `supersedes:`, with every current decision standing on it and those standing on them; each leaves force once the question is answered.
+`closes <letter>` says the record leaves only that option of the question standing: the question is decided, strike the heading. Write the neighbour on `supersedes:` instead only when the question is there to change that decision, and name every decision standing on it too. Under `inconsistent`, write it on `supersedes:` or reword the question so the two agree. A line kept against the reader's word is said in chat, with why.
 A tier holds at most four questions; tiers are unlimited: a question that stands on a question of its file sits a tier above it. The question a tier stands on is the one each of its questions loses its meaning without.
 The owner reads the whole plan at each approval; a plan changes as a whole, not line by line: when one heading is wrong, check every heading of the file for the same flaw and propose the changes together, once. To change an approved plan, edit the file, run plan to the owner's move, and say in chat what changed and why.
 
