@@ -30,3 +30,27 @@ fn the_brief_tells_a_planner_what_the_tool_holds_it_from() {
     assert!(b.contains("its commits hold only paths under `adrdom/`"), "{}", b);
     assert!(b.contains("`builder` (another session)"), "{}", b);
 }
+
+// adr: 28b5837d-46ae-459e-ba4c-12265ef07ac1
+#[test]
+fn the_brief_says_the_option_sentence_binds() {
+    let b = flat();
+    assert!(b.contains("A decision binds by its option sentence; Why and Costs explain it, and on a clash the option holds."), "{}", b);
+}
+
+// adr: 1259323f-cdec-4101-9d47-a165a286089f
+#[test]
+fn the_brief_names_the_adr_code_comment() {
+    let b = flat();
+    assert!(b.contains("may carry the comment `adr-code: <id>`, found by search; it ties no test and no rule judges it."), "{}", b);
+}
+
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
+// adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
+// adr: 69708a07-469c-406b-9e25-63da1605b432
+#[test]
+fn the_brief_gives_the_shape_of_a_blame_file() {
+    let b = flat();
+    assert!(b.contains("A blame file holds `origin: <path>`, `blob: <hash>`, a blank line, then one row per line range, `<start>-<end>`, a tab, `decision` or `detail`, over every line of the origin"), "{}", b);
+    assert!(b.contains("a question written from it carries `blame: <file> <start>-<end>`."), "{}", b);
+}
