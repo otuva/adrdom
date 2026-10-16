@@ -60,7 +60,7 @@ use std::time::{Duration, Instant};
 
 pub const MODEL: &str = "claude-sonnet-5-5";
 /// The model `codex` is asked for; the key of the rows it reads.
-pub const CODEX_MODEL: &str = "gpt-5.6-sol";
+pub const CODEX_MODEL: &str = "gpt-5.6-terra";
 const TIMEOUT: Duration = Duration::from_secs(120);
 /// How many pairs are read at once; `adr read` hands the reader this many.
 pub const AT_ONCE: usize = 4;
@@ -588,12 +588,31 @@ pub fn model_of(root: &Path) -> &'static str {
 /// The file suffixes a program name may carry on this platform.
 const SUFFIXES: &[&str] = if cfg!(windows) { &[".exe", ".cmd"] } else { &[""] };
 
-/// The file of the program `name` in a directory of `path`: in each
-/// directory, `name` with each of `suffixes` in order.
+/// Whether `f` is a file the system can run: on unix, one with an
+/// executable bit; elsewhere any file.
+fn is_runnable(f: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(f) else { return false };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+/// The runnable file of the program `name` in a directory of `path`: in
+/// each directory, `name` with each of `suffixes` in order. On unix a file
+/// with no executable bit is skipped and the search goes on.
 pub fn find_program(name: &str, path: &std::ffi::OsStr, suffixes: &[&str]) -> Option<PathBuf> {
     std::env::split_paths(path)
         .flat_map(|d| suffixes.iter().map(move |s| d.join(format!("{}{}", name, s))))
-        .find(|f| f.is_file())
+        .find(|f| is_runnable(f))
 }
 
 /// Reads with `claude`, found at `exe`.
@@ -722,7 +741,9 @@ impl Reader for Codex {
 
     fn ask(&self, pair: &Pair) -> Result<String, String> {
         // `codex exec` has no system prompt flag: the prompt comes first on
-        // standard input, set apart from the message.
+        // standard input, set apart from the message. The user's config
+        // (effort, MCP servers) and the rules are not loaded, and the shell
+        // tool is off, so text inside a pair cannot make it run a command.
         let input = format!("{}\n\n=====\n\n{}", pair.kind.prompt(), user_message(pair));
         let cwd = PrivateDir::create()?;
         let reply = cwd.0.join("reply.txt");
@@ -731,6 +752,10 @@ impl Reader for Codex {
             "exec",
             "--skip-git-repo-check",
             "--ephemeral",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--disable",
+            "shell_tool",
             "--sandbox",
             "read-only",
             "--color",
@@ -897,13 +922,20 @@ pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &L
     Ok(pairs.iter().map(|p| have[&key(p)].clone()).collect())
 }
 
-/// A fresh directory under the temp dir, named at random and open to its
-/// owner only; removed when dropped. `create_dir` fails when the name exists.
+/// A fresh directory under the absolute temp dir, named at random and open
+/// to its owner only; removed when dropped. `create_dir` fails when the name
+/// exists. The temp dir is made absolute, because the program runs with this
+/// directory as its working directory and is given paths into it.
 struct PrivateDir(PathBuf);
 
 impl PrivateDir {
     fn create() -> Result<PrivateDir, String> {
-        let path = std::env::temp_dir().join(format!("adr-reader-{}", uuid::Uuid::new_v4()));
+        PrivateDir::create_in(&std::env::temp_dir())
+    }
+
+    fn create_in(base: &Path) -> Result<PrivateDir, String> {
+        let base = std::fs::canonicalize(base).map_err(|e| format!("cannot make a directory for the reader: {}: {}", base.display(), e))?;
+        let path = base.join(format!("adr-reader-{}", uuid::Uuid::new_v4()));
         #[allow(unused_mut)]
         let mut dir = std::fs::DirBuilder::new();
         #[cfg(unix)]
@@ -948,6 +980,18 @@ mod tests {
         let path = a.0.clone();
         drop(a);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_run_directory_is_made_under_the_canonical_base() {
+        let base = PrivateDir::create().unwrap();
+        std::fs::create_dir(base.0.join("x")).unwrap();
+        let d = PrivateDir::create_in(&base.0.join("x").join("..")).unwrap();
+        assert!(d.0.is_absolute());
+        assert!(!d.0.components().any(|c| c == std::path::Component::ParentDir), "{:?}", d.0);
+        assert_eq!(d.0.parent().unwrap(), base.0.canonicalize().unwrap());
+        let e = PrivateDir::create_in(&base.0.join("missing")).err().expect("refuses");
+        assert!(e.starts_with("cannot make a directory for the reader"), "{}", e);
     }
 
     fn row() -> Row {

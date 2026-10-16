@@ -79,12 +79,38 @@ fn the_missing_program_named_is_the_installed_agents() {
 fn the_program_file_is_looked_up_with_each_suffix_in_order() {
     let dir = init_repo();
     let path = std::env::join_paths([&dir]).unwrap();
-    std::fs::write(dir.join("codex.cmd"), "").unwrap();
+    let file = |n: &str| {
+        let f = dir.join(n);
+        std::fs::write(&f, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    };
+    file("codex.cmd");
     assert_eq!(reader::find_program("codex", &path, &[".exe", ".cmd"]), Some(dir.join("codex.cmd")));
-    std::fs::write(dir.join("codex.exe"), "").unwrap();
+    file("codex.exe");
     assert_eq!(reader::find_program("codex", &path, &[".exe", ".cmd"]), Some(dir.join("codex.exe")));
     assert_eq!(reader::find_program("codex", &path, &[""]), None);
     assert_eq!(reader::find_program("claude", &path, &[".exe", ".cmd"]), None);
+}
+
+// adr: 5418b256-dfae-439a-96c1-57d82380cd1e
+// "What does the reader run?": a file with no executable bit is not the program; the search goes on.
+#[cfg(unix)]
+#[test]
+fn a_file_that_cannot_run_is_skipped() {
+    use std::os::unix::fs::PermissionsExt;
+    let a = init_repo();
+    let b = init_repo();
+    std::fs::write(a.join("claude"), "").unwrap();
+    std::fs::set_permissions(a.join("claude"), std::fs::Permissions::from_mode(0o644)).unwrap();
+    let path = std::env::join_paths([&a, &b]).unwrap();
+    assert_eq!(reader::find_program("claude", &path, &[""]), None);
+    std::fs::write(b.join("claude"), "").unwrap();
+    std::fs::set_permissions(b.join("claude"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(reader::find_program("claude", &path, &[""]), Some(b.join("claude")));
 }
 
 #[cfg(unix)]
@@ -135,7 +161,7 @@ mod stubs {
             &bin,
             "codex",
             &format!(
-                "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && out=$2; shift; done\ncat > {}/stdin.txt\nprintf 'They ask the same.\\nsame\\n' > \"$out\"\n",
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {0}/args.txt\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && out=$2; shift; done\ncat > {0}/stdin.txt\nprintf 'They ask the same.\\nsame\\n' > \"$out\"\n",
                 bin.display()
             ),
         );
@@ -147,6 +173,10 @@ mod stubs {
         let got = std::fs::read_to_string(bin.join("stdin.txt")).unwrap();
         assert!(got.contains("Does the widget glow?") && got.contains("Does the widget shine?"), "{}", got);
         assert!(got.contains("====="), "the prompt is set apart: {}", got);
+        let args = std::fs::read_to_string(bin.join("args.txt")).unwrap();
+        for flag in ["--ignore-user-config", "--ignore-rules", "shell_tool", reader::CODEX_MODEL] {
+            assert!(args.lines().any(|l| l == flag), "{} missing: {}", flag, args);
+        }
     }
 }
 
