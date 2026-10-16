@@ -8,7 +8,7 @@ The git hooks run `adr check` at every commit and push; check refuses what break
 
 ### Roles
 
-A session is one run of an agent. A session that runs `adr plan` or `adr ask` is a planner until it ends: it does not build the decisions it asked, and its commits hold only paths under `adrdom/`.
+A session that runs `adr plan` or `adr ask` is a planner until it ends: it does not build the decisions it asked, and its commits hold only paths under `adrdom/`.
 A builder is another session; it builds from the record alone.
 A subagent runs under the session's identifier and carries its role. With no session identifier in the environment, no role applies.
 The owner's commands are `adr approve`, `adr answer`, `adr unban`, `adr serve` and `adr uninstall`; they refuse an agent. Every other command is the agent's.
@@ -63,8 +63,8 @@ A heading is a `###` line and one question: "Does X ..." or "What does X ...". O
 Under the heading sit its lines, `depends:`, `supersedes:`, `unrelated:` and `blame:`, entries comma separated; then the body:
 
 ```
-### Does the pre-commit hook run the tests?
-depends: hook, Does check read staged files only?=A
+### Does the pre-commit hook run check?
+depends: check, Does check read staged files only?=A
 unrelated: Does check print a line with no move on it?
 
 Problem: what breaks, in one line.
@@ -85,9 +85,9 @@ A question holds nothing that ties it to the day it was written: no word on what
 
 `adr plan <file>` does the step the file is at and prints the next move, until the move is `owner runs: adr approve <file>`. The steps:
 1. Write the headings, then run plan: for each heading it brings the nearest current decisions and terms, its neighbours.
-2. Write a line for every neighbour: `depends:` when the question loses its meaning without it, `supersedes:` when the question replaces that decision, `unrelated:` otherwise. Run plan again until no neighbour is on no line.
+2. Write a line for every neighbour: `depends:` when the question loses its meaning without it, `supersedes:` when the question replaces that decision, `unrelated:` otherwise. Run plan again until every neighbour is on a line.
 3. Write the bodies. Before an option, read the code and the decisions it meets: what the code has to keep is the option's Costs. A second question found on the way is a new heading.
-4. Run plan again: it brings the neighbours of each body with the reader's word, `same`, `consistent`, `inconsistent`, `unrelated` or `closes <letter>`, and a reason. The reader's word is not a ruling; the agent's line is.
+4. Run plan again: it brings the neighbours of each body with the reader's word, `same`, `consistent`, `inconsistent`, `unrelated` or `closes <letter>`, and a reason. The reader's word is not a ruling; the agent's line is. Write a line for each neighbour it brings, and run plan until the move it prints is the owner's.
 5. Say the plan is ready, post `owner runs: adr approve <file>` and stop.
 
 A question stands on what it loses its meaning without: a term, or a question of the same file; a depends line names at most two questions. Before approval an entry on any line is the term's name or the heading of the question or decision; approve turns them into ids. An entry on an open question carries its answer set, `=A`, `=A|B` or `=*`: the letters under which the question still makes sense.
