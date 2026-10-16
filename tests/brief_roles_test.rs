@@ -26,7 +26,7 @@ fn the_brief_has_another_agent_build_what_an_agent_asked() {
 fn the_brief_has_a_review_name_a_decision_for_each_behaviour() {
     let b = flat();
     assert!(
-        b.contains("In a review of a build, a behaviour with no decision behind it is a finding."),
+        b.contains("In a review of a build, name the decision behind each behaviour the diff adds or changes; a behaviour with no decision behind it is a finding."),
         "{}",
         b
     );
@@ -48,7 +48,11 @@ fn the_brief_tells_a_planner_what_the_tool_holds_it_from() {
         "{}",
         b
     );
-    assert!(b.contains("`builder` (another session)"), "{}", b);
+    assert!(
+        b.contains("- `builder`: another session's; leave it."),
+        "{}",
+        b
+    );
 }
 
 // adr: 28b5837d-46ae-459e-ba4c-12265ef07ac1
@@ -71,9 +75,9 @@ fn the_brief_names_the_adr_code_comment() {
 #[test]
 fn the_brief_gives_the_shape_of_a_blame_file() {
     let b = flat();
-    assert!(b.contains("A blame file holds `origin: <path>`, `blob: <hash>`, a blank line, then one row per line range, `<start>-<end>`, a tab, `decision` or `detail`, over every line of the origin"), "{}", b);
+    assert!(b.contains("A row is a line range, a tab, and one word: `decision` marks a range the owner settles by picking an option, `detail` every other range.") && b.contains("The ranges reach every line of the origin"), "{}", b);
     assert!(
-        b.contains("a question written from it carries `blame: <file> <start>-<end>`."),
+        b.contains("with a blame line under the heading: `blame: old-file 10-14 23-30, other 3-9`"),
         "{}",
         b
     );
