@@ -1,9 +1,4 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
-    <img src="docs/logo-light.svg" alt="adr" width="420">
-  </picture>
-</p>
+<p align="center"><img src="docs/logo.svg" alt="adrdom" width="360"></p>
 
 <p align="center">
   <a href="https://github.com/otuva/adrdom/actions/workflows/check.yml"><img src="https://github.com/otuva/adrdom/actions/workflows/check.yml/badge.svg" alt="check"></a>
@@ -11,7 +6,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
 </p>
 
-**A condom between production and your AI agent.**
+**An adr condom between production and your AI agent.**
 
 The agent writes the questions. Only you answer. Git hooks refuse what breaks an answer.
 

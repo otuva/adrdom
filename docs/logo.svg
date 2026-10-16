@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="200" viewBox="0 0 360 200">
+  <rect width="360" height="200" rx="16" fill="#000000"/>
+  <g font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="700" font-size="72" text-anchor="middle">
+    <text x="180" y="84" fill="#ffffff">adr</text>
+    <text x="180" y="150" fill="#3b82f6">dom</text>
+  </g>
+  <text x="180" y="184" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="15" fill="#9ca3af" text-anchor="middle">agentic adr management</text>
+</svg>

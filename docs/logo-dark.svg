@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="420" height="120" viewBox="0 0 420 120">
-  <g font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" fill="#eeeeee">
-    <text x="20" y="78" font-size="72" font-weight="700">adr</text>
-    <text x="190" y="52" font-size="18" opacity="0.55">the agent asks.</text>
-    <text x="190" y="78" font-size="18" opacity="0.55">you answer.</text>
-    <text x="190" y="104" font-size="18" opacity="0.55">git refuses the rest.</text>
-  </g>
-</svg>
