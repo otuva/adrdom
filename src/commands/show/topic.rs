@@ -58,6 +58,9 @@ pub(super) fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Ve
             question_status_of(led, rf, sec),
             change,
         ));
+        if views.ids {
+            lines.extend(super::listing::id_line(sec, 1));
+        }
         lines.extend(chosen_line(led, sec, st, 1));
         match change {
             Some(change) => lines.extend(change_lines(

@@ -71,6 +71,10 @@ pub struct Views {
     /// Every word the reader gave on every neighbour of each question, with
     /// its reason.
     pub reader: bool,
+    /// Each decision's id under its heading, the one a test tie names (a
+    /// computed view under a flag, per "Does a command print a computed view
+    /// under a flag?", cdc905a2 A).
+    pub ids: bool,
 }
 
 /// Everything `show` reads, loaded once; the page reads its lines from the
@@ -239,6 +243,9 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
     if views.superseded {
         args.push("--superseded".to_string());
     }
+    if views.ids {
+        args.push("--ids".to_string());
+    }
     args
 }
 
@@ -266,7 +273,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
             }
         },
         None if all => whole(&r, views),
-        None => summary(&r),
+        None => summary(&r, views.ids),
     };
     out::print(&lines);
     0

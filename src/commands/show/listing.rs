@@ -18,7 +18,7 @@ use crate::status::{self, FileStatus, QuestionStatus};
 /// Every current decision as its heading and the option picked, under its
 /// topic file, and every move: of each topic file, each removed topic file,
 /// the terms file and each blame file.
-pub(crate) fn summary(r: &Records) -> Vec<Line> {
+pub(crate) fn summary(r: &Records, ids: bool) -> Vec<Line> {
     let mut lines = Vec::new();
     // The reports of every file, merged and printed once after all decisions.
     let mut merged = Report::default();
@@ -38,11 +38,11 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     let mut printed: Vec<String> = Vec::new();
     for rf in &r.topic_files {
         lines.push(topic_heading(rf));
-        lines.extend(decision_lines(rf, &r.led));
+        lines.extend(decision_lines(rf, &r.led, ids));
         absorb(&mut merged, listed_report(r, rf, &mut printed));
     }
     let mut blame_part = Vec::new();
-    lines.extend(rest_into(r, Some((&mut merged, &mut blame_part))));
+    lines.extend(rest_into(r, Some((&mut merged, &mut blame_part)), ids));
     // The refusals of files that cannot be read carry moves: they stand in
     // the end block, a topic file's first and the terms file's after it (a
     // stop on everything), before the terms file's own report.
@@ -98,8 +98,9 @@ pub(crate) fn topic_heading(rf: &RecordFile) -> Line {
     }
 }
 
-/// Every current decision of `rf` as its heading and the option picked.
-pub(crate) fn decision_lines(rf: &RecordFile, led: &Ledger) -> Vec<Line> {
+/// Every current decision of `rf` as its heading and the option picked;
+/// with `ids`, its `id:` line between them.
+pub(crate) fn decision_lines(rf: &RecordFile, led: &Ledger, ids: bool) -> Vec<Line> {
     let mut lines = Vec::new();
     for sec in rf
         .sections
@@ -110,6 +111,9 @@ pub(crate) fn decision_lines(rf: &RecordFile, led: &Ledger) -> Vec<Line> {
             depth: 1,
             text: sec.heading_text.clone(),
         });
+        if ids {
+            lines.extend(id_line(sec, 2));
+        }
         lines.extend(chosen_line(led, sec, QuestionStatus::Answered, 2));
     }
     lines
@@ -152,20 +156,32 @@ pub(crate) fn listed_report_judged(
 /// What the listing prints after the topic files: each removed topic file,
 /// each blame file, and the blame files that cannot be read.
 pub(crate) fn rest(r: &Records) -> Vec<Line> {
-    rest_into(r, None)
+    rest_into(r, None, false)
+}
+
+/// The `id:` line of `sec`, as `--ids` prints it under the heading.
+pub(crate) fn id_line(sec: &crate::record::Section, depth: usize) -> Option<Line> {
+    sec.id.as_ref().map(|id| Line::Record {
+        depth,
+        text: format!("id: {}", id),
+    })
 }
 
 /// `rest`; with `merged`, the reports of the removed files go into its report
 /// and each blame file's status line and report into its lines, not among
 /// the lines returned.
-fn rest_into(r: &Records, mut merged: Option<(&mut Report, &mut Vec<Line>)>) -> Vec<Line> {
+fn rest_into(
+    r: &Records,
+    mut merged: Option<(&mut Report, &mut Vec<Line>)>,
+    ids: bool,
+) -> Vec<Line> {
     let mut lines = Vec::new();
     for rel in r.removed_topic_files() {
         lines.push(file_status(&rel, FileStatus::Removed));
         // Its current decisions stand until a plan change supersedes them:
         // listed from its approved version, as every file's are.
         if let Some(old) = rules::latest_approved_version(&r.root, &rel, &r.led) {
-            lines.extend(decision_lines(&old, &r.led));
+            lines.extend(decision_lines(&old, &r.led, ids));
         }
         match merged.as_mut() {
             Some((m, _)) => absorb(m, removed_report(r, &rel)),

@@ -30,7 +30,7 @@ Behaviour no current decision covers is a question for the owner before it is bu
 ### Build
 
 Build a decision when a move names it, and not before; never one whose question this session wrote. <!-- from: 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8 -->
-A decision's id is the `id:` line under its heading in the topic file; `adr show` prints none. <!-- from: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550 -->
+A decision's id is on the `id:` line under its heading; `adr show --ids` prints it. <!-- from: cdc905a2-5b58-4c38-beff-4a8bd3b6f42e, 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550 -->
 A decision is built once a test outside `adrdom/` carries the comment `adr: <id>` and shows the code follows it; write the test if none exists. One test may carry several `adr:` comments. <!-- from: 4319a653-6901-446c-94ab-6420ef472134, 3460d220-e523-448b-aeff-baa8051b7d06, c49997ee-10e7-48e0-b66b-43f8b09758a6 -->
 `adr check` reports each untested current decision until a test names it. A test whose `adr: <id>` names a decision that is not current is reported and fails nothing: point the tie at the decision that took its place, or remove it. <!-- from: 3460d220-e523-448b-aeff-baa8051b7d06, 2381d759-f85f-484e-9031-fadbe6ea045a, 50b31713-4fea-4aa3-842a-79c2750660ba -->
 Code that follows a decision may carry the comment `adr-code: <id>`, found by search; it ties no test and no rule judges it. <!-- from: 1259323f-cdec-4101-9d47-a165a286089f -->
