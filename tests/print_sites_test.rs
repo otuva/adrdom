@@ -5,7 +5,7 @@
 mod common;
 
 use common::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const REL: &str = "adrdom/decisions/gate.md";
 
@@ -67,7 +67,7 @@ fn the_words_of_a_move_are_written_only_in_moves() {
         let mut in_acts = false;
         for (n, line) in code_lines(&text) {
             // The opening words of the acts are defined once, in msg.rs.
-            if rel == "src/msg.rs"
+            if rel == "src/msg/mod.rs"
                 && (line.contains("NOT_YET: &str") || acts_const(line, &mut in_acts))
             {
                 continue;
@@ -84,12 +84,15 @@ fn the_words_of_a_move_are_written_only_in_moves() {
         "move words outside src/moves.rs:\n{}",
         found.join("\n")
     );
-    let msg = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/msg.rs"))
-        .unwrap();
-    assert!(
-        !msg.contains("pub fn next_"),
-        "msg.rs builds a next line of its own"
-    );
+    for (rel, msg) in source_files() {
+        if rel.starts_with("src/msg/") {
+            assert!(
+                !msg.contains("pub fn next_"),
+                "{} builds a next line of its own",
+                rel
+            );
+        }
+    }
 }
 
 /// Whether `line` is part of the `ACTS` constant: its opening line, or any
@@ -427,11 +430,11 @@ fn every_command_a_move_names_is_built_from_its_words() {
         let mut in_acts = false;
         for (n, line) in code_lines(&text) {
             // The opening words of the acts are defined once, in msg.rs.
-            if rel == "src/msg.rs" && acts_const(line, &mut in_acts) {
+            if rel == "src/msg/mod.rs" && acts_const(line, &mut in_acts) {
                 continue;
             }
             for literal in string_literals(line) {
-                let typed = rel == "src/msg.rs" && renderers.contains(&literal.as_str());
+                let typed = rel == "src/msg/mod.rs" && renderers.contains(&literal.as_str());
                 let runs = literal.contains("runs: ") && !typed;
                 let slotted = literal.starts_with("adr ") && literal.contains("{}");
                 if runs || slotted {
