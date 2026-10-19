@@ -11,8 +11,10 @@ const NAMED: usize = 3;
 /// The failure for a commit in a planner's session that stages a path
 /// outside adrdom (a deletion or either side of a rename counts), or whose
 /// staged paths cannot be read. Nothing in any other session.
-pub(super) fn check_commit(root: &Path) -> Vec<Failure> {
-    match session::role_checked(root) {
+pub(super) fn check_commit(root: &Path, record: &Path) -> Vec<Failure> {
+    // The role is read from the record's root, the staged paths from the
+    // root of the commit: one root in a primary, two in a satellite.
+    match session::role_checked(record) {
         Ok(Role::Planner) => {}
         Ok(Role::Plain) => return Vec::new(),
         Err(e) => {

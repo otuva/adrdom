@@ -6,6 +6,7 @@ use crate::msg::{self, Actor, Next};
 use crate::out::{self, Event};
 use crate::repo;
 use crate::rules::Command;
+use crate::satellite::{self, Located};
 use std::fs;
 use std::path::Path;
 
@@ -31,15 +32,29 @@ pub fn run() -> i32 {
         return 2;
     }
 
-    let root = match repo::find_root() {
-        Some(r) => r,
-        None => {
+    // In a satellite the row it has in the primary's list goes too (per
+    // "Does uninstall in a satellite drop its row from the primary?"); with
+    // no record at the primary's path nothing is removed.
+    let (root, primary_root) = match satellite::locate() {
+        Located::NotARepo => {
             out::eprint_stop(
                 Command::Uninstall,
                 &msg::not_a_repo("uninstall", &[], Actor::Owner),
             );
             return 1;
         }
+        Located::RecordMissing { primary, .. } => {
+            out::eprint_stop(
+                Command::Uninstall,
+                &msg::record_missing("uninstall", &primary),
+            );
+            return 1;
+        }
+        Located::Here(place) if place.is_satellite() => (
+            place.code,
+            Some((place.record, place.primary.unwrap_or_default())),
+        ),
+        Located::Here(place) => (place.code, None),
     };
 
     // One line per file removed or edited, or the failure that stopped it
@@ -47,7 +62,26 @@ pub fn run() -> i32 {
     // removed is printed on a failure too: the run that failed is the only
     // one that can say it, the next one finds it gone.
     let mut events = Vec::new();
-    let failed = remove_all(&root, &mut events).err();
+    let mut failed = remove_all(&root, &mut events).err();
+    if let (None, Some((record, shown))) = (&failed, &primary_root) {
+        let sat = std::fs::canonicalize(&root).unwrap_or_else(|_| root.clone());
+        let path = satellite::relative_path(record, &sat);
+        match satellite::drop_row(record, &path) {
+            Ok(Some(Event::FileWritten { path })) => events.push(written(&format!(
+                "{}/{}",
+                shown.trim_end_matches('/'),
+                path
+            ))),
+            Ok(_) => {}
+            Err(e) => {
+                failed = Some(msg::write_failed(
+                    repo::SATELLITES_PATH,
+                    e,
+                    msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+                ))
+            }
+        }
+    }
     out::print_events(&events);
     match failed {
         Some(m) => {

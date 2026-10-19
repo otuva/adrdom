@@ -24,6 +24,15 @@ pub fn run(id_arg: String, letter: String) -> i32 {
         }
     };
 
+    if super::refused_in_satellite(
+        &root,
+        Command::Answer,
+        &[id_arg.as_str(), letter.as_str()],
+        Actor::Owner,
+    ) {
+        return 1;
+    }
+
     // Per "Does an answer carry the version of the question the owner
     // read?": the id argument is now `<id>@<version>` -- a uuid never holds
     // an `@`, so splitting on the first one is unambiguous. A bare id (no

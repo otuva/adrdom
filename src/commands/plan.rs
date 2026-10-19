@@ -55,6 +55,14 @@ pub fn run(file: PathBuf) -> i32 {
             return 1;
         }
     };
+    if super::refused_in_satellite(
+        &root,
+        Command::Plan,
+        &[&file.display().to_string()],
+        msg::Actor::Agent,
+    ) {
+        return 1;
+    }
     // Planning is the planning of a topic file ("What does the agent do to
     // plan a topic file?"): the terms file, a blame file or any other path
     // is refused with the move, never read as a topic file. The path is

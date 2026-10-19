@@ -46,6 +46,7 @@ use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::rules::Command;
 use crate::rules::{self};
+use crate::satellite::{Located, Place};
 use crate::state;
 use crate::terms::{self, Term, TermsFile};
 use crate::view;
@@ -92,6 +93,12 @@ pub(crate) struct Records {
     blame: blame::Index,
     pub(crate) unreadable_blame_files: Vec<(String, String)>,
     pub(crate) tests: HashMap<String, Vec<String>>,
+    /// Where `show` runs when that is a satellite: `root` is then the
+    /// primary's.
+    pub(crate) satellite: Option<Place>,
+    /// The satellites the record's list names that have no checkout, read
+    /// once.
+    pub(crate) missing: Vec<crate::satellite::Row>,
     /// Every question's heading, every term's name and every blame file's
     /// name by its identifier: what turns an identifier on a line back into
     /// words.
@@ -108,6 +115,17 @@ pub(crate) struct Records {
 
 impl Records {
     pub(crate) fn load(root: PathBuf) -> Records {
+        Records::load_in(root, None)
+    }
+
+    /// The records of `place`: read from its record root, the ties from its
+    /// code root (the same root in a primary).
+    pub(crate) fn load_at(place: Place) -> Records {
+        let satellite = place.is_satellite().then(|| place.clone());
+        Records::load_in(place.record, satellite)
+    }
+
+    fn load_in(root: PathBuf, satellite: Option<Place>) -> Records {
         let led = ledger::read(&root.join(repo::LEDGER_PATH));
         let (terms_file, terms_unreadable) = match state::load_terms_checked(&root) {
             state::TermsLoad::Ok(tf) => (Some(tf), None),
@@ -129,7 +147,9 @@ impl Records {
             .collect();
         let (blame_files, unreadable_blame_files) = blame::load_all_with_errors(&root);
         let blame = blame::Index::of(blame_files, &led);
-        let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
+        let missing = crate::satellite::missing(&root);
+        let code_root = satellite.as_ref().map_or(&root, |p| &p.code);
+        let tests = crate::commands::check::test_index(code_root, &repo::Source::WorkingTree);
         let mut names: HashMap<String, String> = terms_list
             .iter()
             .filter_map(|t| Some((t.id.clone()?, t.name.clone())))
@@ -168,6 +188,8 @@ impl Records {
             blame,
             unreadable_blame_files,
             tests,
+            satellite,
+            missing,
             names,
             index: std::cell::OnceCell::new(),
             minted_terms: std::cell::OnceCell::from(minted),
@@ -187,6 +209,12 @@ impl Records {
         self.minted_terms
             .get_or_init(|| self.terms_file.as_ref().map(terms::minted_copy))
             .as_ref()
+    }
+
+    /// Whether a decision with no test has a build move
+    /// (`satellite::builds`).
+    pub(crate) fn builds(&self) -> bool {
+        crate::satellite::builds(self.satellite.is_some(), &self.missing)
     }
 
     pub(crate) fn index(&self) -> &rules::RepoIndex {
@@ -250,30 +278,49 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
 }
 
 pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
-    let Some(root) = repo::find_root() else {
-        let args = show_args(record_arg.as_deref(), all, &views);
-        let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        out::eprint(&[out::refusal(
-            Command::Show,
-            &msg::not_a_repo("show", &args, Actor::Agent),
-        )]);
-        return 1;
+    let place = match crate::satellite::locate() {
+        Located::NotARepo => {
+            let args = show_args(record_arg.as_deref(), all, &views);
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            out::eprint(&[out::refusal(
+                Command::Show,
+                &msg::not_a_repo("show", &args, Actor::Agent),
+            )]);
+            return 1;
+        }
+        Located::RecordMissing { primary, .. } => {
+            out::eprint(&[out::refusal(
+                Command::Show,
+                &msg::record_missing("show", &primary),
+            )]);
+            return 1;
+        }
+        Located::Here(place) => place,
     };
-    let r = Records::load(root);
-    let lines = match &record_arg {
+    let r = Records::load_at(place);
+    let mut lines = Vec::new();
+    // Per "Does show in a satellite name its primary?": the first line of
+    // every form, the path `adrdom/primary` holds.
+    if let Some(primary) = r.satellite.as_ref().and_then(|p| p.primary.as_deref()) {
+        lines.push(Line::Record {
+            depth: 0,
+            text: msg::record_line(primary),
+        });
+    }
+    match &record_arg {
         Some(p) => match file_form(
             &r,
             &state::given_rel(&r.root, p).unwrap_or_else(|| p.display().to_string()),
             views,
         ) {
-            Ok(lines) => lines,
+            Ok(shown) => lines.extend(shown),
             Err(refusal) => {
                 out::eprint(&[out::refusal(Command::Show, &refusal)]);
                 return 1;
             }
         },
-        None if all => whole(&r, views),
-        None => summary(&r, views.ids),
+        None if all => lines.extend(whole(&r, views)),
+        None => lines.extend(summary(&r, views.ids)),
     };
     out::print(&lines);
     0

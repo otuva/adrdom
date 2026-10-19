@@ -19,6 +19,9 @@ use crate::status::{self, FileStatus, QuestionStatus};
 /// topic file, and every move: of each topic file, each removed topic file,
 /// the terms file and each blame file.
 pub(crate) fn summary(r: &Records, ids: bool) -> Vec<Line> {
+    if let Some(place) = &r.satellite {
+        return satellite_summary(r, place, ids);
+    }
     let mut lines = Vec::new();
     // The reports of every file, merged and printed once after all decisions.
     let mut merged = Report::default();
@@ -55,10 +58,57 @@ pub(crate) fn summary(r: &Records, ids: bool) -> Vec<Line> {
         lines.extend(out::report(&report));
     }
     lines.extend(out::report(&merged));
+    // A satellite the list names and the disk lacks: a note, as check prints it.
+    lines.extend(
+        r.missing
+            .iter()
+            .map(|row| Line::Finding(satellite_missing_finding(row))),
+    );
     // A blame file's status line stands with its report at the end, as the
     // terms file's does.
     lines.extend(blame_part);
     lines.extend(unreadable_blame_lines(r));
+    lines
+}
+
+/// The note for a satellite with no checkout at its path.
+pub(crate) fn satellite_missing_finding(row: &crate::satellite::Row) -> Finding {
+    Finding::said(
+        crate::rules::Class::Untested,
+        msg::satellite_missing(&row.path, &row.url),
+    )
+}
+
+/// The listing in a satellite: every current decision of the primary as the
+/// primary prints it, then the satellite's own report at the working tree
+/// (per "What does check in a satellite read the record from?"): its
+/// failures and notes, no untested decision and no move.
+fn satellite_summary(r: &Records, place: &crate::satellite::Place, ids: bool) -> Vec<Line> {
+    let mut lines = Vec::new();
+    for rf in &r.topic_files {
+        lines.push(topic_heading(rf));
+        lines.extend(decision_lines(rf, &r.led, ids));
+    }
+    for rel in r.removed_topic_files() {
+        lines.push(file_status(&rel, FileStatus::Removed));
+        if let Some(old) = rules::latest_approved_version(&r.root, &rel, &r.led) {
+            lines.extend(decision_lines(&old, &r.led, ids));
+        }
+    }
+    let report = crate::commands::check::satellite_report(place, false, None, Some(&r.tests));
+    lines.extend(
+        report
+            .stops
+            .into_iter()
+            .map(|s| out::refusal(Command::Check, &s)),
+    );
+    lines.extend(
+        report
+            .failures
+            .into_iter()
+            .chain(report.notes)
+            .map(Line::Finding),
+    );
     lines
 }
 

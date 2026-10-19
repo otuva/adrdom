@@ -57,6 +57,9 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
             return 1;
         }
     };
+    if super::refused_in_satellite(&root, Command::Ban, &args, Actor::Agent) {
+        return 1;
+    }
     let banned_path = root.join(banned::BAN_LIST);
     let ledger_path = root.join(repo::LEDGER_PATH);
 

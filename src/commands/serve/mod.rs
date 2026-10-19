@@ -40,6 +40,15 @@ pub fn run(port: u16) -> i32 {
         }
     };
 
+    if super::refused_in_satellite(
+        &root,
+        Command::Serve,
+        &["--port", &port.to_string()],
+        Actor::Owner,
+    ) {
+        return 1;
+    }
+
     let server = match Server::http(("127.0.0.1", port)) {
         Ok(s) => s,
         Err(e) => {
