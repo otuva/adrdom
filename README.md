@@ -49,6 +49,7 @@ adr install            # adrdom/, hooks, AGENTS.md
 adr install --claude   # + CLAUDE.md, deny rules in .claude/settings.json
 adr install --codex    # + .codex/rules/adrdom.rules
 adr install --planning # once per machine: embedding model + onnxruntime into the user cache
+adr install --satellite ../api   # ../api keeps no record: its hooks and tests read this one
 adr uninstall          # owner only; leaves adrdom/ and the cache
 ```
 
@@ -67,7 +68,7 @@ builder
   adr check at every commit and push
 ```
 
-Planner and builder are never one session. A planner's commits hold only `adrdom/`. Every command ends with the next move and who makes it: `agent`, `builder`, `owner runs: <command>` or `not yet`.
+Planner and builder are never one session. A planner's commits hold only `adrdom/`. A test in a satellite counts the same. Every command ends with the next move and who makes it: `agent`, `builder`, `owner runs: <command>` or `not yet`.
 
 ## The records
 
