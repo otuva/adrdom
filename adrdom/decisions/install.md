@@ -166,3 +166,73 @@ Standard: a tool that integrates with several agents calls the one configured fo
   Costs: one more file to read, and a setting the agent can edit.
 
 **Answer:** A
+
+### Does a repository keep hooks of its own beside the tool's?
+depends: install, Does install write outside adrdom?, Does check hold the files install writes?
+unrelated: Does git track a file the tool can get again without the owner?, Does install put the embedding model outside the repository?, What holds the list of loaded phrases?, Does check look at the ledger before a push?, Does every ledger row carry the tool version?, Does install fetch the embedding model?, satellite, Does the tool keep everything it owns under one directory?, Does an owner command commit?, Does check at a commit read the staged files?, Does check hold the merge rule install writes for the ledger?, Does install write a merge rule for the ledger?, Does the hook run the repository's own hook once check passes?, Does install move a hook it finds into the repository's own hook file?, Does install stop when git's hooksPath points away from its hook directory?, Does check hold git's hooksPath?
+
+Problem: a repository with a hook of its own loses it when install points git's hooksPath at the tool's directory.
+Standard: hook managers such as pre-commit and lefthook keep the hook they find and run it after their own.
+
+- A) Yes.
+  Why: the repository's lint or test hook keeps running, and check runs in front of it.
+  Costs: a second hook file per hook name in the tool's directory, and a hook text that calls it.
+- B) No.
+  Why: one hook per name, the tool's, and check judges the whole directory.
+  Costs: install silences a hook the repository had, and the owner finds it another home by hand.
+
+### Does the hook run the repository's own hook once check passes?
+depends: check, install, Does a repository keep hooks of its own beside the tool's?=A
+unrelated: Does check look at the ledger before a push?, Does check at a commit read the staged files?, Does check fail a planner's commit that reaches outside adrdom?, Does a commit run the reading of the whole set?, Does check in CI compare the ledger with the commit before the push?, Does a command refuse what check lets pass?, Does check hold the merge rule install writes for the ledger?, Does git track a file the tool can get again without the owner?, Does an owner command commit?, Does check fail an answered question whose text changed?, Does install write outside adrdom?, What does check do with a fault on a file awaiting approval?, What does the ban scan read?, Does install move a hook it finds into the repository's own hook file?, Does install stop when git's hooksPath points away from its hook directory?, Does check hold git's hooksPath?, Does ban refuse a word that appears in the repository?
+
+Problem: the hook text is fixed and check judges it line by line, so a line the repository adds to it fails every commit.
+Standard: a chaining hook runs the next hook with its own arguments and input and returns its exit code.
+
+- A) Yes.
+  Why: check refuses first; the repository's hook sees only what check passed, with git's arguments and input.
+  Costs: the hook text saves git's input for both, since the push check reads it; the own hook fails last.
+- B) No.
+  Why: the repository's hook runs first and may format or stage before check reads the staged files.
+  Costs: check judges what the own hook left, and a hook that stages files changes the commit under check.
+
+### Does install move a hook it finds into the repository's own hook file?
+depends: install, Does the hook run the repository's own hook once check passes?=A, Does a repository keep hooks of its own beside the tool's?=A
+unrelated: Does install put the embedding model outside the repository?, Does check look at the ledger before a push?, Does install fetch the embedding model?, Does install take the path of a satellite?, Does git track a file the tool can get again without the owner?, Does check hold the merge rule install writes for the ledger?, Does a command compute a move of its own?, Does install write a merge rule for the ledger?, Does install write outside adrdom?, Does an owner command commit?, Does check at a commit read the staged files?, Does check hold the files install writes?, Does uninstall remove a file install created?, Does install stop when git's hooksPath points away from its hook directory?, Does check hold git's hooksPath?
+
+Problem: a hook under .git/hooks stops running once hooksPath points elsewhere, and a hook in the tool's directory is overwritten.
+Standard: pre-commit renames the hook it finds to .legacy and runs it from its own hook.
+
+- A) Yes.
+  Why: the hook runs from the first commit after install, with nothing to type by hand.
+  Costs: install writes a tracked file it does not own, and a hook that relies on its old path breaks.
+- B) No.
+  Why: install writes only its own files, and the owner moves the hook knowing what moved.
+  Costs: the hook install found is silent until the owner moves it by hand.
+
+### Does install stop when git's hooksPath points away from its hook directory?
+depends: install, Does a repository keep hooks of its own beside the tool's?=A, Does the hook run the repository's own hook once check passes?=A
+unrelated: Does check look at the ledger before a push?, Does install put the embedding model outside the repository?, Does git track a file the tool can get again without the owner?, Does install take the path of a satellite?, Does check hold the merge rule install writes for the ledger?, Does install write a merge rule for the ledger?, Does check fail a planner's commit that reaches outside adrdom?, Does check hold the files install writes?, Does install write outside adrdom?, Does uninstall remove a file install created?, What does install write in a satellite?, Does install move a hook it finds into the repository's own hook file?, Does check hold git's hooksPath?
+
+Problem: a hooksPath another hook manager set is repointed at the tool's directory without a word, and that manager sets it back at its next run.
+Standard: pre-commit refuses to install while core.hooksPath is set.
+
+- A) Yes.
+  Why: two managers of one git setting cannot both hold it; the owner picks one and knows why.
+  Costs: install stops in a husky repository until the owner removes the other manager or routes it through the own hook.
+- B) No.
+  Why: install finishes, and the own hook file calls the hook at the old path, so both run.
+  Costs: the other manager sets hooksPath back at its next run and the tool's hooks go silent.
+
+### Does check hold git's hooksPath?
+depends: check, Does a repository keep hooks of its own beside the tool's?=A, Does check hold the files install writes?
+unrelated: Does check look at the ledger before a push?, Does check hold the merge rule install writes for the ledger?, Does check at a commit read the staged files?, Does git track a file the tool can get again without the owner?, Does check fail a planner's commit that reaches outside adrdom?, Does check in CI compare the ledger with the commit before the push?, Does check print a line with no move on it?, Does check at a merge look for the ledger rows of both branches?, Does install write outside adrdom?, Does check fail a ledger whose rows changed place?, What does check do when an origin is absent?, What does the ban scan read?, Does the hook run the repository's own hook once check passes?, Does install move a hook it finds into the repository's own hook file?, Does install stop when git's hooksPath points away from its hook directory?
+
+Problem: a hooksPath set away from the tool's directory leaves every hook file in place and current while none of them runs.
+Standard: a tool that depends on a setting verifies the setting, not only the files behind it.
+
+- A) Yes.
+  Why: a repointed hooksPath is a finding wherever check runs, by hand or in CI, with install as the move.
+  Costs: check reads git's configuration; a fresh clone and a CI checkout have no hooksPath until install runs there.
+- B) No.
+  Why: check judges files; git's configuration is the owner's machine.
+  Costs: a manager that repoints hooksPath silences the tool's hooks, and only a commit that should have failed shows it.
