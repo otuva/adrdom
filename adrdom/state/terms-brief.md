@@ -42,3 +42,6 @@
 - session (sessions): One run of an agent, from open to close.
 - planner (planners): A session that makes plans.
 - builder (builders): A session that builds decisions.
+- record (records): The files under adrdom that hold the decisions, the terms and the ledger of one owner.
+- satellite (satellites): A repository whose record is in another repository.
+- primary (primaries): The repository that holds a satellite's record.
