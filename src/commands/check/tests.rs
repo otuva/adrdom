@@ -120,9 +120,10 @@ pub(super) fn check_tests(
     }
 
     // In the order of the identifiers, so two runs print the same lines.
+    let builds = crate::satellite::builds(in_satellite, &missing);
     let mut untested: Vec<&String> = current
         .iter()
-        .filter(|id| !in_satellite && missing.is_empty() && !test_ids.contains_key(*id))
+        .filter(|id| builds && !test_ids.contains_key(*id))
         .collect();
     untested.sort();
     for id in untested {

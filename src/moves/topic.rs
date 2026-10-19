@@ -236,14 +236,16 @@ pub fn of_topic_file_with(
     tests: &HashMap<String, Vec<String>>,
     index: &crate::rules::RepoIndex,
 ) -> Report {
-    of_topic_file_judged(root, rf, all, terms_list, led, tests, index, false).0
+    let builds = crate::satellite::builds(false, &crate::satellite::missing(root));
+    of_topic_file_judged(root, rf, all, terms_list, led, tests, index, builds).0
 }
 
 /// `of_topic_file_with` and the file's own judgement
 /// (`rules::judge_topic_file_in`) that the report's findings start from,
 /// before the findings on the records as a whole, the terms gate and the
 /// struck questions join them: what `check` files by rule for the file.
-/// `in_satellite`: `root` is the record of a satellite's primary.
+/// `builds`: whether a decision with no test has a build move
+/// (`satellite::builds`).
 #[allow(clippy::too_many_arguments)]
 pub fn of_topic_file_judged(
     root: &std::path::Path,
@@ -253,7 +255,7 @@ pub fn of_topic_file_judged(
     led: &Ledger,
     tests: &HashMap<String, Vec<String>>,
     index: &crate::rules::RepoIndex,
-    in_satellite: bool,
+    builds: bool,
 ) -> (Report, Vec<Finding>) {
     let shared = &index.planning;
     let plan_ok =
@@ -275,7 +277,7 @@ pub fn of_topic_file_judged(
         tests,
         &planning,
         crate::session::role(root),
-        !in_satellite && crate::satellite::missing(root).is_empty(),
+        builds,
     );
     // While adrdom/terms.md is not approved, approve, ask and answer stop on
     // it: its gate is the file's finding, and their moves wait on it.

@@ -60,7 +60,7 @@ pub(crate) fn summary(r: &Records, ids: bool) -> Vec<Line> {
     lines.extend(out::report(&merged));
     // A satellite the list names and the disk lacks: a note, as check prints it.
     lines.extend(
-        crate::satellite::missing(&r.root)
+        r.missing
             .iter()
             .map(|row| Line::Finding(satellite_missing_finding(row))),
     );

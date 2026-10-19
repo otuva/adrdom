@@ -23,7 +23,7 @@ pub(crate) fn topic_file_report_judged(r: &Records, rf: &RecordFile) -> (Report,
         &r.led,
         &r.tests,
         r.index(),
-        r.satellite.is_some(),
+        r.builds(),
     )
 }
 

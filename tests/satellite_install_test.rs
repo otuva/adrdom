@@ -455,3 +455,71 @@ fn uninstall_in_a_satellite_with_the_record_missing_removes_nothing() {
     assert!(sat.join(".githooks/pre-commit").exists());
     assert!(sat.join("AGENTS.md").exists());
 }
+
+// adr: 0e16fbf3-1401-4538-bd12-25303994af10
+#[test]
+fn the_refusal_of_a_writing_command_prints_a_file_argument_as_the_primary_runs_it() {
+    let (primary, sat, _) = satellite_pair();
+    let back = rel_back(&primary, &sat);
+    let inside = format!("{}/adrdom/decisions/example.md", back);
+    let absolute = primary.join("adrdom/decisions/example.md");
+    for (cmd, given) in [
+        ("plan", inside.as_str()),
+        ("plan", absolute.to_str().unwrap()),
+        ("ask", inside.as_str()),
+    ] {
+        let out = adr(&sat, &[cmd, given], &[], "");
+        assert!(!out.status.success());
+        let want = format!(
+            "changes into {}, then runs: adr {} adrdom/decisions/example.md",
+            back, cmd
+        );
+        assert!(stderr(&out).contains(&want), "{}: {}", cmd, stderr(&out));
+    }
+    let out = adr_owner(&sat, &["approve", &inside, "authority"], "");
+    let want = format!(
+        "changes into {}, then runs: adr approve adrdom/decisions/example.md authority",
+        back
+    );
+    assert!(stderr(&out).contains(&want), "{}", stderr(&out));
+    // A path outside the primary is printed as given.
+    let out = adr(&sat, &["plan", "elsewhere/x.md"], &[], "");
+    assert!(
+        stderr(&out).contains("then runs: adr plan elsewhere/x.md"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+// adr: 7e756e04-dde0-4137-ad4f-646e52073398
+#[test]
+fn the_row_holds_no_credentials_of_an_http_origin_and_keeps_an_ssh_user() {
+    let (primary, sat) = primary_and_plain();
+    let r = rel(&primary, &sat);
+    run_git(
+        &sat,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://user:SECRETTOKEN@example.com/a.git",
+        ],
+    );
+    let out = adr(&primary, &["install", "--satellite", &r], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        satellites_tsv(&primary),
+        format!("{}\thttps://example.com/a.git\n", r)
+    );
+    run_git(
+        &sat,
+        &["remote", "set-url", "origin", "git@example.com:o/a.git"],
+    );
+    assert!(adr(&primary, &["install", "--satellite", &r], &[], "")
+        .status
+        .success());
+    assert_eq!(
+        satellites_tsv(&primary),
+        format!("{}\tgit@example.com:o/a.git\n", r)
+    );
+}

@@ -4,6 +4,7 @@
 //! satellite's files through the run's source. The primary's topic files,
 //! terms file, ledger, reader rows and blame files are the primary's own
 //! check to judge, not this one.
+use super::terms::terms_brief_ready;
 use super::{banned, brief, install, planner, tests, Failure};
 use crate::ledger;
 use crate::msg;
@@ -96,57 +97,74 @@ fn same(got: &str, want: &str) -> bool {
     )
 }
 
-/// The brief copy (per "Does check hold a satellite's brief to the
-/// primary's?"): the satellite's `adrdom/state/brief.md` against the
-/// primary's. At a commit with only the working tree right, the file is
-/// named as not staged.
-fn brief_copy(code: &Path, primary: &Path, source: &Source) -> Vec<Failure> {
-    let Some(want) = Source::WorkingTree.read(primary, repo::BRIEF_PATH) else {
-        return Vec::new();
-    };
-    let ok = |s: &Source| {
-        s.read(code, repo::BRIEF_PATH)
-            .is_some_and(|got| same(&got, &want))
-    };
+/// A copy the satellite holds of a file of the primary: `rel` in the
+/// satellite against `want`. At a commit with only the working tree right,
+/// the file is named as not staged.
+fn copy_failure(
+    code: &Path,
+    source: &Source,
+    rel: &str,
+    want: &str,
+    class: Class,
+    [not_staged, differs, missing]: [msg::Said; 3],
+) -> Vec<Failure> {
+    let ok = |s: &Source| s.read(code, rel).is_some_and(|got| same(&got, want));
     if ok(source) {
         return Vec::new();
     }
     let said = if *source == Source::Index && ok(&Source::WorkingTree) {
-        msg::install_file_not_staged(repo::BRIEF_PATH)
-    } else if source.exists(code, repo::BRIEF_PATH) {
-        msg::satellite_brief_differs()
+        not_staged
+    } else if source.exists(code, rel) {
+        differs
     } else {
-        msg::satellite_brief_missing()
+        missing
     };
-    vec![Failure::said(Class::Install, said)]
+    vec![Failure::said(class, said)]
+}
+
+/// The brief copy (per "Does check hold a satellite's brief to the
+/// primary's?"): the satellite's `adrdom/state/brief.md` against the
+/// primary's.
+fn brief_copy(code: &Path, primary: &Path, source: &Source) -> Vec<Failure> {
+    let Some(want) = Source::WorkingTree.read(primary, repo::BRIEF_PATH) else {
+        return Vec::new();
+    };
+    copy_failure(
+        code,
+        source,
+        repo::BRIEF_PATH,
+        &want,
+        Class::Install,
+        [
+            msg::install_file_not_staged(repo::BRIEF_PATH),
+            msg::satellite_brief_differs(),
+            msg::satellite_brief_missing(),
+        ],
+    )
 }
 
 /// The terms brief copy: the satellite's terms brief against the text built
-/// from the primary's terms file, once that file is approved with every id
-/// (the gate `check_terms` holds the primary's own terms brief to).
+/// from the primary's terms file, under the gate `check_terms` holds the
+/// primary's own terms brief to.
 fn terms_brief_copy(
     code: &Path,
     source: &Source,
     tf: &terms::TermsFile,
     led: &ledger::Ledger,
 ) -> Vec<Failure> {
-    if !state::terms_approved(led, tf) || !tf.missing_ids().is_empty() {
+    if !terms_brief_ready(led, tf) {
         return Vec::new();
     }
-    let want = terms::brief_text(tf);
-    let ok = |s: &Source| {
-        s.read(code, repo::TERMS_BRIEF_PATH)
-            .is_some_and(|got| same(&got, &want))
-    };
-    if ok(source) {
-        return Vec::new();
-    }
-    let said = if *source == Source::Index && ok(&Source::WorkingTree) {
-        msg::terms_brief_not_staged()
-    } else if source.exists(code, repo::TERMS_BRIEF_PATH) {
-        msg::satellite_terms_brief_differs()
-    } else {
-        msg::satellite_terms_brief_missing()
-    };
-    vec![Failure::said(Class::Terms, said)]
+    copy_failure(
+        code,
+        source,
+        repo::TERMS_BRIEF_PATH,
+        &terms::brief_text(tf),
+        Class::Terms,
+        [
+            msg::terms_brief_not_staged(),
+            msg::satellite_terms_brief_differs(),
+            msg::satellite_terms_brief_missing(),
+        ],
+    )
 }

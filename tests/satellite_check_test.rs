@@ -385,3 +385,36 @@ fn a_terms_brief_copy_that_differs_from_the_primary_terms_fails_until_install_ru
     let out = adr(&sat, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
 }
+
+#[test]
+fn terms_brief_drift_is_found_in_a_satellite_when_the_terms_were_approved_one_entry_at_a_time() {
+    let primary = init_repo();
+    assert!(adr(&primary, &["install"], &[], "").status.success());
+    std::fs::write(
+        primary.join("adrdom/terms.md"),
+        "# Terms\n\n## owner\ndefinition: The person the repository belongs to.\naliases: owners\n\n## greeting\ndefinition: The line the program prints.\naliases: greetings\n",
+    )
+    .unwrap();
+    for name in ["owner", "greeting"] {
+        let out = adr_owner(&primary, &["approve", "adrdom/terms.md", name], "");
+        assert!(out.status.success(), "{}", stderr(&out));
+    }
+    let satellite = init_repo();
+    let rel = relative_between(&primary, &satellite);
+    let out = adr(&primary, &["install", "--satellite", &rel], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let out = adr(&satellite, &["check"], &[], "");
+    assert!(!stdout(&out).contains("terms-brief"), "{}", stdout(&out));
+    let copy = satellite.join("adrdom/state/terms-brief.md");
+    let mut text = std::fs::read_to_string(&copy).unwrap();
+    text.push_str("drift\n");
+    std::fs::write(&copy, text).unwrap();
+    let out = adr(&satellite, &["check"], &[], "");
+    assert!(
+        stdout(&out)
+            .contains("adrdom/state/terms-brief.md differs from the primary's adrdom/terms.md"),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+}

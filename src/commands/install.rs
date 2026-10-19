@@ -711,15 +711,7 @@ fn run_satellite_of(root: &Path, given: &Path) -> i32 {
         out::eprint_stop(Command::Install, &text);
         1
     };
-    let abs = if given.is_absolute() {
-        given.to_path_buf()
-    } else {
-        match std::env::current_dir() {
-            Ok(cwd) => cwd.join(given),
-            Err(_) => return refuse(msg::satellite_not_a_repo(&shown)),
-        }
-    };
-    let sat = match fs::canonicalize(&abs) {
+    let sat = match satellite::absolute(given) {
         Ok(p) if p.join(".git").exists() => p,
         _ => return refuse(msg::satellite_not_a_repo(&shown)),
     };
@@ -743,7 +735,7 @@ fn run_satellite_of(root: &Path, given: &Path) -> i32 {
     );
     if result.is_ok() {
         let url = repo::git(&sat, &["remote", "get-url", "origin"])
-            .map(|u| u.trim().to_string())
+            .map(|u| satellite::without_userinfo(u.trim()))
             .unwrap_or_default();
         result = satellite::write_row(&primary, Row { path: to_sat, url })
             .map(|ev| events.extend(ev))
@@ -778,12 +770,13 @@ fn run_in_satellite(
     if let Some(given) = satellite_arg {
         // The path as the primary's root reads it, since that is where the
         // command runs.
-        let abs = if given.is_absolute() {
-            given.to_path_buf()
-        } else {
-            std::env::current_dir().unwrap_or_default().join(given)
+        let Ok(abs) = satellite::absolute(given) else {
+            out::eprint_stop(
+                Command::Install,
+                &msg::satellite_not_a_repo(&given.display().to_string()),
+            );
+            return 1;
         };
-        let abs = fs::canonicalize(&abs).unwrap_or(abs);
         let rel = satellite::relative_path(&place.record, &abs);
         out::eprint_stop(
             Command::Install,

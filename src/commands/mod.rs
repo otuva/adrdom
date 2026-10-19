@@ -20,12 +20,30 @@ pub(crate) fn refused_in_satellite(
     args: &[&str],
     actor: crate::msg::Actor,
 ) -> bool {
+    use crate::rules::Command;
     let Some(primary) = crate::satellite::primary_of(root) else {
         return false;
     };
+    // The move runs from the primary, so the file the command names is
+    // printed from the primary's root when it lies inside it (the other
+    // arguments, the entry of approve, as given).
+    let mut shown: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    if matches!(cmd, Command::Plan | Command::Ask | Command::Approve) {
+        if let (Some(file), Ok(record)) = (
+            shown.first_mut(),
+            std::fs::canonicalize(root.join(&primary)),
+        ) {
+            if let Ok(abs) = crate::satellite::absolute(std::path::Path::new(file.as_str())) {
+                if let Ok(inside) = abs.strip_prefix(&record) {
+                    *file = crate::satellite::relative_path(&record, &record.join(inside));
+                }
+            }
+        }
+    }
+    let shown: Vec<&str> = shown.iter().map(String::as_str).collect();
     crate::out::eprint_stop(
         cmd,
-        &crate::msg::record_elsewhere(cmd.as_str(), args, actor, &primary),
+        &crate::msg::record_elsewhere(cmd.as_str(), &shown, actor, &primary),
     );
     true
 }

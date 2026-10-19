@@ -96,6 +96,9 @@ pub(crate) struct Records {
     /// Where `show` runs when that is a satellite: `root` is then the
     /// primary's.
     pub(crate) satellite: Option<Place>,
+    /// The satellites the record's list names that have no checkout, read
+    /// once.
+    pub(crate) missing: Vec<crate::satellite::Row>,
     /// Every question's heading, every term's name and every blame file's
     /// name by its identifier: what turns an identifier on a line back into
     /// words.
@@ -144,6 +147,7 @@ impl Records {
             .collect();
         let (blame_files, unreadable_blame_files) = blame::load_all_with_errors(&root);
         let blame = blame::Index::of(blame_files, &led);
+        let missing = crate::satellite::missing(&root);
         let code_root = satellite.as_ref().map_or(&root, |p| &p.code);
         let tests = crate::commands::check::test_index(code_root, &repo::Source::WorkingTree);
         let mut names: HashMap<String, String> = terms_list
@@ -185,6 +189,7 @@ impl Records {
             unreadable_blame_files,
             tests,
             satellite,
+            missing,
             names,
             index: std::cell::OnceCell::new(),
             minted_terms: std::cell::OnceCell::from(minted),
@@ -204,6 +209,12 @@ impl Records {
         self.minted_terms
             .get_or_init(|| self.terms_file.as_ref().map(terms::minted_copy))
             .as_ref()
+    }
+
+    /// Whether a decision with no test has a build move
+    /// (`satellite::builds`).
+    pub(crate) fn builds(&self) -> bool {
+        crate::satellite::builds(self.satellite.is_some(), &self.missing)
     }
 
     pub(crate) fn index(&self) -> &rules::RepoIndex {

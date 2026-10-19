@@ -82,6 +82,8 @@ pub struct Row {
 
 fn parse(text: &str) -> Vec<Row> {
     text.lines()
+        // A tracked file may be checked out with CRLF line ends.
+        .map(|l| l.trim_end_matches('\r'))
         .filter(|l| !l.trim().is_empty())
         .map(|l| match l.split_once('\t') {
             Some((p, u)) => Row {
@@ -149,6 +151,49 @@ pub fn missing(primary_root: &Path) -> Vec<Row> {
         .collect()
 }
 
+/// Whether a command may build decisions here: not in a satellite, and not
+/// in a primary while a satellite of its list is missing (`missing` is
+/// `missing(primary_root)`, read once by the caller).
+pub fn builds(in_satellite: bool, missing: &[Row]) -> bool {
+    !in_satellite && missing.is_empty()
+}
+
+/// The absolute, canonical form of `given`, a path as typed on the command
+/// line and resolved against the current directory. A path that does not
+/// exist yet is canonical up to its last component. A failure is returned,
+/// never a relative path.
+pub fn absolute(given: &Path) -> Result<PathBuf, String> {
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let abs = cwd.join(given);
+    match fs::canonicalize(&abs) {
+        Ok(p) => Ok(p),
+        Err(e) => match (abs.parent(), abs.file_name()) {
+            (Some(dir), Some(name)) => fs::canonicalize(dir)
+                .map(|d| d.join(name))
+                .map_err(|_| e.to_string()),
+            _ => Err(e.to_string()),
+        },
+    }
+}
+
+/// `url` without the userinfo of an http or https url (`user:token@`); any
+/// other url is returned as it is.
+pub fn without_userinfo(url: &str) -> String {
+    let lower = url.to_ascii_lowercase();
+    let Some(scheme) = ["http://", "https://"]
+        .into_iter()
+        .find(|s| lower.starts_with(s))
+    else {
+        return url.to_string();
+    };
+    let rest = &url[scheme.len()..];
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    match rest[..end].rfind('@') {
+        Some(at) => format!("{}{}", &url[..scheme.len()], &rest[at + 1..]),
+        None => url.to_string(),
+    }
+}
+
 /// The path from `from` to `to`, both canonical and absolute, `/`
 /// separated; `.` when they are the same.
 pub fn relative_path(from: &Path, to: &Path) -> String {
@@ -179,6 +224,59 @@ mod tests {
         assert_eq!(relative_path(p("/a/b"), p("/a/c")), "../c");
         assert_eq!(relative_path(p("/a/b"), p("/a/b/c/d")), "c/d");
         assert_eq!(relative_path(p("/a/b/c"), p("/a")), "../..");
+    }
+
+    #[test]
+    fn crlf_lines_parse_like_lf_lines() {
+        let rows = parse("../a\r\n\r\n../b\thttps://h/o/r.git\r\n");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].path, "../a");
+        assert_eq!(rows[0].url, "");
+        assert_eq!(rows[1].path, "../b");
+        assert_eq!(rows[1].url, "https://h/o/r.git");
+        let dir = std::env::temp_dir().join(format!("adr-sat-crlf-{}", std::process::id()));
+        fs::create_dir_all(dir.join("adrdom")).unwrap();
+        fs::write(dir.join(repo::PRIMARY_PATH), "../primary\r\n").unwrap();
+        assert_eq!(primary_of(&dir).as_deref(), Some("../primary"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn userinfo_is_dropped_from_http_urls_only() {
+        assert_eq!(
+            without_userinfo("https://user:TOKEN@host/o/r.git"),
+            "https://host/o/r.git"
+        );
+        assert_eq!(
+            without_userinfo("http://TOKEN@host:8080/r"),
+            "http://host:8080/r"
+        );
+        assert_eq!(without_userinfo("HTTPS://u:p@host/r"), "HTTPS://host/r");
+        assert_eq!(
+            without_userinfo("https://host/o/r@2.git"),
+            "https://host/o/r@2.git"
+        );
+        assert_eq!(
+            without_userinfo("https://host/o/r.git"),
+            "https://host/o/r.git"
+        );
+        assert_eq!(
+            without_userinfo("ssh://git@host/o/r.git"),
+            "ssh://git@host/o/r.git"
+        );
+        assert_eq!(without_userinfo("git@host:o/r.git"), "git@host:o/r.git");
+        assert_eq!(without_userinfo(""), "");
+    }
+
+    #[test]
+    fn builds_needs_a_primary_with_no_missing_satellite() {
+        let row = Row {
+            path: "../a".into(),
+            url: String::new(),
+        };
+        assert!(builds(false, &[]));
+        assert!(!builds(true, &[]));
+        assert!(!builds(false, &[row]));
     }
 
     #[test]
