@@ -18,6 +18,33 @@ use std::path::Path;
 /// disk (per "Does check at a commit read the staged files?").
 pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> {
     let mut test_ids: HashMap<String, Vec<String>> = HashMap::new();
+    scan(root, source, "", &mut test_ids);
+    // Per "Does check in the primary count a tie in a satellite?": the primary
+    // also reads each satellite of its list that has a checkout, from its
+    // working tree. One that is missing is not scanned, never cloned.
+    for row in crate::satellite::rows(root) {
+        if !root.join(&row.path).join(".git").exists() {
+            continue;
+        }
+        let dir = root.join(&row.path);
+        scan(
+            &dir,
+            &Source::WorkingTree,
+            &format!("{}/", row.path),
+            &mut test_ids,
+        );
+    }
+    test_ids
+}
+
+/// The note for a satellite with no checkout at its path.
+pub(crate) fn satellite_missing_finding(row: &crate::satellite::Row) -> Finding {
+    Finding::said(Class::Untested, msg::satellite_missing(&row.path, &row.url))
+}
+
+/// Adds every tie of the tracked files of the repository at `root` to
+/// `test_ids`, each location led by `prefix`.
+fn scan(root: &Path, source: &Source, prefix: &str, test_ids: &mut HashMap<String, Vec<String>>) {
     let adrdom_prefix = format!("{}/", repo::ADRDOM_DIR);
     if let Some(list) = repo::git_paths(root, &["ls-files"]) {
         for path in &list {
@@ -35,13 +62,12 @@ pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> 
                         test_ids
                             .entry(id_tok)
                             .or_default()
-                            .push(msg::location(path, i + 1));
+                            .push(msg::location(&format!("{}{}", prefix, path), i + 1));
                     }
                 }
             }
         }
     }
-    test_ids
 }
 
 pub(super) fn check_tests(
@@ -51,6 +77,7 @@ pub(super) fn check_tests(
     tests: Option<&HashMap<String, Vec<String>>>,
     source: &Source,
     role: crate::session::Role,
+    in_satellite: bool,
 ) -> Vec<Finding> {
     let mut notes = Vec::new();
 
@@ -80,10 +107,24 @@ pub(super) fn check_tests(
         }
     }
 
+    // Per "Does check in a satellite report an untested decision?" (No), and
+    // per "What does check in the primary report for a satellite missing at
+    // its path?": the satellite is named with its url, and no decision is
+    // untested until it is found.
+    let missing = if in_satellite {
+        Vec::new()
+    } else {
+        crate::satellite::missing(root)
+    };
+    for row in &missing {
+        notes.push(satellite_missing_finding(row));
+    }
+
     // In the order of the identifiers, so two runs print the same lines.
+    let builds = crate::satellite::builds(in_satellite, &missing);
     let mut untested: Vec<&String> = current
         .iter()
-        .filter(|id| !test_ids.contains_key(*id))
+        .filter(|id| builds && !test_ids.contains_key(*id))
         .collect();
     untested.sort();
     for id in untested {

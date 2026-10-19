@@ -24,6 +24,14 @@ pub fn run(given: PathBuf) -> i32 {
             return 1;
         }
     };
+    if super::refused_in_satellite(
+        &root,
+        Command::Ask,
+        &[&given.display().to_string()],
+        Actor::Agent,
+    ) {
+        return 1;
+    }
     let ledger_path = root.join(repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     // The path as the shell that ran ask reads it, from the repository

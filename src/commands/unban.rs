@@ -19,6 +19,10 @@ pub fn run() -> i32 {
         }
     };
 
+    if super::refused_in_satellite(&root, Command::Unban, &[], Actor::Owner) {
+        return 1;
+    }
+
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
         out::eprint_stop(

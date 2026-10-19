@@ -169,6 +169,7 @@ aliases: answer sets
 
 ## origin
 id: ecb18413-cb3e-437e-9444-3cdd406ed67d
+terms: records=68536615-d17e-4399-ad6c-2a2cf8622b2b
 definition: A prose file outside adrdom whose text the records take in.
 aliases: origins
 
@@ -209,29 +210,31 @@ aliases: embedding indexes
 
 ## neighbour
 id: daec9ffd-676f-4111-a359-2827bfd4527c
-terms: embedding=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+terms: embedding=fa0b0e24-b7cf-471b-94b6-6d167e8ad269, records=68536615-d17e-4399-ad6c-2a2cf8622b2b
 definition: A text in the records whose embedding is near a new text's embedding.
 aliases: neighbours, neighbor, neighbors
 
 ## reader
 id: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, records=68536615-d17e-4399-ad6c-2a2cf8622b2b
 definition: A program apart from the agent that reads records on the owner's behalf.
 aliases: readers
 
 ## status
 id: 209081f4-864f-4ef6-8909-65da87f135e5
+terms: records=68536615-d17e-4399-ad6c-2a2cf8622b2b
 definition: The position a thing in the records is at, one of a closed set the tool holds.
 aliases: statuses
 
 ## move
 id: d904dc0d-231f-4e93-ac74-7babe888107d
-terms: status=209081f4-864f-4ef6-8909-65da87f135e5
+terms: records=68536615-d17e-4399-ad6c-2a2cf8622b2b, status=209081f4-864f-4ef6-8909-65da87f135e5
 definition: The step a thing in the records takes next from the status it is in, and who takes it.
 aliases: moves
 
 ## finding
 id: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862
+terms: records=68536615-d17e-4399-ad6c-2a2cf8622b2b
 definition: The report of one rule that one thing in the records breaks.
 aliases: findings
 
@@ -252,3 +255,21 @@ id: c49997ee-10e7-48e0-b66b-43f8b09758a6
 terms: decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, session=3afef03f-9017-4638-9759-e010d44d536b
 definition: A session that builds decisions.
 aliases: builders
+
+## record
+id: 68536615-d17e-4399-ad6c-2a2cf8622b2b
+terms: decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb
+definition: The files under adrdom that hold the decisions, the terms and the ledger of one owner.
+aliases: records
+
+## satellite
+id: dd50488e-a8cd-4778-aecc-72295ffd8671
+terms: record=68536615-d17e-4399-ad6c-2a2cf8622b2b
+definition: A repository whose record is in another repository.
+aliases: satellites
+
+## primary
+id: c6fc0041-dead-4e31-9c19-8913c1bdfa29
+terms: record=68536615-d17e-4399-ad6c-2a2cf8622b2b, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
+definition: The repository that holds a satellite's record.
+aliases: primaries

@@ -9,6 +9,13 @@ use crate::state::{self, rel_path};
 use crate::terms;
 use std::path::Path;
 
+/// Whether the terms brief is held to the terms file: the file is approved as
+/// it stands and every entry has its id. The one gate `check_terms` and the
+/// terms brief copy of a satellite share.
+pub(super) fn terms_brief_ready(led: &Ledger, tf: &terms::TermsFile) -> bool {
+    state::terms_approved(led, tf) && tf.missing_ids().is_empty()
+}
+
 /// `terms`: shape/approval failures on `adrdom/terms.md` (read through
 /// `source` -- the index when `check` is judging a commit, the working
 /// tree otherwise, per "Does check at a commit read the staged files?").
@@ -48,7 +55,7 @@ pub(super) fn check_terms(
     // can never match a `terms` ledger row `approve` wrote), so it is
     // caught by the same not-approved gate below rather than its own
     // separate check.
-    let missing_ids = !tf.missing_ids().is_empty();
+    let ready = terms_brief_ready(led, &tf);
 
     let approved = state::terms_approved(led, &tf);
 
@@ -83,7 +90,7 @@ pub(super) fn check_terms(
         out.push(r);
     }
 
-    if !approved || missing_ids {
+    if !ready {
         // The owner's move is named only when `approve` would take the
         // file: with a refusal above, the agent's move comes first.
         // One finding per entry that waits, each with its own approve (per

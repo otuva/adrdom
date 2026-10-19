@@ -22,11 +22,18 @@ const CODEX_RULES: &str = ".codex/rules/adrdom.rules";
 /// move: running install again would write nothing, so naming install there
 /// names a move that clears nothing.
 pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
-    let staged = judge(root, source);
+    check_install_in(root, source, false)
+}
+
+/// `check_install` for a satellite when `satellite`: install writes neither
+/// the merge rule, the ignore rule nor the binary's brief there (per "What
+/// does install write in a satellite?"), so they are not judged.
+pub(super) fn check_install_in(root: &Path, source: &Source, satellite: bool) -> Vec<Failure> {
+    let staged = judge(root, source, satellite);
     if !matches!(source, Source::Index) {
         return staged.into_iter().map(|(_, f)| f).collect();
     }
-    let on_disk: Vec<&'static str> = judge(root, &Source::WorkingTree)
+    let on_disk: Vec<&'static str> = judge(root, &Source::WorkingTree, satellite)
         .into_iter()
         .map(|(p, _)| p)
         .collect();
@@ -48,7 +55,7 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
 
 /// Every file install writes that `source` does not hold as install writes
 /// it, each with the path it is about.
-fn judge(root: &Path, source: &Source) -> Vec<(&'static str, Failure)> {
+fn judge(root: &Path, source: &Source, satellite: bool) -> Vec<(&'static str, Failure)> {
     let mut out: Vec<(&'static str, Failure)> = Vec::new();
 
     // The git hooks are checked unconditionally, the same as AGENTS.md
@@ -76,59 +83,61 @@ fn judge(root: &Path, source: &Source) -> Vec<(&'static str, Failure)> {
         crate::commands::install::PRE_PUSH_HOOK,
     );
 
-    // The ledger's merge rule (Decision 8, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c):
-    // checked unconditionally, the same as the git hooks above -- install
-    // writes this file on every install, behind no agent flag. Whole-file
-    // comparison against `GITATTRIBUTES_CONTENT`, the one source install's
-    // own writer (`install_gitattributes`) uses to decide the same
-    // question, so the two can never disagree about whether it's current.
-    match source.read(root, repo::GITATTRIBUTES_PATH) {
-        Some(content) => {
-            if content != crate::commands::install::GITATTRIBUTES_CONTENT {
-                out.push((
-                    repo::GITATTRIBUTES_PATH,
-                    Failure::said(Class::Install, msg::gitattributes_differs()),
-                ));
+    if !satellite {
+        // The ledger's merge rule (Decision 8, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c):
+        // checked unconditionally, the same as the git hooks above -- install
+        // writes this file on every install, behind no agent flag. Whole-file
+        // comparison against `GITATTRIBUTES_CONTENT`, the one source install's
+        // own writer (`install_gitattributes`) uses to decide the same
+        // question, so the two can never disagree about whether it's current.
+        match source.read(root, repo::GITATTRIBUTES_PATH) {
+            Some(content) => {
+                if content != crate::commands::install::GITATTRIBUTES_CONTENT {
+                    out.push((
+                        repo::GITATTRIBUTES_PATH,
+                        Failure::said(Class::Install, msg::gitattributes_differs()),
+                    ));
+                }
             }
+            None => out.push((
+                repo::GITATTRIBUTES_PATH,
+                Failure::said(Class::Install, msg::gitattributes_missing()),
+            )),
         }
-        None => out.push((
-            repo::GITATTRIBUTES_PATH,
-            Failure::said(Class::Install, msg::gitattributes_missing()),
-        )),
-    }
 
-    // The rule that keeps the index out of git, held like the file above.
-    match source.read(root, repo::GITIGNORE_PATH) {
-        Some(content) => {
-            if content != crate::commands::install::GITIGNORE_CONTENT {
-                out.push((
-                    repo::GITIGNORE_PATH,
-                    Failure::said(Class::Install, msg::gitignore_differs()),
-                ));
+        // The rule that keeps the index out of git, held like the file above.
+        match source.read(root, repo::GITIGNORE_PATH) {
+            Some(content) => {
+                if content != crate::commands::install::GITIGNORE_CONTENT {
+                    out.push((
+                        repo::GITIGNORE_PATH,
+                        Failure::said(Class::Install, msg::gitignore_differs()),
+                    ));
+                }
             }
+            None => out.push((
+                repo::GITIGNORE_PATH,
+                Failure::said(Class::Install, msg::gitignore_missing()),
+            )),
         }
-        None => out.push((
-            repo::GITIGNORE_PATH,
-            Failure::said(Class::Install, msg::gitignore_missing()),
-        )),
-    }
 
-    // The brief's text: install writes it on every install, and the marked
-    // section of AGENTS.md names it. Judged by the comparison install's own
-    // writer uses, so the two never disagree.
-    match source.read(root, repo::BRIEF_PATH) {
-        Some(content) => {
-            if !crate::commands::install::brief_is_current(&content) {
-                out.push((
-                    repo::BRIEF_PATH,
-                    Failure::said(Class::Install, msg::brief_file_differs()),
-                ));
+        // The brief's text: install writes it on every install, and the marked
+        // section of AGENTS.md names it. Judged by the comparison install's own
+        // writer uses, so the two never disagree.
+        match source.read(root, repo::BRIEF_PATH) {
+            Some(content) => {
+                if !crate::commands::install::brief_is_current(&content) {
+                    out.push((
+                        repo::BRIEF_PATH,
+                        Failure::said(Class::Install, msg::brief_file_differs()),
+                    ));
+                }
             }
+            None => out.push((
+                repo::BRIEF_PATH,
+                Failure::said(Class::Install, msg::brief_file_missing()),
+            )),
         }
-        None => out.push((
-            repo::BRIEF_PATH,
-            Failure::said(Class::Install, msg::brief_file_missing()),
-        )),
     }
 
     // AGENTS.md is checked unconditionally; CLAUDE.md's import is checked

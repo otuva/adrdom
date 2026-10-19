@@ -10,10 +10,13 @@ mod plan;
 mod planner;
 mod push;
 mod reader;
+mod satellite;
 mod terms;
 mod tests;
 
 pub(crate) use banned::collect_targets;
+pub(crate) use satellite::report as satellite_report;
+pub(crate) use tests::satellite_missing_finding;
 pub use tests::test_index;
 
 use crate::depends;
@@ -24,6 +27,7 @@ use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
 use crate::rules;
 use crate::rules::{Class, Command};
+use crate::satellite::{Located, Place};
 use crate::state;
 use crate::terms as terms_mod;
 use crate::view;
@@ -326,7 +330,7 @@ fn build(
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
     if staged || message.is_some() {
-        push_failures(&mut failures, planner::check_commit(root));
+        push_failures(&mut failures, planner::check_commit(root, root));
     }
     let (brief_failures, brief_notes) = brief::check_brief(
         root,
@@ -345,6 +349,7 @@ fn build(
         tests,
         &source,
         crate::session::role(root),
+        false,
     );
     let (tells_failures, tells_notes) =
         parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, led);
@@ -408,19 +413,34 @@ fn check_args(staged: bool, message: Option<&Path>, since: Option<&str>) -> Vec<
 /// notes; a pass prints nothing, by hand or in a hook (per "Does check print a
 /// line with no move on it?", bd83aa22 A).
 pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
-    if push {
-        return push::run();
-    }
-
-    let root = match repo::find_root() {
-        Some(r) => r,
-        None => {
+    let place = match crate::satellite::locate() {
+        Located::NotARepo => {
+            if push {
+                return push::run();
+            }
             let args = check_args(staged, message.as_deref(), since.as_deref());
             let args: Vec<&str> = args.iter().map(String::as_str).collect();
             out::eprint(&[stopped(msg::not_a_repo("check", &args, Actor::Agent))]);
             return 1;
         }
+        Located::RecordMissing { primary, .. } => {
+            out::eprint(&[stopped(msg::record_missing("check", &primary))]);
+            return 1;
+        }
+        Located::Here(place) => place,
     };
+    if place.is_satellite() {
+        // A satellite's git holds no ledger rows to compare, so a push has
+        // nothing to judge and no decision says otherwise.
+        if push {
+            return 0;
+        }
+        return run_in_satellite(&place, staged, message.as_deref());
+    }
+    if push {
+        return push::run();
+    }
+    let root = place.code;
 
     // The commit-msg hook: the staged files were judged by the pre-commit
     // hook of the same commit, so only the message is read, for banned
@@ -468,6 +488,47 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
             .map(Line::Finding),
     );
     lines.extend(report.moves.into_iter().map(Line::Move));
+    out::print(&lines);
+    exit_code
+}
+
+/// `check` in a satellite (per "What does check in a satellite read the
+/// record from?"). A satellite's git holds no ledger rows, so a push and
+/// `--since` have nothing to compare there: a push passes and `since` is
+/// not read (`run`). The commit-msg hook reads the message for banned words only,
+/// except at a merge, where the whole report is read at the index.
+fn run_in_satellite(place: &Place, staged: bool, message: Option<&Path>) -> i32 {
+    // `--since` is not read: no ledger rows to compare.
+    let merging = repo::git(&place.code, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some();
+    if let Some(m) = message.filter(|_| !merging) {
+        let mut stops: Vec<String> = Vec::new();
+        let found = banned::check_banned_in(
+            &place.record,
+            &Source::WorkingTree,
+            &place.code,
+            false,
+            Some(m),
+            &mut stops,
+        );
+        let mut lines: Vec<Line> = stops.into_iter().map(stopped).collect();
+        lines.extend(found.into_iter().map(Line::Finding));
+        out::print(&lines);
+        return if lines.is_empty() { 0 } else { 1 };
+    }
+    let report = satellite::report(place, staged, message, None);
+    let exit_code = if report.failures.is_empty() && report.stops.is_empty() {
+        0
+    } else {
+        1
+    };
+    let mut lines: Vec<Line> = report.stops.into_iter().map(stopped).collect();
+    lines.extend(
+        report
+            .failures
+            .into_iter()
+            .chain(report.notes)
+            .map(Line::Finding),
+    );
     out::print(&lines);
     exit_code
 }

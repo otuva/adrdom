@@ -25,6 +25,13 @@ pub fn run(file: PathBuf, entry: Option<String>) -> i32 {
         }
     };
 
+    let given = file.display().to_string();
+    let mut args = vec![given.as_str()];
+    args.extend(entry.as_deref());
+    if super::refused_in_satellite(&root, Command::Approve, &args, Actor::Owner) {
+        return 1;
+    }
+
     // One line per ledger row written, or the findings that stopped it (per
     // "What does a command that writes print?", 069a6b4a A).
     match actions::do_approve(&root, &file, entry.as_deref()) {

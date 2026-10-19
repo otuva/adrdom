@@ -27,6 +27,9 @@ enum Command {
         /// Also fetch the embedding model and the onnxruntime library into the user cache
         #[arg(long)]
         planning: bool,
+        /// Make the git repository at this path a satellite of this one
+        #[arg(long, conflicts_with_all = ["claude", "codex", "planning"])]
+        satellite: Option<PathBuf>,
     },
     /// Owner: remove what install wrote outside adrdom/
     Uninstall,
@@ -134,7 +137,8 @@ fn main() {
             claude,
             codex,
             planning,
-        } => commands::install::run(claude, codex, planning),
+            satellite,
+        } => commands::install::run(claude, codex, planning, satellite),
         Command::Uninstall => commands::uninstall::run(),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Plan { topic_file } => commands::plan::run(topic_file),

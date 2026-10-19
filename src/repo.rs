@@ -43,6 +43,12 @@ pub const TERMS_BRIEF_PATH: &str = "adrdom/state/terms-brief.md";
 /// the file `install` writes under adrdom, which the marked section of
 /// AGENTS.md names with an @ line, and `check` holds to.
 pub const BRIEF_PATH: &str = "adrdom/state/brief.md";
+/// The file of a satellite holding the path to its primary, relative to the
+/// satellite's root (per "Does install take the path of a satellite?").
+pub const PRIMARY_PATH: &str = "adrdom/primary";
+/// The primary's list of its satellites, one `<path>\t<url>` row each (per
+/// "What does the primary hold of a satellite?").
+pub const SATELLITES_PATH: &str = "adrdom/state/satellites.tsv";
 /// Where the hashed ban list lives, relative to the repo root: the one
 /// literal for this path, used by every site that reads or writes it
 /// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
