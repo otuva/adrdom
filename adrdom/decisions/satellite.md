@@ -18,6 +18,8 @@ Standard: a hub-and-spoke tool learns its spokes at the hub, once, by one comman
   Why: install keeps one shape; a satellite is made by hand.
   Costs: two files written by hand that have to agree, with nothing to say when they do not.
 
+**Answer:** A
+
 ### What does check in a satellite read the record from?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 68536615-d17e-4399-ad6c-2a2cf8622b2b, dd50488e-a8cd-4778-aecc-72295ffd8671, c6fc0041-dead-4e31-9c19-8913c1bdfa29
 unrelated: 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 0c3d498a-c540-47f3-8384-050fc044c109, 6108b8b2-911e-443b-abe0-4c6f8b407384, d904dc0d-231f-4e93-ac74-7babe888107d, bd83aa22-94fc-49ac-b215-a82990ff8c65, 48c47c42-6720-44ca-b47d-12a61ba8ee9f, 3460d220-e523-448b-aeff-baa8051b7d06, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, 80b89c24-7d65-43f4-bb03-55e9d85c327d, fc118154-4172-48db-bddb-75a691894edf, a8280dd1-4bfa-4eeb-9656-1cd06381590a, 7e756e04-dde0-4137-ad4f-646e52073398, bf6697e3-8832-4b90-b036-8fecedb55406, ce19c883-c61d-477b-a6d4-fee5134c6e9a, 19e1c023-a678-4842-a414-bb0e45c41601, 1af76f91-5644-42ef-97ea-8f70f934c26c, 05141f49-d9d2-407c-b60c-ebb195a05864, 0e16fbf3-1401-4538-bd12-25303994af10, 03f47941-43c5-479f-bf64-2d030361092d, 563ba307-4c7d-4945-9c89-46dfa61cb88d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710
@@ -36,6 +38,8 @@ Standard: a tool with a remote configuration reads it from the one place named, 
 - C) A copy of the record install writes into the satellite.
   Why: a satellite stands alone, with no checkout beside it.
   Costs: every answer in the primary waits for a copy, and two records drift.
+
+**Answer:** A
 
 ### What does the primary hold of a satellite?
 depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, dd50488e-a8cd-4778-aecc-72295ffd8671
@@ -56,6 +60,8 @@ Standard: a hub keeps the list of its spokes beside its own state, one row each.
   Why: the smallest tool.
   Costs: the primary's check cannot count a satellite's ties.
 
+**Answer:** A
+
 ### Does a command that writes the record run in a satellite?
 depends: dd50488e-a8cd-4778-aecc-72295ffd8671, 68536615-d17e-4399-ad6c-2a2cf8622b2b, cb15b115-610f-4c82-a8f7-6bae9c131dc0=*
 unrelated: aac5c313-dedd-466b-a0c3-ead5e99ce913, aefa7f3c-70c3-412e-8d73-16ff9e2b703a, f53ac3b9-efde-427c-8027-19988aa8fda7, 1af76f91-5644-42ef-97ea-8f70f934c26c, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, a9e9e370-7768-4a79-b67b-7fe0926b5670, e78b8297-fd89-4e09-9c3e-9eeb0fd0f654, 80b89c24-7d65-43f4-bb03-55e9d85c327d, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 8081c82d-e5c6-485b-a302-07d586f1a01b, fc118154-4172-48db-bddb-75a691894edf, a8280dd1-4bfa-4eeb-9656-1cd06381590a, 7e756e04-dde0-4137-ad4f-646e52073398, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 4f04bae4-98e3-48eb-9403-3257268e2d87, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, bf27b020-4e60-48e0-8d3b-5f818e6bf6d8, 03f47941-43c5-479f-bf64-2d030361092d, 563ba307-4c7d-4945-9c89-46dfa61cb88d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710
@@ -71,6 +77,8 @@ Standard: a command that would write another repository's state refuses and name
 - B) Yes.
   Why: the command writes through to the primary from any directory.
   Costs: a commit in the primary made from a satellite, by a hook that runs in the wrong repository.
+
+**Answer:** A
 
 ### What does install write in a satellite?
 depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, dd50488e-a8cd-4778-aecc-72295ffd8671, 937bc0a6-691d-4d67-91c6-cc9e956ebc96=A
@@ -88,6 +96,8 @@ Standard: every repository an agent works in carries the same brief and the same
   Why: nothing to keep equal.
   Costs: an agent that opens the satellite alone reads no brief.
 
+**Answer:** A
+
 ### Does check in the primary count a tie in a satellite?
 depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, dd50488e-a8cd-4778-aecc-72295ffd8671, 7e756e04-dde0-4137-ad4f-646e52073398=A|B
 unrelated: 3460d220-e523-448b-aeff-baa8051b7d06, db07a54d-4d80-4035-a9ef-eabcc0c872b3, f53ac3b9-efde-427c-8027-19988aa8fda7, 24bdcbde-d9f4-45a0-8c3d-37e53569e950, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 48c47c42-6720-44ca-b47d-12a61ba8ee9f, a26876ba-5789-4d05-965e-853d00d9edd2, 19e1c023-a678-4842-a414-bb0e45c41601, ce19c883-c61d-477b-a6d4-fee5134c6e9a, aac5c313-dedd-466b-a0c3-ead5e99ce913, 86d5e944-ecfa-44bc-9819-83ee4b96890d, fc118154-4172-48db-bddb-75a691894edf, a8280dd1-4bfa-4eeb-9656-1cd06381590a, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, bd83aa22-94fc-49ac-b215-a82990ff8c65, 0c3d498a-c540-47f3-8384-050fc044c109, a469ecb9-a4f1-4a2a-89c5-7378cc1138b4, 05141f49-d9d2-407c-b60c-ebb195a05864, 2381d759-f85f-484e-9031-fadbe6ea045a, 0e16fbf3-1401-4538-bd12-25303994af10, 03f47941-43c5-479f-bf64-2d030361092d, 563ba307-4c7d-4945-9c89-46dfa61cb88d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, cb15b115-610f-4c82-a8f7-6bae9c131dc0
@@ -103,6 +113,8 @@ Standard: a traceability tool counts a tag wherever it scans, and scans every tr
 - B) No.
   Why: check reads one repository.
   Costs: a decision built in a satellite is untested for ever.
+
+**Answer:** A
 
 ### Does show in a satellite name its primary?
 depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, dd50488e-a8cd-4778-aecc-72295ffd8671, cb15b115-610f-4c82-a8f7-6bae9c131dc0=A|B
@@ -120,6 +132,8 @@ Standard: the tool says what the repository is; the brief says only how to work.
   Why: show prints the same in every repository.
   Costs: the brief has to carry a repository-specific line, or the agent asks.
 
+**Answer:** A
+
 ### Does check in a satellite report an untested decision?
 depends: dd50488e-a8cd-4778-aecc-72295ffd8671, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 13ddec51-ce03-4645-99ae-2bbf4f30712d=A
 unrelated: 3460d220-e523-448b-aeff-baa8051b7d06, 2381d759-f85f-484e-9031-fadbe6ea045a, 0c3d498a-c540-47f3-8384-050fc044c109, 80b89c24-7d65-43f4-bb03-55e9d85c327d, db07a54d-4d80-4035-a9ef-eabcc0c872b3, bd83aa22-94fc-49ac-b215-a82990ff8c65, ed372cc6-c161-4b90-85bd-c73a6e788c5e, a469ecb9-a4f1-4a2a-89c5-7378cc1138b4, 912f4f3b-1213-435a-af0d-7617017fcff4, 48c47c42-6720-44ca-b47d-12a61ba8ee9f, fc118154-4172-48db-bddb-75a691894edf, a8280dd1-4bfa-4eeb-9656-1cd06381590a, 7e756e04-dde0-4137-ad4f-646e52073398, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, c3127af2-4c96-48d5-a164-bac49a9a09ec, 4319a653-6901-446c-94ab-6420ef472134, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, 0e16fbf3-1401-4538-bd12-25303994af10, 03f47941-43c5-479f-bf64-2d030361092d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, cb15b115-610f-4c82-a8f7-6bae9c131dc0
@@ -135,6 +149,8 @@ Standard: a coverage report is made where every tree is visible, and nowhere els
 - B) Yes.
   Why: every repository reports the same.
   Costs: a false report in every satellite for every decision built elsewhere.
+
+**Answer:** A
 
 ### What does check in the primary report for a satellite missing at its path?
 depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, dd50488e-a8cd-4778-aecc-72295ffd8671, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, 13ddec51-ce03-4645-99ae-2bbf4f30712d=A
@@ -155,6 +171,8 @@ Standard: a report over a partial input says the input is partial and makes no c
   Why: check reads what is there.
   Costs: a wrong build move with no word on why.
 
+**Answer:** A
+
 ### Does check hold a satellite's brief to the primary's?
 depends: dd50488e-a8cd-4778-aecc-72295ffd8671, c6fc0041-dead-4e31-9c19-8913c1bdfa29, 1d9df88a-40f6-4235-a083-e063fde634fe, a8280dd1-4bfa-4eeb-9656-1cd06381590a=A
 unrelated: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, ec3f875c-a0f8-4085-8da1-fec9dcb14377, 80b89c24-7d65-43f4-bb03-55e9d85c327d, e3200081-9995-4bbe-983f-2f430dc341e7, 0c3d498a-c540-47f3-8384-050fc044c109, db07a54d-4d80-4035-a9ef-eabcc0c872b3, ce19c883-c61d-477b-a6d4-fee5134c6e9a, 19e1c023-a678-4842-a414-bb0e45c41601, 24bdcbde-d9f4-45a0-8c3d-37e53569e950, f53ac3b9-efde-427c-8027-19988aa8fda7, fc118154-4172-48db-bddb-75a691894edf, 7e756e04-dde0-4137-ad4f-646e52073398, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, a26876ba-5789-4d05-965e-853d00d9edd2, 05141f49-d9d2-407c-b60c-ebb195a05864, 0e16fbf3-1401-4538-bd12-25303994af10, 563ba307-4c7d-4945-9c89-46dfa61cb88d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, cb15b115-610f-4c82-a8f7-6bae9c131dc0
@@ -171,6 +189,8 @@ Standard: a copied configuration is checked against its source on every run.
   Why: a copy is written once.
   Costs: a satellite's agent reads a brief the primary left behind.
 
+**Answer:** A
+
 ### Does uninstall in a satellite drop its row from the primary?
 depends: dd50488e-a8cd-4778-aecc-72295ffd8671, c6fc0041-dead-4e31-9c19-8913c1bdfa29, a8280dd1-4bfa-4eeb-9656-1cd06381590a=*, 7e756e04-dde0-4137-ad4f-646e52073398=A|B
 unrelated: 292359a4-0512-465b-b6a7-79838e66e5a5, c304b7da-1843-43ad-930c-b01b3310483d, aac5c313-dedd-466b-a0c3-ead5e99ce913, a8034401-420c-45d7-8f43-60c1b9f3baf9, 459c1b77-82dd-469f-a60c-784b6f3d7b81, f53ac3b9-efde-427c-8027-19988aa8fda7, 8081c82d-e5c6-485b-a302-07d586f1a01b, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, e1c305af-af94-494a-9fdb-3faffafa0e06, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, fc118154-4172-48db-bddb-75a691894edf, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, db56a285-946f-48b1-b073-bb1e90192185, ef7ec04d-9cdd-40a1-8246-42a4a0200828, 0e16fbf3-1401-4538-bd12-25303994af10, 03f47941-43c5-479f-bf64-2d030361092d, 563ba307-4c7d-4945-9c89-46dfa61cb88d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, cb15b115-610f-4c82-a8f7-6bae9c131dc0
@@ -186,3 +206,5 @@ Standard: what one command writes on two sides, its reverse removes on both.
 - B) No.
   Why: uninstall touches one repository.
   Costs: the owner edits the primary's list by hand.
+
+**Answer:** A
