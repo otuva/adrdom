@@ -491,6 +491,18 @@ pub const AGENTS_BRIEF_MATCHES_INSTALL: Rule = Rule {
     decisions: &["6ef9eca6-fd8b-4211-aae7-00b37a2a9245"],
 };
 
+/// Decision: Does check hold a satellite's brief to the primary's?
+pub const SATELLITE_BRIEF_MATCHES_PRIMARY: Rule = Rule {
+    name: "satellite_brief_matches_primary",
+    decisions: &["03f47941-43c5-479f-bf64-2d030361092d"],
+};
+
+/// Decision: What does check in the primary report for a satellite missing at its path?
+pub const SATELLITE_FOUND_AT_PATH: Rule = Rule {
+    name: "satellite_found_at_path",
+    decisions: &["fc118154-4172-48db-bddb-75a691894edf"],
+};
+
 /// Decision: What does install write for one agent?
 pub const AGENT_FILE_IMPORTS_AGENTS_MD: Rule = Rule {
     name: "agent_file_imports_agents_md",
@@ -1057,6 +1069,8 @@ pub const ALL: &[&Rule] = &[
     &ASKED_TERMS_LINE_TERM_IS_LIVE,
     &DEFINITION_TERM_EXISTS,
     &AGENTS_BRIEF_MATCHES_INSTALL,
+    &SATELLITE_BRIEF_MATCHES_PRIMARY,
+    &SATELLITE_FOUND_AT_PATH,
     &AGENT_FILE_IMPORTS_AGENTS_MD,
     &AGENT_SETTINGS_DENY_OWNER_COMMANDS,
     &AGENT_SETTINGS_FILE_PARSES,

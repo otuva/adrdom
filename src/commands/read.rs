@@ -46,6 +46,9 @@ pub fn run() -> i32 {
             return 1;
         }
     };
+    if super::refused_in_satellite(&root, Command::Read, &[], Actor::Agent) {
+        return 1;
+    }
     match read_all(&root) {
         Ok(lines) => {
             out::print(&lines);

@@ -5,27 +5,38 @@ use crate::msg::{self, Actor};
 use crate::out::{self, Event};
 use crate::repo;
 use crate::rules::Command;
+use crate::satellite::{self, Located, Place, Row};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The agent's next move on any I/O failure while installing: fix what the
 /// error names, then run `command`, the install that failed, again.
 /// The install command as it was given, flags and all.
 fn install_command(claude: bool, codex: bool, planning: bool) -> Cmd {
-    command(&install_words(claude, codex, planning))
+    let words = install_words(claude, codex, planning, None);
+    command(&words.iter().map(String::as_str).collect::<Vec<_>>())
 }
 
 /// The words of the install command as it was given, flags and all.
-fn install_words(claude: bool, codex: bool, planning: bool) -> Vec<&'static str> {
-    let mut w = vec!["adr", "install"];
+fn install_words(
+    claude: bool,
+    codex: bool,
+    planning: bool,
+    satellite: Option<&Path>,
+) -> Vec<String> {
+    let mut w = vec!["adr".to_string(), "install".to_string()];
     if claude {
-        w.push("--claude");
+        w.push("--claude".to_string());
     }
     if codex {
-        w.push("--codex");
+        w.push("--codex".to_string());
     }
     if planning {
-        w.push("--planning");
+        w.push("--planning".to_string());
+    }
+    if let Some(p) = satellite {
+        w.push("--satellite".to_string());
+        w.push(p.display().to_string());
     }
     w
 }
@@ -130,18 +141,29 @@ pub(crate) fn codex_rules_content() -> String {
     out
 }
 
-pub fn run(claude: bool, codex: bool, planning: bool) -> i32 {
-    let root = match repo::find_root() {
-        Some(r) => r,
-        None => {
-            let words = install_words(claude, codex, planning);
+pub fn run(claude: bool, codex: bool, planning: bool, satellite: Option<PathBuf>) -> i32 {
+    let root = match satellite::locate() {
+        Located::NotARepo => {
+            let words = install_words(claude, codex, planning, satellite.as_deref());
+            let args: Vec<&str> = words[2..].iter().map(String::as_str).collect();
             out::eprint_stop(
                 Command::Install,
-                &msg::not_a_repo("install", &words[2..], Actor::Agent),
+                &msg::not_a_repo("install", &args, Actor::Agent),
             );
             return 1;
         }
+        Located::RecordMissing { primary, .. } => {
+            out::eprint_stop(Command::Install, &msg::record_missing("install", &primary));
+            return 1;
+        }
+        Located::Here(place) if place.is_satellite() => {
+            return run_in_satellite(&place, claude, codex, planning, satellite.as_deref());
+        }
+        Located::Here(place) => place.code,
     };
+    if let Some(given) = satellite {
+        return run_satellite_of(&root, &given);
+    }
 
     // One line per file written, or the failure that stopped it (per "What
     // does a command that writes print?", 069a6b4a A). The files written
@@ -586,4 +608,210 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
 fn install_codex_rules(root: &Path) -> Result<Option<Event>, String> {
     fs::create_dir_all(root.join(".codex/rules")).map_err(|e| e.to_string())?;
     write_whole(root, ".codex/rules/adrdom.rules", &codex_rules_content())
+}
+
+/// The satellite files, written in the satellite at `sat` from the primary's
+/// files at `primary`: the primary's path, byte copies of the brief and the
+/// terms brief, the hooks and the marked section of AGENTS.md (per "What
+/// does install write in a satellite?"). Nothing else is written there.
+/// `shown` leads each file's event: the satellite's path from where the
+/// command runs, or nothing in the satellite itself.
+fn install_satellite_files(
+    sat: &Path,
+    primary: &Path,
+    primary_line: &str,
+    shown: &str,
+    events: &mut Vec<Event>,
+) -> Result<(), String> {
+    let cmd = Cmd::fixed("adr install");
+    let again = || msg::after_fix_agent_runs(cmd.clone());
+    let at = |rel: &str| format!("{}{}", shown, rel);
+    let lead = |ev: Option<Event>| match ev {
+        Some(Event::FileWritten { path }) => Some(Event::FileWritten { path: at(&path) }),
+        other => other,
+    };
+    let state = sat.join(repo::STATE_DIR);
+    fs::create_dir_all(&state)
+        .map_err(|e| msg::create_failed(&state.display().to_string(), e, again()))?;
+
+    events.extend(
+        write_bytes(
+            sat,
+            repo::PRIMARY_PATH,
+            format!("{}\n", primary_line).as_bytes(),
+        )
+        .map_err(|e| msg::write_failed(&at(repo::PRIMARY_PATH), e, again()))?
+        .map(|_| Event::FileWritten {
+            path: at(repo::PRIMARY_PATH),
+        }),
+    );
+    for (rel, optional) in [(repo::BRIEF_PATH, false), (repo::TERMS_BRIEF_PATH, true)] {
+        let bytes = match fs::read(primary.join(rel)) {
+            Ok(b) => b,
+            Err(e) if optional && e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(msg::read_failed(
+                    &primary.join(rel).display().to_string(),
+                    e,
+                    again(),
+                ))
+            }
+        };
+        events.extend(
+            write_bytes(sat, rel, &bytes)
+                .map_err(|e| msg::write_failed(&at(rel), e, again()))?
+                .map(|_| Event::FileWritten { path: at(rel) }),
+        );
+    }
+
+    let hooks = sat.join(".githooks");
+    fs::create_dir_all(&hooks)
+        .map_err(|e| msg::create_failed(&hooks.display().to_string(), e, again()))?;
+    for (rel, content) in [
+        (repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK),
+        (repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK),
+        (repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK),
+    ] {
+        events.extend(lead(
+            create_hook(sat, rel, content).map_err(|e| msg::write_failed(&at(rel), e, again()))?,
+        ));
+    }
+    let hooks_path = repo::git(sat, &["config", "core.hooksPath"]).map(|v| v.trim().to_string());
+    if hooks_path.as_deref() != Some(".githooks") {
+        if repo::git(sat, &["config", "core.hooksPath", ".githooks"]).is_none() {
+            return Err(msg::hooks_path_failed("set", again()));
+        }
+        events.push(Event::ConfigSet {
+            key: "core.hooksPath".to_string(),
+            value: ".githooks".to_string(),
+        });
+    }
+    events.extend(lead(
+        install_agents_md(sat).map_err(|e| msg::update_failed(&at("AGENTS.md"), e, again()))?,
+    ));
+    Ok(())
+}
+
+/// Writes `bytes` at `rel` under `root` unless the file already holds them.
+fn write_bytes(root: &Path, rel: &str, bytes: &[u8]) -> Result<Option<()>, String> {
+    let path = root.join(rel);
+    if fs::read(&path).is_ok_and(|c| c == bytes) {
+        return Ok(None);
+    }
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(Some(()))
+}
+
+/// `adr install --satellite <given>` in the primary at `root` (per "Does
+/// install take the path of a satellite?"): the satellite's files, then its
+/// row in the primary's list.
+fn run_satellite_of(root: &Path, given: &Path) -> i32 {
+    let shown = given.display().to_string();
+    let refuse = |text: String| {
+        out::eprint_stop(Command::Install, &text);
+        1
+    };
+    let abs = if given.is_absolute() {
+        given.to_path_buf()
+    } else {
+        match std::env::current_dir() {
+            Ok(cwd) => cwd.join(given),
+            Err(_) => return refuse(msg::satellite_not_a_repo(&shown)),
+        }
+    };
+    let sat = match fs::canonicalize(&abs) {
+        Ok(p) if p.join(".git").exists() => p,
+        _ => return refuse(msg::satellite_not_a_repo(&shown)),
+    };
+    let primary = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    if sat == primary || satellite::has_record(&sat) {
+        return refuse(msg::satellite_holds_record(&shown));
+    }
+    if !satellite::has_record(&primary) {
+        return refuse(msg::satellite_without_record(&shown));
+    }
+
+    let to_primary = satellite::relative_path(&sat, &primary);
+    let to_sat = satellite::relative_path(&primary, &sat);
+    let mut events: Vec<Event> = Vec::new();
+    let mut result = install_satellite_files(
+        &sat,
+        &primary,
+        &to_primary,
+        &format!("{}/", to_sat),
+        &mut events,
+    );
+    if result.is_ok() {
+        let url = repo::git(&sat, &["remote", "get-url", "origin"])
+            .map(|u| u.trim().to_string())
+            .unwrap_or_default();
+        result = satellite::write_row(&primary, Row { path: to_sat, url })
+            .map(|ev| events.extend(ev))
+            .map_err(|e| {
+                msg::write_failed(
+                    repo::SATELLITES_PATH,
+                    e,
+                    msg::after_fix_agent_runs(command(&["adr", "install", "--satellite", &shown])),
+                )
+            });
+    }
+    out::print_events(&events);
+    match result {
+        Ok(()) => 0,
+        Err(stop) => {
+            out::eprint_stop(Command::Install, &stop);
+            1
+        }
+    }
+}
+
+/// `adr install` in a satellite: its files again from the primary's; a flag
+/// of the primary's install is refused, and no row is touched.
+fn run_in_satellite(
+    place: &Place,
+    claude: bool,
+    codex: bool,
+    planning: bool,
+    satellite_arg: Option<&Path>,
+) -> i32 {
+    let primary = place.primary.clone().unwrap_or_default();
+    if let Some(given) = satellite_arg {
+        // The path as the primary's root reads it, since that is where the
+        // command runs.
+        let abs = if given.is_absolute() {
+            given.to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_default().join(given)
+        };
+        let abs = fs::canonicalize(&abs).unwrap_or(abs);
+        let rel = satellite::relative_path(&place.record, &abs);
+        out::eprint_stop(
+            Command::Install,
+            &msg::record_elsewhere("install", &["--satellite", &rel], Actor::Agent, &primary),
+        );
+        return 1;
+    }
+    let flag = if claude {
+        Some("--claude")
+    } else if codex {
+        Some("--codex")
+    } else if planning {
+        Some("--planning")
+    } else {
+        None
+    };
+    if let Some(flag) = flag {
+        out::eprint_stop(Command::Install, &msg::satellite_takes_no_flag(flag));
+        return 1;
+    }
+    let mut events = Vec::new();
+    let result = install_satellite_files(&place.code, &place.record, &primary, "", &mut events);
+    out::print_events(&events);
+    match result {
+        Ok(()) => 0,
+        Err(stop) => {
+            out::eprint_stop(Command::Install, &stop);
+            1
+        }
+    }
 }

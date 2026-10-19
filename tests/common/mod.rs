@@ -1097,3 +1097,49 @@ pub fn assert_owner_move_shown(line: &str, body: &str) {
         panic!("an owner move this test does not know: {:?}", line);
     }
 }
+
+const SATELLITE_QUESTION: &str = "# Example\n\n### 1.1 What is the unit of authority called?\ndepends: authority\n\nProblem: names leaked into decisions.\n\nStandard: plain words.\n\n- A) The authoritative sentence is a decision.\n  Why: plainest word.\n  Costs: two nouns.\n- B) The whole unit is a block.\n  Why: matches predecessors.\n  Costs: names a region.\n";
+
+/// The path from `from` to `to` as a satellite's row and `adrdom/primary`
+/// hold it, both repositories being temp directories.
+pub fn relative_between(from: &Path, to: &Path) -> String {
+    adr::satellite::relative_path(
+        &std::fs::canonicalize(from).unwrap(),
+        &std::fs::canonicalize(to).unwrap(),
+    )
+}
+
+/// A primary with a term and one answered decision, a second repository
+/// made its satellite by `adr install --satellite`, both committed. Returns
+/// (primary, satellite, the decision's id).
+pub fn satellite_pair() -> (PathBuf, PathBuf, String) {
+    let primary = init_repo();
+    assert!(adr(&primary, &["install"], &[], "").status.success());
+    approve_minimal_terms(&primary, "authority");
+    let record = write_record(&primary, "adrdom/decisions/example.md", SATELLITE_QUESTION);
+    approve_record(&primary, "adrdom/decisions/example.md");
+    assert!(adr(&primary, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&primary, &id, "A").status.success());
+
+    let satellite = init_repo();
+    let rel = relative_between(&primary, &satellite);
+    let out = adr(&primary, &["install", "--satellite", &rel], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    for dir in [&primary, &satellite] {
+        assert!(run_git(dir, &["add", "-A"]).status.success());
+    }
+    // The primary's commit runs its hooks.
+    let c = run_git(&primary, &["commit", "-q", "-m", "chore: record"]);
+    assert!(c.status.success(), "{}", stdout(&c));
+    // wave 2 removes --no-verify
+    let c = run_git(
+        &satellite,
+        &["commit", "-q", "--no-verify", "-m", "chore: install"],
+    );
+    assert!(c.status.success(), "{}", stderr(&c));
+    (primary, satellite, id)
+}

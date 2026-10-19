@@ -11,6 +11,25 @@ pub mod show;
 pub mod unban;
 pub mod uninstall;
 
+/// Per "Does a command that writes the record run in a satellite?" (no): in a
+/// satellite, prints the refusal naming the primary's path and returns true.
+/// The caller returns 1 before it reads or writes anything.
+pub(crate) fn refused_in_satellite(
+    root: &std::path::Path,
+    cmd: crate::rules::Command,
+    args: &[&str],
+    actor: crate::msg::Actor,
+) -> bool {
+    let Some(primary) = crate::satellite::primary_of(root) else {
+        return false;
+    };
+    crate::out::eprint_stop(
+        cmd,
+        &crate::msg::record_elsewhere(cmd.as_str(), args, actor, &primary),
+    );
+    true
+}
+
 /// The five commands only the owner runs (matches the brief's "Commands"
 /// section and `repo::owner_authorized`'s callers): the one list the Claude
 /// deny entries and the Codex rules are both derived from.
