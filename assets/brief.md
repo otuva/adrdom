@@ -32,8 +32,9 @@ Behaviour no current decision covers is a question for the owner before it is bu
 Build a decision when a move names it, and not before; never one whose question this session wrote. <!-- from: 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8 -->
 A decision's id is on the `id:` line under its heading; `adr show --ids` prints it. <!-- from: cdc905a2-5b58-4c38-beff-4a8bd3b6f42e, 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550 -->
 A decision is built once a test outside `adrdom/` carries the comment `adr: <id>` and shows the code follows it; write the test if none exists. One test may carry several `adr:` comments. <!-- from: 4319a653-6901-446c-94ab-6420ef472134, 3460d220-e523-448b-aeff-baa8051b7d06, c49997ee-10e7-48e0-b66b-43f8b09758a6 -->
-`adr check` reports each untested current decision until a test names it. A test whose `adr: <id>` names a decision that is not current is reported and fails nothing: point the tie at the decision that took its place, or remove it. <!-- from: 3460d220-e523-448b-aeff-baa8051b7d06, 2381d759-f85f-484e-9031-fadbe6ea045a, 50b31713-4fea-4aa3-842a-79c2750660ba -->
-Code that follows a decision may carry the comment `adr-code: <id>`, found by search; it ties no test and no rule judges it. <!-- from: 1259323f-cdec-4101-9d47-a165a286089f -->
+`adr check` reports each untested current decision until a test names it. A test whose `adr: <id>` names a decision that is not current is reported and fails nothing: change its `adr:` comment to the decision that took its place, or remove the comment. <!-- from: 3460d220-e523-448b-aeff-baa8051b7d06, 2381d759-f85f-484e-9031-fadbe6ea045a, 50b31713-4fea-4aa3-842a-79c2750660ba -->
+Code that follows a decision may carry the comment `adr-code: <id>`, found by search; it counts as no test and no rule judges it. <!-- from: 1259323f-cdec-4101-9d47-a165a286089f -->
+In a satellite, `adrdom/primary` holds the path to the record; a test there with `adr: <id>` counts for the primary, and a command that writes the record runs in the primary. <!-- from: a8280dd1-4bfa-4eeb-9656-1cd06381590a, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 0e16fbf3-1401-4538-bd12-25303994af10 -->
 
 ### Review
 
@@ -79,7 +80,7 @@ Standard: the named practice for this, stated flat.
 
 Two or three options. Under a heading that opens with Does, an option is one word with its full stop, `- A) Yes.`; the Why and Costs lines carry the rest. Two options that answer the heading the same way are one option. <!-- from: 178a232e-b51c-4122-a1a9-9e9ed6970748, b3cb190d-d6f1-4930-bdcd-7827e31ac62a, 43778946-d44c-4acf-a766-0a4915fce199 -->
 A decision binds by its option sentence; Why and Costs explain it, and on a clash the option holds. <!-- from: 28b5837d-46ae-459e-ba4c-12265ef07ac1 -->
-A question holds nothing that ties it to the day it was written: no word on what the code does now ("already", "currently", "as built", "unchanged"), who said what ("agreed", "decided", "in chat", an agent's name), or a date. <!-- from: 149c9a73-16eb-46aa-9806-2950423ee1a2 -->
+A question holds nothing of the day it was written: no word on what the code does now ("already", "currently", "as built", "unchanged"), who said what ("agreed", "decided", "in chat", an agent's name), or a date. <!-- from: 149c9a73-16eb-46aa-9806-2950423ee1a2 -->
 
 ### Plan
 

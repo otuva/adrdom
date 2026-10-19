@@ -32,8 +32,9 @@ Behaviour no current decision covers is a question for the owner before it is bu
 Build a decision when a move names it, and not before; never one whose question this session wrote.
 A decision's id is on the `id:` line under its heading; `adr show --ids` prints it.
 A decision is built once a test outside `adrdom/` carries the comment `adr: <id>` and shows the code follows it; write the test if none exists. One test may carry several `adr:` comments.
-`adr check` reports each untested current decision until a test names it. A test whose `adr: <id>` names a decision that is not current is reported and fails nothing: point the tie at the decision that took its place, or remove it.
-Code that follows a decision may carry the comment `adr-code: <id>`, found by search; it ties no test and no rule judges it.
+`adr check` reports each untested current decision until a test names it. A test whose `adr: <id>` names a decision that is not current is reported and fails nothing: change its `adr:` comment to the decision that took its place, or remove the comment.
+Code that follows a decision may carry the comment `adr-code: <id>`, found by search; it counts as no test and no rule judges it.
+In a satellite, `adrdom/primary` holds the path to the record; a test there with `adr: <id>` counts for the primary, and a command that writes the record runs in the primary.
 
 ### Review
 
@@ -79,7 +80,7 @@ Standard: the named practice for this, stated flat.
 
 Two or three options. Under a heading that opens with Does, an option is one word with its full stop, `- A) Yes.`; the Why and Costs lines carry the rest. Two options that answer the heading the same way are one option.
 A decision binds by its option sentence; Why and Costs explain it, and on a clash the option holds.
-A question holds nothing that ties it to the day it was written: no word on what the code does now ("already", "currently", "as built", "unchanged"), who said what ("agreed", "decided", "in chat", an agent's name), or a date.
+A question holds nothing of the day it was written: no word on what the code does now ("already", "currently", "as built", "unchanged"), who said what ("agreed", "decided", "in chat", an agent's name), or a date.
 
 ### Plan
 
