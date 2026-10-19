@@ -22,9 +22,8 @@ pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> 
     // Per "Does check in the primary count a tie in a satellite?": the primary
     // also reads each satellite of its list that has a checkout, from its
     // working tree. One that is missing is not scanned, never cloned.
-    let missing = crate::satellite::missing(root);
     for row in crate::satellite::rows(root) {
-        if missing.contains(&row) {
+        if !root.join(&row.path).join(".git").exists() {
             continue;
         }
         let dir = root.join(&row.path);
@@ -36,6 +35,11 @@ pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> 
         );
     }
     test_ids
+}
+
+/// The note for a satellite with no checkout at its path.
+pub(crate) fn satellite_missing_finding(row: &crate::satellite::Row) -> Finding {
+    Finding::said(Class::Untested, msg::satellite_missing(&row.path, &row.url))
 }
 
 /// Adds every tie of the tracked files of the repository at `root` to
@@ -113,10 +117,7 @@ pub(super) fn check_tests(
         crate::satellite::missing(root)
     };
     for row in &missing {
-        notes.push(Finding::said(
-            Class::Untested,
-            msg::satellite_missing(&row.path, &row.url),
-        ));
+        notes.push(satellite_missing_finding(row));
     }
 
     // In the order of the identifiers, so two runs print the same lines.

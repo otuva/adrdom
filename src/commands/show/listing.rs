@@ -62,21 +62,13 @@ pub(crate) fn summary(r: &Records, ids: bool) -> Vec<Line> {
     lines.extend(
         r.missing
             .iter()
-            .map(|row| Line::Finding(satellite_missing_finding(row))),
+            .map(|row| Line::Finding(crate::commands::check::satellite_missing_finding(row))),
     );
     // A blame file's status line stands with its report at the end, as the
     // terms file's does.
     lines.extend(blame_part);
     lines.extend(unreadable_blame_lines(r));
     lines
-}
-
-/// The note for a satellite with no checkout at its path.
-pub(crate) fn satellite_missing_finding(row: &crate::satellite::Row) -> Finding {
-    Finding::said(
-        crate::rules::Class::Untested,
-        msg::satellite_missing(&row.path, &row.url),
-    )
 }
 
 /// The listing in a satellite: every current decision of the primary as the

@@ -523,3 +523,21 @@ fn the_row_holds_no_credentials_of_an_http_origin_and_keeps_an_ssh_user() {
         format!("{}\tgit@example.com:o/a.git\n", r)
     );
 }
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+#[test]
+fn a_write_failure_in_install_satellite_names_the_command_with_the_path() {
+    let (primary, sat) = primary_and_plain();
+    let r = rel(&primary, &sat);
+    // A file where the hooks directory belongs, so it cannot be created.
+    std::fs::write(sat.join(".githooks"), "x").unwrap();
+    let out = adr(&primary, &["install", "--satellite", &r], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(
+        err.contains(&format!("adr install --satellite {}", r)),
+        "{}",
+        err
+    );
+    assert_eq!(satellites_tsv(&primary), "");
+}

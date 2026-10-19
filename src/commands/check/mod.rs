@@ -16,6 +16,7 @@ mod tests;
 
 pub(crate) use banned::collect_targets;
 pub(crate) use satellite::report as satellite_report;
+pub(crate) use tests::satellite_missing_finding;
 pub use tests::test_index;
 
 use crate::depends;

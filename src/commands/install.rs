@@ -621,9 +621,9 @@ fn install_satellite_files(
     primary: &Path,
     primary_line: &str,
     shown: &str,
+    cmd: Cmd,
     events: &mut Vec<Event>,
 ) -> Result<(), String> {
-    let cmd = Cmd::fixed("adr install");
     let again = || msg::after_fix_agent_runs(cmd.clone());
     let at = |rel: &str| format!("{}{}", shown, rel);
     let lead = |ev: Option<Event>| match ev {
@@ -726,11 +726,13 @@ fn run_satellite_of(root: &Path, given: &Path) -> i32 {
     let to_primary = satellite::relative_path(&sat, &primary);
     let to_sat = satellite::relative_path(&primary, &sat);
     let mut events: Vec<Event> = Vec::new();
+    let again = command(&["adr", "install", "--satellite", &shown]);
     let mut result = install_satellite_files(
         &sat,
         &primary,
         &to_primary,
         &format!("{}/", to_sat),
+        again.clone(),
         &mut events,
     );
     if result.is_ok() {
@@ -740,11 +742,7 @@ fn run_satellite_of(root: &Path, given: &Path) -> i32 {
         result = satellite::write_row(&primary, Row { path: to_sat, url })
             .map(|ev| events.extend(ev))
             .map_err(|e| {
-                msg::write_failed(
-                    repo::SATELLITES_PATH,
-                    e,
-                    msg::after_fix_agent_runs(command(&["adr", "install", "--satellite", &shown])),
-                )
+                msg::write_failed(repo::SATELLITES_PATH, e, msg::after_fix_agent_runs(again))
             });
     }
     out::print_events(&events);
@@ -798,7 +796,14 @@ fn run_in_satellite(
         return 1;
     }
     let mut events = Vec::new();
-    let result = install_satellite_files(&place.code, &place.record, &primary, "", &mut events);
+    let result = install_satellite_files(
+        &place.code,
+        &place.record,
+        &primary,
+        "",
+        Cmd::fixed("adr install"),
+        &mut events,
+    );
     out::print_events(&events);
     match result {
         Ok(()) => 0,
