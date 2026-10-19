@@ -85,15 +85,15 @@ A question holds nothing that ties it to the day it was written: no word on what
 
 `adr plan <file>` does the step the file is at and prints the next move, until the move is `owner runs: adr approve <file>`. The steps:
 1. Write the headings, then run plan: for each heading it brings the nearest current decisions and terms, its neighbours.
-2. Write a line for every neighbour: `depends:` when the question loses its meaning without it, `supersedes:` when the question replaces that decision, `unrelated:` otherwise. Run plan again until every neighbour is on a line.
+2. Write a line for every neighbour: `depends:` when the question loses its meaning without it or gains its meaning from it, `supersedes:` when the question replaces that decision, `unrelated:` otherwise. Run plan again until every neighbour is on a line.
 3. Write the bodies. Before an option, read the code and the decisions it meets: what the code has to keep is the option's Costs. A second question found on the way is a new heading.
 4. Run plan again: it brings the neighbours of each body with the reader's word, `same`, `consistent`, `inconsistent`, `unrelated` or `closes <letter>`, and a reason. The reader's word is not a ruling; the agent's line is. Write a line for each neighbour it brings, and run plan until the move it prints is the owner's.
 5. Say the plan is ready, post `owner runs: adr approve <file>` and stop.
 
-A question stands on what it loses its meaning without: a term, or a question of the same file; a depends line names at most two questions. Before approval an entry on any line is the term's name or the heading of the question or decision; approve turns them into ids. An entry on an open question carries its answer set, `=A`, `=A|B` or `=*`: the letters under which the question still makes sense.
+A question stands on what it loses its meaning without or gains its meaning from: a term, or a question of the same file; a depends line names at most two questions. Before approval an entry on any line is the term's name or the heading of the question or decision; approve turns them into ids. An entry on an open question carries its answer set, `=A`, `=A|B` or `=*`: the letters under which the question still makes sense.
 A question that replaces a current decision names it on `supersedes:`, with every current decision standing on it and those standing on them; each leaves force once the question is answered.
 `closes <letter>` says the record leaves only that option of the question standing: the question is decided, strike the heading. Write the neighbour on `supersedes:` instead only when the question is there to change that decision, and name every decision standing on it too. Under `inconsistent`, write it on `supersedes:` or reword the question so the two agree. A line kept against the reader's word is said in chat, with why.
-A tier holds at most four questions; tiers are unlimited: a question that stands on a question of its file sits a tier above it. The question a tier stands on is the one each of its questions loses its meaning without.
+A tier holds at most four questions; tiers are unlimited: a question that stands on a question of its file sits a tier above it. The question a tier stands on is the one each of its questions loses its meaning without or gains its meaning from.
 The owner reads the whole plan at each approval; a plan changes as a whole, not line by line: when one heading is wrong, check every heading of the file for the same flaw and propose the changes together, once. To change an approved plan, edit the file, run plan to the owner's move, and say in chat what changed and why.
 
 ### Ask and answer
