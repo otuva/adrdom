@@ -15,6 +15,22 @@ pub(super) fn check_banned(
     source: &Source,
     stops: &mut Vec<String>,
 ) -> Vec<Failure> {
+    check_banned_in(root, source, root, staged, message, stops)
+}
+
+/// `check_banned` with the ban list and the terms read from `record` through
+/// `record_source`, and the targets from `code` through `source` (per "What
+/// does check in a satellite read the record from?": a satellite reads the
+/// ban list from the primary's working tree). The targets are the staged
+/// files, the message or the tracked files, as `collect_targets` reads them.
+pub(super) fn check_banned_in(
+    record: &Path,
+    record_source: &Source,
+    root: &Path,
+    staged: bool,
+    message: Option<&Path>,
+    stops: &mut Vec<String>,
+) -> Vec<Failure> {
     let mut out = Vec::new();
     // A message file that cannot be read is never scanned: a failure, or
     // the commit would pass with its message unread.
@@ -26,12 +42,12 @@ pub(super) fn check_banned(
             ));
         }
     }
-    let entries = read_banned_entries(root, source);
+    let entries = read_banned_entries(record, record_source);
     if entries.is_empty() {
         return out;
     }
     let hash_map: HashMap<String, Option<String>> = entries.into_iter().collect();
-    let tf = state::load_terms_via(root, source);
+    let tf = state::load_terms_via(record, record_source);
     let terms_list: &[crate::terms::Term] = tf.as_ref().map(|f| f.terms.as_slice()).unwrap_or(&[]);
 
     for (name, content) in collect_targets(root, staged, message) {

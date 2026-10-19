@@ -1135,11 +1135,7 @@ pub fn satellite_pair() -> (PathBuf, PathBuf, String) {
     // The primary's commit runs its hooks.
     let c = run_git(&primary, &["commit", "-q", "-m", "chore: record"]);
     assert!(c.status.success(), "{}", stdout(&c));
-    // wave 2 removes --no-verify
-    let c = run_git(
-        &satellite,
-        &["commit", "-q", "--no-verify", "-m", "chore: install"],
-    );
+    let c = run_git(&satellite, &["commit", "-q", "-m", "chore: install"]);
     assert!(c.status.success(), "{}", stderr(&c));
     (primary, satellite, id)
 }

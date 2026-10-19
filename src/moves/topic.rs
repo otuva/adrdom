@@ -28,7 +28,10 @@ pub fn of_removed_topic_file(rel: &str, findings: Vec<Finding>) -> Report {
 /// heading with no body, follows the planning steps from it ("What does the
 /// agent do to plan a topic file?", 46fc51ff A). `findings` are what the
 /// rules find in the file (`rules::judge_topic_file_in`): each carries its
-/// own move, so while one stands the planning steps wait on it.
+/// own move, so while one stands the planning steps wait on it. With `builds`
+/// false no untested decision has a build move (a satellite builds none, and
+/// a primary none while a satellite is missing).
+#[allow(clippy::too_many_arguments)]
 pub fn of_topic_file(
     rf: &RecordFile,
     led: &Ledger,
@@ -37,6 +40,7 @@ pub fn of_topic_file(
     tests: &HashMap<String, Vec<String>>,
     planning: &crate::plan::Planning,
     role: crate::session::Role,
+    builds: bool,
 ) -> Vec<Move> {
     if rf.tiers.is_none() {
         if findings.is_empty() {
@@ -90,6 +94,9 @@ pub fn of_topic_file(
             })),
             QuestionStatus::Answered => {
                 let Some(id) = &sec.id else { continue };
+                if !builds {
+                    continue;
+                }
                 if tests.get(id).is_some_and(|locations| !locations.is_empty()) {
                     continue;
                 }
@@ -229,13 +236,15 @@ pub fn of_topic_file_with(
     tests: &HashMap<String, Vec<String>>,
     index: &crate::rules::RepoIndex,
 ) -> Report {
-    of_topic_file_judged(root, rf, all, terms_list, led, tests, index).0
+    of_topic_file_judged(root, rf, all, terms_list, led, tests, index, false).0
 }
 
 /// `of_topic_file_with` and the file's own judgement
 /// (`rules::judge_topic_file_in`) that the report's findings start from,
 /// before the findings on the records as a whole, the terms gate and the
 /// struck questions join them: what `check` files by rule for the file.
+/// `in_satellite`: `root` is the record of a satellite's primary.
+#[allow(clippy::too_many_arguments)]
 pub fn of_topic_file_judged(
     root: &std::path::Path,
     rf: &RecordFile,
@@ -244,6 +253,7 @@ pub fn of_topic_file_judged(
     led: &Ledger,
     tests: &HashMap<String, Vec<String>>,
     index: &crate::rules::RepoIndex,
+    in_satellite: bool,
 ) -> (Report, Vec<Finding>) {
     let shared = &index.planning;
     let plan_ok =
@@ -265,6 +275,7 @@ pub fn of_topic_file_judged(
         tests,
         &planning,
         crate::session::role(root),
+        !in_satellite && crate::satellite::missing(root).is_empty(),
     );
     // While adrdom/terms.md is not approved, approve, ask and answer stop on
     // it: its gate is the file's finding, and their moves wait on it.
