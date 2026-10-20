@@ -210,8 +210,10 @@ Standard: what one command writes on two sides, its reverse removes on both.
 **Answer:** A
 
 ### What does a path under adrdom to another repository resolve against?
-depends: What does check in a satellite read the record from?, What does the primary hold of a satellite?
-unrelated: Does a repository keep hooks of its own beside the tool's?, Does check fail a planner's commit that reaches outside adrdom?, Does check hold the merge rule install writes for the ledger?, Does install move a hook it finds into the repository's own hook file?, Does install put the embedding model outside the repository?, Does install stop when git's hooksPath points away from its hook directory?, Does install write a merge rule for the ledger?, Does install write outside adrdom?, Does the tool keep everything it owns under one directory?, What does install write in a satellite?, Does check hold git's hooksPath?, Does check at a commit read the staged files?, Does show in a satellite print the directory it read the record from?, What drops the row of a satellite the primary no longer finds at its path?, Does install take a satellite that holds the path of another primary?
+depends: cb15b115-610f-4c82-a8f7-6bae9c131dc0, 7e756e04-dde0-4137-ad4f-646e52073398
+unrelated: d6112bd7-1649-4a47-ab3f-0681e4d0e8f6, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 459c1b77-82dd-469f-a60c-784b6f3d7b81, 897b52a7-f6d2-467e-ba14-9f4ce4865664, db56a285-946f-48b1-b073-bb1e90192185, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 16a71892-b348-4b9b-82c5-a9d375187bd3, a8280dd1-4bfa-4eeb-9656-1cd06381590a, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 7e248514-25f8-46ed-936e-2849cd27cf86, 59e73422-5d55-4b4c-9793-25f78f5f9586, 490cdbb6-0482-41ba-8f57-36a6136b166f
+id: 0320a987-f8b2-4105-9b27-64bf484026e6
+terms: answers=b36113a1-1384-4e4c-a798-8399f4181366, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, primary=c6fc0041-dead-4e31-9c19-8913c1bdfa29, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
 
 Problem: a checkout in a linked worktree sits elsewhere than the one install ran in, and the relative path finds nothing.
 Standard: a tool that links sibling repositories by relative path resolves it from one fixed root per repository.
@@ -227,8 +229,10 @@ Standard: a tool that links sibling repositories by relative path resolves it fr
   Costs: the tracked row breaks on every other machine and in CI.
 
 ### Does show in a satellite print the directory it read the record from?
-depends: Does show in a satellite name its primary?, What does a path under adrdom to another repository resolve against?=*
-unrelated: Does a command that writes the record run in a satellite?, Does install take the path of a satellite?, Does show print the reference lines of a question that is answered?, Does show print what a file holds past its latest approval?, Does the ui render what the commands print?, What does a command print when it writes nothing?, What does check in a satellite read the record from?, What does show print for a file under adrdom?, What does show print when no file is named?, What does the tool print for a build move in a planner session?, Does check at a commit read the staged files?, What does a blame file hold of its origin?, What drops the row of a satellite the primary no longer finds at its path?, Does install take a satellite that holds the path of another primary?
+depends: 30063002-420c-4309-bae2-4175b993f8f1, 0320a987-f8b2-4105-9b27-64bf484026e6=*
+unrelated: 0e16fbf3-1401-4538-bd12-25303994af10, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, d1d6fed2-4e1a-44bd-b9cb-22f779a00bce, 91f9652a-f053-4b32-9534-c9c39e7639a4, a9e9e370-7768-4a79-b67b-7fe0926b5670, 1af76f91-5644-42ef-97ea-8f70f934c26c, cb15b115-610f-4c82-a8f7-6bae9c131dc0, b0acc95b-3dd5-4158-ac5c-65a2159972a9, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, d2851ea1-fcb6-476a-b321-c813a594d5e5, 59e73422-5d55-4b4c-9793-25f78f5f9586, 490cdbb6-0482-41ba-8f57-36a6136b166f
+id: 7e248514-25f8-46ed-936e-2849cd27cf86
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, record=68536615-d17e-4399-ad6c-2a2cf8622b2b, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
 
 Problem: the first line of show names the path as held; from a worktree that path, read as written, points at nothing.
 Standard: a tool that resolves a configured path reports the resolved one when it says where it read.
@@ -241,8 +245,10 @@ Standard: a tool that resolves a configured path reports the resolved one when i
   Costs: an agent in a worktree resolves the path itself.
 
 ### What drops the row of a satellite the primary no longer finds at its path?
-depends: primary, What does the primary hold of a satellite?, What does check in the primary report for a satellite missing at its path?
-unrelated: Does check hold a satellite's brief to the primary's?, Does check in the primary count a tie in a satellite?, Does install take the path of a satellite?, Does show in a satellite name its primary?, Does uninstall in a satellite drop its row from the primary?, What does check in a satellite read the record from?, What does install write in a satellite?, What does answer write for a removed question?, What does a path under adrdom to another repository resolve against?, Does show in a satellite print the directory it read the record from?, Does install take a satellite that holds the path of another primary?
+depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, 7e756e04-dde0-4137-ad4f-646e52073398, fc118154-4172-48db-bddb-75a691894edf
+unrelated: 03f47941-43c5-479f-bf64-2d030361092d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, cb15b115-610f-4c82-a8f7-6bae9c131dc0, a8280dd1-4bfa-4eeb-9656-1cd06381590a, f5c242b6-e2f6-45a3-8c61-c743f3ad794f, 0320a987-f8b2-4105-9b27-64bf484026e6, 7e248514-25f8-46ed-936e-2849cd27cf86, 490cdbb6-0482-41ba-8f57-36a6136b166f
+id: 59e73422-5d55-4b4c-9793-25f78f5f9586
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, move=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, primary=c6fc0041-dead-4e31-9c19-8913c1bdfa29, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
 
 Problem: a satellite moved or deleted leaves its row, and the primary reports it missing at every check.
 Standard: a hub removes a spoke from its list by one command at the hub, with the spoke absent.
@@ -258,8 +264,10 @@ Standard: a hub removes a spoke from its list by one command at the hub, with th
   Costs: a tracked file of the tool written by hand.
 
 ### Does install take a satellite that holds the path of another primary?
-depends: primary, satellite, Does install take the path of a satellite?, What does install write in a satellite?
-unrelated: Does check hold a satellite's brief to the primary's?, Does check in the primary count a tie in a satellite?, Does install move a hook it finds into the repository's own hook file?, Does show in a satellite name its primary?, Does uninstall in a satellite drop its row from the primary?, What does check in the primary report for a satellite missing at its path?, What does the primary hold of a satellite?, Does uninstall belong to the owner?, Does a command that writes the record run in a satellite?, What does a path under adrdom to another repository resolve against?, Does show in a satellite print the directory it read the record from?, What drops the row of a satellite the primary no longer finds at its path?
+depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, dd50488e-a8cd-4778-aecc-72295ffd8671, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, a8280dd1-4bfa-4eeb-9656-1cd06381590a
+unrelated: 03f47941-43c5-479f-bf64-2d030361092d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, fc118154-4172-48db-bddb-75a691894edf, 7e756e04-dde0-4137-ad4f-646e52073398, 292359a4-0512-465b-b6a7-79838e66e5a5, 0e16fbf3-1401-4538-bd12-25303994af10, 0320a987-f8b2-4105-9b27-64bf484026e6, 7e248514-25f8-46ed-936e-2849cd27cf86, 59e73422-5d55-4b4c-9793-25f78f5f9586
+id: 490cdbb6-0482-41ba-8f57-36a6136b166f
+terms: install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, moves=d904dc0d-231f-4e93-ac74-7babe888107d, primaries=c6fc0041-dead-4e31-9c19-8913c1bdfa29, primary=c6fc0041-dead-4e31-9c19-8913c1bdfa29, record=68536615-d17e-4399-ad6c-2a2cf8622b2b, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
 
 Problem: install in a primary claims a satellite of another record, and the other primary's row keeps pointing at it.
 Standard: a tool refuses to claim what another instance owns until that one lets go.
