@@ -1,3 +1,6 @@
 #!/bin/sh
-adr check --message "$1"
-exit $?
+# The repository's own hook goes in .githooks/commit-msg.own and runs once adr check passes.
+adr check --message "$1" || exit $?
+own="$(dirname "$0")/commit-msg.own"
+[ -x "$own" ] || exit 0
+exec "$own" "$@"

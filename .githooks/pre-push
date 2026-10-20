@@ -1,3 +1,9 @@
 #!/bin/sh
-adr check --push
-exit $?
+# The repository's own hook goes in .githooks/pre-push.own and runs once adr check passes.
+input=$(cat)
+[ -z "$input" ] || input="$input
+"
+printf '%s' "$input" | adr check --push || exit $?
+own="$(dirname "$0")/pre-push.own"
+[ -x "$own" ] || exit 0
+printf '%s' "$input" | "$own" "$@"

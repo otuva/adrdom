@@ -22,7 +22,7 @@ A finding is what the tool found and the one move that clears it. A move opens w
 - `owner runs: <command>`: post the command in chat and stop.
 - `not yet`: its turn has not come; leave it.
 A refusal names what failed and the move that clears it; make that move and no other. The owner is not a way past a refusal: never change a file so that the owner's command clears it, and never ask for an approval or an answer the refusal did not name.
-Never pass `--no-verify`; never edit or remove the hooks.
+Never pass `--no-verify`; never edit or remove the tool's hooks.
 The tool writes `adrdom/state/`; its tracked files are staged with the commit, never edited. Approve writes the `id:` lines, ask the `terms:` line, answer the `**Answer:**` line.
 Behaviour no current decision covers is a question for the owner before it is built. A decision never changes once answered: a later question supersedes it. A decision that looks wrong is said in chat, never edited or worked around.
 `adr ban` bans a word the owner does not want in the repository; only the owner unbans.
