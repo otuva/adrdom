@@ -228,6 +228,8 @@ Standard: a tool that links sibling repositories by relative path resolves it fr
   Why: any checkout on the machine resolves it.
   Costs: the tracked row breaks on every other machine and in CI.
 
+**Answer:** A
+
 ### Does show in a satellite print the directory it read the record from?
 depends: 30063002-420c-4309-bae2-4175b993f8f1, 0320a987-f8b2-4105-9b27-64bf484026e6=*
 unrelated: 0e16fbf3-1401-4538-bd12-25303994af10, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, d1d6fed2-4e1a-44bd-b9cb-22f779a00bce, 91f9652a-f053-4b32-9534-c9c39e7639a4, a9e9e370-7768-4a79-b67b-7fe0926b5670, 1af76f91-5644-42ef-97ea-8f70f934c26c, cb15b115-610f-4c82-a8f7-6bae9c131dc0, b0acc95b-3dd5-4158-ac5c-65a2159972a9, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, d2851ea1-fcb6-476a-b321-c813a594d5e5, 59e73422-5d55-4b4c-9793-25f78f5f9586, 490cdbb6-0482-41ba-8f57-36a6136b166f
@@ -243,6 +245,8 @@ Standard: a tool that resolves a configured path reports the resolved one when i
 - B) No.
   Why: the line prints the path as the satellite holds it, the same everywhere.
   Costs: an agent in a worktree resolves the path itself.
+
+**Answer:** A
 
 ### What drops the row of a satellite the primary no longer finds at its path?
 depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, 7e756e04-dde0-4137-ad4f-646e52073398, fc118154-4172-48db-bddb-75a691894edf
@@ -263,6 +267,8 @@ Standard: a hub removes a spoke from its list by one command at the hub, with th
   Why: no command.
   Costs: a tracked file of the tool written by hand.
 
+**Answer:** A
+
 ### Does install take a satellite that holds the path of another primary?
 depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, dd50488e-a8cd-4778-aecc-72295ffd8671, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, a8280dd1-4bfa-4eeb-9656-1cd06381590a
 unrelated: 03f47941-43c5-479f-bf64-2d030361092d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, fc118154-4172-48db-bddb-75a691894edf, 7e756e04-dde0-4137-ad4f-646e52073398, 292359a4-0512-465b-b6a7-79838e66e5a5, 0e16fbf3-1401-4538-bd12-25303994af10, 0320a987-f8b2-4105-9b27-64bf484026e6, 7e248514-25f8-46ed-936e-2849cd27cf86, 59e73422-5d55-4b4c-9793-25f78f5f9586
@@ -278,3 +284,5 @@ Standard: a tool refuses to claim what another instance owns until that one lets
 - B) Yes.
   Why: one command moves a satellite.
   Costs: the old primary's row stays and reports the satellite missing for ever.
+
+**Answer:** A
