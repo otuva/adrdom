@@ -299,12 +299,14 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
     };
     let r = Records::load_at(place);
     let mut lines = Vec::new();
-    // Per "Does show in a satellite name its primary?": the first line of
-    // every form, the path `adrdom/primary` holds.
-    if let Some(primary) = r.satellite.as_ref().and_then(|p| p.primary.as_deref()) {
+    // Per "Does show in a satellite name its primary?" the first line of
+    // every form names the primary; per "Does show in a satellite print the
+    // directory it read the record from?" (7e248514-25f8-46ed-936e-2849cd27cf86
+    // A) it prints the directory the record was read from.
+    if r.satellite.as_ref().is_some_and(|p| p.primary.is_some()) {
         lines.push(Line::Record {
             depth: 0,
-            text: msg::record_line(primary),
+            text: msg::record_line(&r.root.display().to_string()),
         });
     }
     match &record_arg {

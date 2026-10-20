@@ -113,6 +113,23 @@ pub fn find_root() -> Option<PathBuf> {
     }
 }
 
+/// The main working tree of the repository at `dir`, canonical: the first
+/// entry of `git worktree list`, the same for every linked worktree (per
+/// "What does a path under adrdom to another repository resolve against?",
+/// 0320a987-f8b2-4105-9b27-64bf484026e6 A). The checkout root `dir` itself
+/// only when git gives no entry.
+pub fn main_root(dir: &Path) -> PathBuf {
+    git(dir, &["worktree", "list", "--porcelain"])
+        .and_then(|out| {
+            out.lines()
+                .next()
+                .and_then(|l| l.strip_prefix("worktree "))
+                .and_then(|p| std::fs::canonicalize(p).ok())
+        })
+        .or_else(|| std::fs::canonicalize(dir).ok())
+        .unwrap_or_else(|| dir.to_path_buf())
+}
+
 /// Runs `git <args>` in `root`, returning stdout on success and None on
 /// any non-zero exit (e.g. `git show HEAD:...` for a path that doesn't
 /// exist yet on HEAD).
@@ -123,11 +140,29 @@ pub fn git(root: &Path, args: &[&str]) -> Option<String> {
 /// What git prints, as bytes: `None` on a failure to run it or a non-zero
 /// exit.
 fn git_bytes(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let out = Command::new("git")
-        .current_dir(root)
-        .args(args)
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root).args(args);
+    // A hook in a linked worktree gets GIT_DIR and an absolute
+    // GIT_INDEX_FILE of its own repository. Git finds the same directory
+    // from `root` for that repository, so they are dropped; and for another
+    // repository (the primary, a satellite: "What does a path under adrdom
+    // to another repository resolve against?",
+    // 0320a987-f8b2-4105-9b27-64bf484026e6 A) they would point git back at
+    // the hook's repository. The index file is kept only for the checkout
+    // the process runs in, which `git commit -a` and partial commits point
+    // at a temporary index.
+    for name in ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"] {
+        cmd.env_remove(name);
+    }
+    if std::env::var_os("GIT_INDEX_FILE").is_some() {
+        let own = find_root()
+            .zip(std::fs::canonicalize(root).ok())
+            .is_some_and(|(r, c)| std::fs::canonicalize(r).is_ok_and(|r| r == c));
+        if !own {
+            cmd.env_remove("GIT_INDEX_FILE");
+        }
+    }
+    let out = cmd.output().ok()?;
     out.status.success().then_some(out.stdout)
 }
 
