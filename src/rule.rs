@@ -792,6 +792,16 @@ pub const HOOK_MATCHES_INSTALL: Rule = Rule {
     ],
 };
 
+/// Decision: Does check hold git's hooksPath?
+/// Decision: Does install write outside adrdom?
+pub const HOOKS_PATH_IS_GITHOOKS: Rule = Rule {
+    name: "hooks_path_is_githooks",
+    decisions: &[
+        "db76c9a0-b4fc-4aa2-8afb-47cd78ef7138",
+        "4f925b13-ad16-48b8-acd1-3e30d6e308b6",
+    ],
+};
+
 /// Decision: Does check hold the files install writes?
 /// Decision: Does install write outside adrdom?
 pub const HOOK_IS_EXECUTABLE: Rule = Rule {
@@ -1119,6 +1129,7 @@ pub const ALL: &[&Rule] = &[
     &QUESTION_NOT_ON_ITSELF,
     &HOOK_MATCHES_INSTALL,
     &HOOK_IS_EXECUTABLE,
+    &HOOKS_PATH_IS_GITHOOKS,
     &SECTION_TERMS_LINE_PARSES,
     &DEFINITION_TERMS_LINE_PARSES,
     &RETIRE_READS_ASKED_TERMS_LINES,

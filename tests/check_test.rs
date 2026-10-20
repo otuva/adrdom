@@ -804,7 +804,7 @@ fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall()
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
-        "#!/bin/sh\nadr check --staged\nexit $?\n",
+        common::PRE_COMMIT_TEXT,
         "reinstall should restore the hook"
     );
 
@@ -2568,12 +2568,12 @@ fn check_prints_what_failed_and_nothing_on_a_pass() {
     let pre_commit = std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap();
     let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
     assert!(
-        pre_commit.contains("adr check --staged\n"),
+        pre_commit.contains("adr check --staged || exit $?\n"),
         "{}",
         pre_commit
     );
     assert!(
-        commit_msg.contains("adr check --message \"$1\"\n"),
+        commit_msg.contains("adr check --message \"$1\" || exit $?\n"),
         "{}",
         commit_msg
     );

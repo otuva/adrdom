@@ -277,6 +277,63 @@ pub fn list_decision_files_via(root: &Path, source: &Source) -> Vec<PathBuf> {
     out
 }
 
+/// What git's `core.hooksPath` is, read as git reads it (any config level).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HooksPath {
+    /// Not set: git runs the hooks under `.git/hooks`.
+    Unset,
+    /// Set to the tool's directory, `.githooks` under the working tree.
+    Ours,
+    /// Set to anything else, as written.
+    Foreign(String),
+}
+
+/// `core.hooksPath` in the repository at `root`. A relative value resolves
+/// against the working-tree root, and `./.githooks` or an absolute path to the
+/// directory is the same as `.githooks`
+/// (adr-code: db76c9a0-b4fc-4aa2-8afb-47cd78ef7138).
+pub fn hooks_path_state(root: &Path) -> HooksPath {
+    let Some(value) = git(root, &["config", "--path", "core.hooksPath"]) else {
+        return HooksPath::Unset;
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return HooksPath::Unset;
+    }
+    let given = Path::new(value);
+    let full = if given.is_absolute() {
+        given.to_path_buf()
+    } else {
+        root.join(given)
+    };
+    let ours = std::fs::canonicalize(root.join(".githooks"));
+    match (std::fs::canonicalize(&full), ours) {
+        (Ok(a), Ok(b)) if a == b => HooksPath::Ours,
+        // The directory is not there yet: compare the paths as written.
+        _ if lexical(&full) == lexical(&root.join(".githooks")) => HooksPath::Ours,
+        _ => HooksPath::Foreign(value.to_string()),
+    }
+}
+
+/// `path` without its `.` components.
+fn lexical(path: &Path) -> PathBuf {
+    path.components()
+        .filter(|c| !matches!(c, std::path::Component::CurDir))
+        .collect()
+}
+
+/// The directory git runs hooks from while `core.hooksPath` is unset:
+/// `git rev-parse --git-path hooks`, which holds in a worktree too.
+pub fn git_hooks_dir(root: &Path) -> Option<PathBuf> {
+    let out = git(root, &["rev-parse", "--git-path", "hooks"])?;
+    let dir = PathBuf::from(out.trim());
+    Some(if dir.is_absolute() {
+        dir
+    } else {
+        root.join(dir)
+    })
+}
+
 /// Whether git would run the hook at `path` at all: git skips a hook file
 /// that is not executable, silently, so a hook whose content is current
 /// but whose mode is not is no hook. On unix this is the owner execute

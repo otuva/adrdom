@@ -48,6 +48,13 @@ jobs:
       # whatever the fetch left, and its own message for a commit it can't
       # read (per "Does check in CI compare..." unreadable case) is what
       # gets reported, not git's.
+      # A checkout has no core.hooksPath, and check holds it (per "Does
+      # check hold git's hooksPath?", db76c9a0-b4fc-4aa2-8afb-47cd78ef7138).
+      # Only the setting is made here: running install would rewrite the
+      # files check holds and hide a drift this step is there to catch.
+      - name: git config core.hooksPath .githooks
+        run: git config core.hooksPath .githooks
+
       - name: adr check
         run: |
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then

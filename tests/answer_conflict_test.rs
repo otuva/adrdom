@@ -45,7 +45,10 @@ fn checkout(dir: &Path, name: &str) {
 
 fn commit_all(dir: &Path, msg: &str) {
     run_git(dir, &["add", "-A"]);
-    let out = run_git(dir, &["commit", "-q", "-m", msg]);
+    let out = run_git(
+        dir,
+        &["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", msg],
+    );
     assert!(
         out.status.success(),
         "commit '{}' failed: {}",
@@ -55,7 +58,10 @@ fn commit_all(dir: &Path, msg: &str) {
 }
 
 fn finish_merge_commit(dir: &Path) {
-    let out = run_git(dir, &["commit", "--no-edit"]);
+    let out = run_git(
+        dir,
+        &["-c", "core.hooksPath=/dev/null", "commit", "--no-edit"],
+    );
     assert!(
         out.status.success(),
         "merge commit failed: {}",
@@ -63,15 +69,14 @@ fn finish_merge_commit(dir: &Path) {
     );
 }
 
-/// A repo with `adr install`ed and its hook wiring immediately switched off
-/// (same as `ledger_merge_test.rs`'s `new_repo`), so a plain `git commit`
+/// A repo with `adr install`ed; fixture commits skip the hooks per command
+/// (`-c core.hooksPath=/dev/null`), so a fixture commit
 /// here is never gated by the pre-commit hook: these tests drive `adr
 /// check`/`adr check --staged` directly instead.
 fn new_repo() -> PathBuf {
     let dir = init_repo();
     git_ok(&dir, &["config", "merge.conflictStyle", "merge"]);
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    run_git(&dir, &["config", "--unset", "core.hooksPath"]);
     dir
 }
 

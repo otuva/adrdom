@@ -11,7 +11,10 @@ use std::path::Path;
 
 fn commit_all(dir: &Path, msg: &str) {
     run_git(dir, &["add", "-A"]);
-    let out = run_git(dir, &["commit", "-q", "-m", msg]);
+    let out = run_git(
+        dir,
+        &["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", msg],
+    );
     assert!(
         out.status.success(),
         "commit '{}' failed: {}",
@@ -26,8 +29,8 @@ fn head_sha(dir: &Path) -> String {
         .to_string()
 }
 
-/// `adr install`ed, with the hook wiring immediately switched off
-/// (`core.hooksPath` unset) -- these tests drive `adr check --since`
+/// `adr install`ed; fixture commits skip the hooks per command
+/// (`-c core.hooksPath=/dev/null`) -- these tests drive `adr check --since`
 /// directly, at exactly the ledger bytes each case wants to hand it, some
 /// of which a real pre-commit hook would itself refuse to let land; the
 /// same shape `tests/ledger_merge_test.rs`'s `new_repo` already uses.
@@ -35,7 +38,6 @@ fn new_repo() -> std::path::PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     commit_all(&dir, "install");
-    run_git(&dir, &["config", "--unset", "core.hooksPath"]);
     dir
 }
 

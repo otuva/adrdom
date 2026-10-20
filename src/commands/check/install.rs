@@ -29,6 +29,24 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
 /// the merge rule, the ignore rule nor the binary's brief there (per "What
 /// does install write in a satellite?"), so they are not judged.
 pub(super) fn check_install_in(root: &Path, source: &Source, satellite: bool) -> Vec<Failure> {
+    let mut out = check_files(root, source, satellite);
+    out.extend(check_hooks_path(root));
+    out
+}
+
+/// git's `core.hooksPath` is a setting of the machine, not a file in the
+/// index, so no staged or not-staged reading applies to it
+/// (adr-code: db76c9a0-b4fc-4aa2-8afb-47cd78ef7138).
+fn check_hooks_path(root: &Path) -> Option<Failure> {
+    let said = match repo::hooks_path_state(root) {
+        repo::HooksPath::Ours => return None,
+        repo::HooksPath::Unset => msg::hooks_path_unset(),
+        repo::HooksPath::Foreign(v) => msg::hooks_path_not_ours(&v),
+    };
+    Some(Failure::said(Class::Install, said))
+}
+
+fn check_files(root: &Path, source: &Source, satellite: bool) -> Vec<Failure> {
     let staged = judge(root, source, satellite);
     if !matches!(source, Source::Index) {
         return staged.into_iter().map(|(_, f)| f).collect();

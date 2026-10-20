@@ -69,7 +69,7 @@ fn the_brief_says_the_option_sentence_binds() {
 #[test]
 fn the_brief_names_the_adr_code_comment() {
     let b = flat();
-    assert!(b.contains("may carry the comment `adr-code: <id>`, found by search; it ties no test and no rule judges it."), "{}", b);
+    assert!(b.contains("may carry the comment `adr-code: <id>`, found by search; it counts as no test and no rule judges it."), "{}", b);
 }
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5

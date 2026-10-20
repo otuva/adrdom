@@ -358,6 +358,46 @@ pub fn hooks_path_failed(doing: &str, next: Next) -> String {
     )
 }
 
+/// Install stops: git's `core.hooksPath` is set away from `.githooks`, so
+/// another program holds it (adr-code: 897b52a7-f6d2-467e-ba14-9f4ce4865664).
+pub fn hooks_path_foreign(value: &str, install: Cmd) -> String {
+    refuse(
+        format!("core.hooksPath is {}, not .githooks", value),
+        hooks_path_foreign_next(install),
+    )
+}
+
+/// The move that clears a foreign `core.hooksPath`, for install's refusal and
+/// for check's finding alike: install alone leaves it standing.
+fn hooks_path_foreign_next(install: Cmd) -> Next {
+    Next::owner_then_runs(
+        Act::Removes("the hook manager that set core.hooksPath".into()),
+        install,
+    )
+}
+
+/// Install stops: the hook at `from` moves to `own`, and a file is there
+/// already (adr-code: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0).
+pub fn hook_move_blocked(from: &str, own: &str, install: Cmd) -> String {
+    refuse(
+        format!("{} would move to {}, which exists", from, own),
+        Next::agent(Act::Rewrites(own.to_string()))
+            .then(Act::Removes(from.to_string()))
+            .then(Act::Runs(install)),
+    )
+}
+
+/// Install stops: two hooks of one name would move to the same file.
+pub fn hook_move_twice(from: &str, other: &str, own: &str, install: Cmd) -> String {
+    refuse(
+        format!("{} and {} would both move to {}", from, other, own),
+        Next::agent(Act::Writes(own.to_string()))
+            .then(Act::Removes(from.to_string()))
+            .then(Act::Removes(other.to_string()))
+            .then(Act::Runs(install)),
+    )
+}
+
 pub fn parse_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(format!("{}: {}", target, e), next.on(target))
 }
@@ -783,6 +823,20 @@ mod tests {
             no_terms_line("x.md", "id-1", "heading").text(),
             remove_failed("x", e, Next::agent(Act::Rewrites("it".into()))),
             hooks_path_failed("set", Next::agent(Act::Rewrites("it".into()))),
+            hooks_path_foreign(".husky", command(&["adr", "install"])),
+            hook_move_blocked(
+                ".git/hooks/pre-commit",
+                ".githooks/pre-commit.own",
+                command(&["adr", "install"]),
+            ),
+            hook_move_twice(
+                ".git/hooks/pre-commit",
+                ".githooks/pre-commit",
+                ".githooks/pre-commit.own",
+                command(&["adr", "install"]),
+            ),
+            hooks_path_unset().text(),
+            hooks_path_not_ours(".husky").text(),
             heading_not_a_question("x.md", 3).text(),
             approve_not_a_file_approve_takes("README.md"),
             dep_names_decision_of_other_file("x.md", "H?", "id-1", None).text(),
