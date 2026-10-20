@@ -183,9 +183,11 @@ fn a_stale_tie_in_a_satellite_is_reported_by_the_primary_with_the_satellite_path
 // adr: 30063002-420c-4309-bae2-4175b993f8f1
 #[test]
 fn show_in_a_satellite_names_its_primary_first_and_lists_its_decisions() {
-    let (_, sat, id) = satellite_pair();
-    let held = primary_line(&sat);
-    let first = format!("record: {}", held);
+    let (primary, sat, id) = satellite_pair();
+    let first = format!(
+        "record: {}",
+        std::fs::canonicalize(&primary).unwrap().display()
+    );
     for args in [
         &["show"][..],
         &["show", "--ids"],
@@ -523,4 +525,40 @@ fn a_commit_in_a_linked_worktree_of_the_primary_counts_the_tie_in_the_satellite(
         "{}",
         text
     );
+}
+
+// adr: 7e248514-25f8-46ed-936e-2849cd27cf86
+#[test]
+fn show_in_a_satellite_and_in_its_linked_worktree_print_the_directory_the_record_was_read_from() {
+    let (primary, sat, _) = satellite_pair();
+    let want = format!(
+        "record: {}",
+        std::fs::canonicalize(&primary).unwrap().display()
+    );
+    let wt = PathBuf::from(format!("{}-wt", sat.display())).join("deep");
+    std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
+    let made = run_git(
+        &sat,
+        &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+    );
+    assert!(made.status.success(), "{}", stderr(&made));
+    for dir in [&sat, &wt] {
+        let out = adr(dir, &["show"], &[], "");
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(
+            stdout(&out).lines().next(),
+            Some(want.as_str()),
+            "{}",
+            stdout(&out)
+        );
+    }
+}
+
+// adr: 7e248514-25f8-46ed-936e-2849cd27cf86
+#[test]
+fn show_in_a_primary_prints_no_record_line() {
+    let (primary, _, _) = satellite_pair();
+    let out = adr(&primary, &["show"], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(!stdout(&out).contains("record: "), "{}", stdout(&out));
 }

@@ -131,8 +131,10 @@ pub fn satellite_takes_no_flag(flag: &str) -> String {
     )
 }
 
-/// The first line of `show` in a satellite (per "Does show in a satellite
-/// name its primary?").
+/// The first line of `show` in a satellite: the directory the record was
+/// read from (per "Does show in a satellite name its primary?" and "Does
+/// show in a satellite print the directory it read the record from?",
+/// 7e248514-25f8-46ed-936e-2849cd27cf86 A).
 pub fn record_line(primary: &str) -> String {
     format!("record: {}", primary)
 }
