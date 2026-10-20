@@ -123,6 +123,45 @@ pub fn satellite_without_record(given: &str) -> String {
     )
 }
 
+/// `install --satellite <path>`: the satellite is held by another primary,
+/// at `other` (per "Does install take a satellite that holds the path of
+/// another primary?", 490cdbb6-0482-41ba-8f57-36a6136b166f A). The owner
+/// uninstalls in the satellite, then the agent installs it here.
+pub fn satellite_of_another(given: &str, satellite: &str, other: &str) -> String {
+    refuse(
+        format!("install: {} is held by the primary at {}", given, other),
+        Next::all(vec![
+            Next::owner_then_runs(
+                Act::ChangesInto(satellite.to_string()),
+                Cmd::fixed("adr uninstall"),
+            ),
+            Next::agent_runs(command(&["adr", "install", "--satellite", given])),
+        ]),
+    )
+}
+
+/// `uninstall --satellite <path>`: the primary lists no satellite at the
+/// path (per "What drops the row of a satellite the primary no longer finds
+/// at its path?", 59e73422-5d55-4b4c-9793-25f78f5f9586 A).
+pub fn satellite_not_listed(given: &str) -> String {
+    refuse(
+        format!("uninstall: no satellite is listed at {}", given),
+        Next::owner(Act::Rewrites("the path after --satellite".to_string())),
+    )
+}
+
+/// `uninstall --satellite <path>`: a checkout is at the path, so the
+/// satellite is found there and drops its own row.
+pub fn satellite_still_there(given: &str) -> String {
+    refuse(
+        format!("uninstall: a checkout is at {}", given),
+        Next::owner_then_runs(
+            Act::ChangesInto(given.to_string()),
+            Cmd::fixed("adr uninstall"),
+        ),
+    )
+}
+
 /// `install --claude`, `--codex` or `--planning` in a satellite.
 pub fn satellite_takes_no_flag(flag: &str) -> String {
     refuse(
@@ -131,8 +170,10 @@ pub fn satellite_takes_no_flag(flag: &str) -> String {
     )
 }
 
-/// The first line of `show` in a satellite (per "Does show in a satellite
-/// name its primary?").
+/// The first line of `show` in a satellite: the directory the record was
+/// read from (per "Does show in a satellite name its primary?" and "Does
+/// show in a satellite print the directory it read the record from?",
+/// 7e248514-25f8-46ed-936e-2849cd27cf86 A).
 pub fn record_line(primary: &str) -> String {
     format!("record: {}", primary)
 }

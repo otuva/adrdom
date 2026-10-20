@@ -208,3 +208,81 @@ Standard: what one command writes on two sides, its reverse removes on both.
   Costs: the owner edits the primary's list by hand.
 
 **Answer:** A
+
+### What does a path under adrdom to another repository resolve against?
+depends: cb15b115-610f-4c82-a8f7-6bae9c131dc0, 7e756e04-dde0-4137-ad4f-646e52073398
+unrelated: d6112bd7-1649-4a47-ab3f-0681e4d0e8f6, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 459c1b77-82dd-469f-a60c-784b6f3d7b81, 897b52a7-f6d2-467e-ba14-9f4ce4865664, db56a285-946f-48b1-b073-bb1e90192185, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 16a71892-b348-4b9b-82c5-a9d375187bd3, a8280dd1-4bfa-4eeb-9656-1cd06381590a, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 7e248514-25f8-46ed-936e-2849cd27cf86, 59e73422-5d55-4b4c-9793-25f78f5f9586, 490cdbb6-0482-41ba-8f57-36a6136b166f
+id: 0320a987-f8b2-4105-9b27-64bf484026e6
+terms: answers=b36113a1-1384-4e4c-a798-8399f4181366, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, primary=c6fc0041-dead-4e31-9c19-8913c1bdfa29, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
+
+Problem: a checkout in a linked worktree sits elsewhere than the one install ran in, and the relative path finds nothing.
+Standard: a tool that links sibling repositories by relative path resolves it from one fixed root per repository.
+
+- A) The main working tree of the repository the command runs in, when install writes it and check reads it.
+  Why: every worktree of a repository finds the same primary or satellite; nothing is guessed.
+  Costs: tests written in a worktree count, and answers bind, only once they reach the main working tree.
+- B) The directory of the checkout the command runs in.
+  Why: no git call; the path is read as written.
+  Costs: a worktree placed elsewhere finds nothing, and its hook refuses every commit.
+- C) Nothing; the path is written absolute.
+  Why: any checkout on the machine resolves it.
+  Costs: the tracked row breaks on every other machine and in CI.
+
+**Answer:** A
+
+### Does show in a satellite print the directory it read the record from?
+depends: 30063002-420c-4309-bae2-4175b993f8f1, 0320a987-f8b2-4105-9b27-64bf484026e6=*
+unrelated: 0e16fbf3-1401-4538-bd12-25303994af10, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, d1d6fed2-4e1a-44bd-b9cb-22f779a00bce, 91f9652a-f053-4b32-9534-c9c39e7639a4, a9e9e370-7768-4a79-b67b-7fe0926b5670, 1af76f91-5644-42ef-97ea-8f70f934c26c, cb15b115-610f-4c82-a8f7-6bae9c131dc0, b0acc95b-3dd5-4158-ac5c-65a2159972a9, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, d2851ea1-fcb6-476a-b321-c813a594d5e5, 59e73422-5d55-4b4c-9793-25f78f5f9586, 490cdbb6-0482-41ba-8f57-36a6136b166f
+id: 7e248514-25f8-46ed-936e-2849cd27cf86
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, record=68536615-d17e-4399-ad6c-2a2cf8622b2b, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
+
+Problem: the first line of show names the path as held; from a worktree that path, read as written, points at nothing.
+Standard: a tool that resolves a configured path reports the resolved one when it says where it read.
+
+- A) Yes.
+  Why: the line names the directory the record came from; an agent in a worktree sees where.
+  Costs: the line differs between checkouts of one repository.
+- B) No.
+  Why: the line prints the path as the satellite holds it, the same everywhere.
+  Costs: an agent in a worktree resolves the path itself.
+
+**Answer:** A
+
+### What drops the row of a satellite the primary no longer finds at its path?
+depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, 7e756e04-dde0-4137-ad4f-646e52073398, fc118154-4172-48db-bddb-75a691894edf
+unrelated: 03f47941-43c5-479f-bf64-2d030361092d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, cb15b115-610f-4c82-a8f7-6bae9c131dc0, a8280dd1-4bfa-4eeb-9656-1cd06381590a, f5c242b6-e2f6-45a3-8c61-c743f3ad794f, 0320a987-f8b2-4105-9b27-64bf484026e6, 7e248514-25f8-46ed-936e-2849cd27cf86, 490cdbb6-0482-41ba-8f57-36a6136b166f
+id: 59e73422-5d55-4b4c-9793-25f78f5f9586
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, move=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, primary=c6fc0041-dead-4e31-9c19-8913c1bdfa29, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
+
+Problem: a satellite moved or deleted leaves its row, and the primary reports it missing at every check.
+Standard: a hub removes a spoke from its list by one command at the hub, with the spoke absent.
+
+- A) Uninstall in the primary, given the satellite's path, with no checkout at it.
+  Why: the row is the primary's; the command that removes rows removes it.
+  Costs: one flag more on uninstall, and a row dropped while the satellite is merely unmounted.
+- B) Install in the primary, given the satellite's new path, drops the row of the old.
+  Why: a move is one command.
+  Costs: install has to guess which old row the new satellite was.
+- C) The owner, by editing the primary's list by hand.
+  Why: no command.
+  Costs: a tracked file of the tool written by hand.
+
+**Answer:** A
+
+### Does install take a satellite that holds the path of another primary?
+depends: c6fc0041-dead-4e31-9c19-8913c1bdfa29, dd50488e-a8cd-4778-aecc-72295ffd8671, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, a8280dd1-4bfa-4eeb-9656-1cd06381590a
+unrelated: 03f47941-43c5-479f-bf64-2d030361092d, 13ddec51-ce03-4645-99ae-2bbf4f30712d, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 30063002-420c-4309-bae2-4175b993f8f1, da777c6e-f22a-41fa-ba6f-1f1544382710, fc118154-4172-48db-bddb-75a691894edf, 7e756e04-dde0-4137-ad4f-646e52073398, 292359a4-0512-465b-b6a7-79838e66e5a5, 0e16fbf3-1401-4538-bd12-25303994af10, 0320a987-f8b2-4105-9b27-64bf484026e6, 7e248514-25f8-46ed-936e-2849cd27cf86, 59e73422-5d55-4b4c-9793-25f78f5f9586
+id: 490cdbb6-0482-41ba-8f57-36a6136b166f
+terms: install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, moves=d904dc0d-231f-4e93-ac74-7babe888107d, primaries=c6fc0041-dead-4e31-9c19-8913c1bdfa29, primary=c6fc0041-dead-4e31-9c19-8913c1bdfa29, record=68536615-d17e-4399-ad6c-2a2cf8622b2b, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, satellite=dd50488e-a8cd-4778-aecc-72295ffd8671
+
+Problem: install in a primary claims a satellite of another record, and the other primary's row keeps pointing at it.
+Standard: a tool refuses to claim what another instance owns until that one lets go.
+
+- A) No.
+  Why: the refusal names the primary the satellite holds; uninstall there first, then install here.
+  Costs: moving a satellite between primaries is two commands in two repositories.
+- B) Yes.
+  Why: one command moves a satellite.
+  Costs: the old primary's row stays and reports the satellite missing for ever.
+
+**Answer:** A

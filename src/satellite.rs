@@ -24,13 +24,22 @@ impl Place {
     pub fn is_satellite(&self) -> bool {
         self.primary.is_some()
     }
+
+    /// The path to the primary as a move printed here names it
+    /// (`from_checkout`), in a satellite.
+    pub fn primary_shown(&self) -> Option<String> {
+        self.primary
+            .as_deref()
+            .map(|p| from_checkout(&self.code, p))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Located {
     NotARepo,
     Here(Place),
-    /// A satellite whose primary has no record at the path it holds.
+    /// A satellite whose primary has no record at the path it holds;
+    /// `primary` is that path from the checkout (`from_checkout`).
     RecordMissing {
         code: PathBuf,
         primary: String,
@@ -62,13 +71,19 @@ pub fn locate() -> Located {
             primary: None,
         });
     };
-    match fs::canonicalize(code.join(&primary)) {
+    // Per "What does a path under adrdom to another repository resolve
+    // against?" (0320a987-f8b2-4105-9b27-64bf484026e6 A): the main working
+    // tree of the repository, so every worktree finds the same primary.
+    match fs::canonicalize(repo::main_root(&code).join(&primary)) {
         Ok(record) if has_record(&record) => Located::Here(Place {
             code,
             record,
             primary: Some(primary),
         }),
-        _ => Located::RecordMissing { code, primary },
+        _ => Located::RecordMissing {
+            primary: from_checkout(&code, &primary),
+            code,
+        },
     }
 }
 
@@ -143,11 +158,63 @@ pub fn drop_row(primary_root: &Path, path: &str) -> Result<Option<Event>, String
     save(primary_root, &all).map(Some)
 }
 
-/// The rows whose satellite has no git checkout at its path.
-pub fn missing(primary_root: &Path) -> Vec<Row> {
+/// The path `held`, a line of `adrdom/primary`, as the checkout at `code`
+/// reaches it: resolved against the main working tree (per "What does a
+/// path under adrdom to another repository resolve against?",
+/// 0320a987-f8b2-4105-9b27-64bf484026e6 A), then written from `code`, so a
+/// move printed in a linked worktree leads to the primary. In the main
+/// working tree it is the line as held.
+pub fn from_checkout(code: &Path, held: &str) -> String {
+    let base = repo::main_root(code);
+    let here = fs::canonicalize(code).unwrap_or_else(|_| code.to_path_buf());
+    if here == base {
+        return held.to_string();
+    }
+    relative_path(&here, &lexical(&base, Path::new(held)))
+}
+
+/// The row of the primary at `primary_root` whose path, resolved against
+/// the primary's main working tree (per "What does a path under adrdom to
+/// another repository resolve against?", 0320a987-f8b2-4105-9b27-64bf484026e6
+/// A), is the directory `dir` (canonical). The one lookup install's refusal
+/// and uninstall in a satellite share, so the row one finds the other drops.
+pub fn row_at(primary_root: &Path, dir: &Path) -> Option<Row> {
+    let base = repo::main_root(primary_root);
     rows(primary_root)
         .into_iter()
-        .filter(|r| !primary_root.join(&r.path).join(".git").exists())
+        .find(|r| fs::canonicalize(base.join(&r.path)).is_ok_and(|d| d == dir))
+}
+
+/// The primary that holds the satellite at `sat` besides the one at
+/// `primary`, if any (per "Does install take a satellite that holds the path
+/// of another primary?", 490cdbb6-0482-41ba-8f57-36a6136b166f A): the path in
+/// `adrdom/primary`, resolved against the satellite's main working tree,
+/// reaches another repository with a record whose list still has a row for
+/// the satellite. A path to no record, or a list without the row, holds
+/// nothing.
+pub fn held_by_another(sat: &Path, primary: &Path) -> Option<PathBuf> {
+    let here = repo::main_root(sat);
+    let mine = repo::main_root(primary);
+    // The line is read in the checkout given and in the satellite's main
+    // working tree: a linked worktree may lack the file the other holds.
+    let mut held: Vec<String> = [sat, here.as_path()]
+        .into_iter()
+        .filter_map(primary_of)
+        .collect();
+    held.dedup();
+    held.into_iter().find_map(|line| {
+        let other = fs::canonicalize(here.join(line)).ok()?;
+        (has_record(&other) && repo::main_root(&other) != mine && row_at(&other, &here).is_some())
+            .then_some(other)
+    })
+}
+
+/// The rows whose satellite has no git checkout at its path.
+pub fn missing(primary_root: &Path) -> Vec<Row> {
+    let base = repo::main_root(primary_root);
+    rows(primary_root)
+        .into_iter()
+        .filter(|r| !base.join(&r.path).join(".git").exists())
         .collect()
 }
 
@@ -173,6 +240,38 @@ pub fn absolute(given: &Path) -> Result<PathBuf, String> {
                 .map_err(|_| e.to_string()),
             _ => Err(e.to_string()),
         },
+    }
+}
+
+/// `given` resolved against `base` by its words alone: `.` and `..` are
+/// folded away, then the longest part that exists is made canonical, so a
+/// path whose last components are gone still compares equal to the same
+/// path built another way.
+pub fn lexical(base: &Path, given: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for c in base.join(given).components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    let mut tail = Vec::new();
+    let mut head = out.as_path();
+    loop {
+        if let Ok(real) = fs::canonicalize(head) {
+            return tail.iter().rev().fold(real, |p, n| p.join(n));
+        }
+        match (head.parent(), head.file_name()) {
+            (Some(up), Some(name)) => {
+                tail.push(name.to_os_string());
+                head = up;
+            }
+            _ => return out,
+        }
     }
 }
 

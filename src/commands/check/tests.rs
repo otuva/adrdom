@@ -22,11 +22,13 @@ pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> 
     // Per "Does check in the primary count a tie in a satellite?": the primary
     // also reads each satellite of its list that has a checkout, from its
     // working tree. One that is missing is not scanned, never cloned.
+    // Each row from the primary's main working tree, as `satellite::row_at`.
+    let base = crate::repo::main_root(root);
     for row in crate::satellite::rows(root) {
-        if !root.join(&row.path).join(".git").exists() {
+        let dir = base.join(&row.path);
+        if !dir.join(".git").exists() {
             continue;
         }
-        let dir = root.join(&row.path);
         scan(
             &dir,
             &Source::WorkingTree,

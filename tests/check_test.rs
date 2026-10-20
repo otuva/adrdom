@@ -2814,3 +2814,38 @@ fn check_counts_an_adr_tie_that_follows_an_adr_code_comment_on_one_line() {
     );
     assert!(!stdout(&out).contains(other), "{}", stdout(&out));
 }
+
+// adr: 34e81f57-9b3c-4dc4-a2ba-ca227523177d
+//
+// A partial commit (`git commit <path>`) runs the hook with GIT_INDEX_FILE
+// pointing at a temporary index that holds only that path's change. The
+// check reads that index, not `.git/index`: a banned word staged in
+// another file does not refuse this commit, and refuses the next plain one.
+#[test]
+fn partial_commit_checks_the_commit_index_not_the_default_index() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(adr(&dir, &["ban"], &[], "forbiddenword\n").status.success());
+    run_git(&dir, &["add", "-A"]);
+    let seed = run_git(&dir, &["commit", "-q", "-m", "seed"]);
+    assert!(seed.status.success(), "{}", stderr(&seed));
+
+    std::fs::write(dir.join("a.txt"), "forbiddenword\n").unwrap();
+    run_git(&dir, &["add", "a.txt"]);
+    std::fs::write(dir.join("b.txt"), "clean\n").unwrap();
+    run_git(&dir, &["add", "b.txt"]);
+
+    let partial = run_git(&dir, &["commit", "-q", "-m", "msg", "b.txt"]);
+    assert!(
+        partial.status.success(),
+        "{}{}",
+        stdout(&partial),
+        stderr(&partial)
+    );
+
+    let plain = run_git(&dir, &["commit", "-q", "-m", "msg"]);
+    assert!(
+        !plain.status.success(),
+        "a plain commit with the banned word staged must be refused"
+    );
+}

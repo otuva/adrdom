@@ -31,7 +31,7 @@ pub(crate) fn refused_in_satellite(
     if matches!(cmd, Command::Plan | Command::Ask | Command::Approve) {
         if let (Some(file), Ok(record)) = (
             shown.first_mut(),
-            std::fs::canonicalize(root.join(&primary)),
+            std::fs::canonicalize(crate::repo::main_root(root).join(&primary)),
         ) {
             if let Ok(abs) = crate::satellite::absolute(std::path::Path::new(file.as_str())) {
                 if let Ok(inside) = abs.strip_prefix(&record) {
@@ -43,7 +43,12 @@ pub(crate) fn refused_in_satellite(
     let shown: Vec<&str> = shown.iter().map(String::as_str).collect();
     crate::out::eprint_stop(
         cmd,
-        &crate::msg::record_elsewhere(cmd.as_str(), &shown, actor, &primary),
+        &crate::msg::record_elsewhere(
+            cmd.as_str(),
+            &shown,
+            actor,
+            &crate::satellite::from_checkout(root, &primary),
+        ),
     );
     true
 }
