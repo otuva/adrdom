@@ -6,9 +6,9 @@ use crate::msg::{self, Actor, Next};
 use crate::out::{self, Event};
 use crate::repo;
 use crate::rules::Command;
-use crate::satellite::{self, Located};
+use crate::satellite::{self, Located, Place};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The event of the file at `rel` edited in place.
 fn written(rel: &str) -> Event {
@@ -25,21 +25,26 @@ fn removed(rel: &str) -> Event {
 }
 
 /// Owner-only: removes everything `adr install` wrote outside `adrdom/`,
-/// leaving `adrdom/` itself untouched.
-pub fn run() -> i32 {
+/// leaving `adrdom/` itself untouched. With `--satellite <path>` it removes
+/// nothing but the row of the satellite no longer found at `path` (per "What
+/// drops the row of a satellite the primary no longer finds at its path?",
+/// 59e73422-5d55-4b4c-9793-25f78f5f9586 A).
+pub fn run(satellite: Option<PathBuf>) -> i32 {
+    let shown = satellite.as_ref().map(|p| p.display().to_string());
+    let args: Vec<&str> = shown
+        .iter()
+        .flat_map(|p| ["--satellite", p.as_str()])
+        .collect();
     if !repo::owner_authorized() {
-        out::eprint_stop(Command::Uninstall, &msg::owner_refusal("uninstall", &[]));
+        out::eprint_stop(Command::Uninstall, &msg::owner_refusal("uninstall", &args));
         return 2;
     }
 
-    // In a satellite the row it has in the primary's list goes too (per
-    // "Does uninstall in a satellite drop its row from the primary?"); with
-    // no record at the primary's path nothing is removed.
-    let (root, primary_root) = match satellite::locate() {
+    let place = match satellite::locate() {
         Located::NotARepo => {
             out::eprint_stop(
                 Command::Uninstall,
-                &msg::not_a_repo("uninstall", &[], Actor::Owner),
+                &msg::not_a_repo("uninstall", &args, Actor::Owner),
             );
             return 1;
         }
@@ -50,11 +55,22 @@ pub fn run() -> i32 {
             );
             return 1;
         }
-        Located::Here(place) if place.is_satellite() => (
+        Located::Here(place) => place,
+    };
+    if let Some(given) = satellite {
+        return drop_missing(&given, &place);
+    }
+
+    // In a satellite the row it has in the primary's list goes too (per
+    // "Does uninstall in a satellite drop its row from the primary?"); with
+    // no record at the primary's path nothing is removed.
+    let (root, primary_root) = if place.is_satellite() {
+        (
             place.code,
             Some((place.record, place.primary.unwrap_or_default())),
-        ),
-        Located::Here(place) => (place.code, None),
+        )
+    } else {
+        (place.code, None)
     };
 
     // One line per file removed or edited, or the failure that stopped it
@@ -92,6 +108,63 @@ pub fn run() -> i32 {
             1
         }
         None => 0,
+    }
+}
+
+/// `uninstall --satellite <given>`, run in the primary: drops the row whose
+/// directory is `given` and removes nothing else. Both paths are read by
+/// their words, since the satellite is no longer there to resolve. A
+/// satellite is not run from (per "Does a command that writes the record run
+/// in a satellite?"), and a checkout still at the path is not dropped: its
+/// own `adr uninstall` does that.
+fn drop_missing(given: &Path, place: &Place) -> i32 {
+    let shown = given.display().to_string();
+    let main = repo::main_root(&place.record);
+    let Ok(cwd) = std::env::current_dir() else {
+        out::eprint_stop(Command::Uninstall, &msg::satellite_not_listed(&shown));
+        return 1;
+    };
+    let wanted = satellite::lexical(&cwd, given);
+    if let Some(primary) = &place.primary {
+        let rel = satellite::relative_path(&main, &wanted);
+        out::eprint_stop(
+            Command::Uninstall,
+            &msg::record_elsewhere("uninstall", &["--satellite", &rel], Actor::Owner, primary),
+        );
+        return 1;
+    }
+    let Some(row) = satellite::rows(&place.record)
+        .into_iter()
+        .find(|r| satellite::lexical(&main, Path::new(&r.path)) == wanted)
+    else {
+        out::eprint_stop(Command::Uninstall, &msg::satellite_not_listed(&shown));
+        return 1;
+    };
+    if wanted.join(".git").exists() {
+        out::eprint_stop(Command::Uninstall, &msg::satellite_still_there(&shown));
+        return 1;
+    }
+    match satellite::drop_row(&place.record, &row.path) {
+        Ok(event) => {
+            out::print_events(&event.into_iter().collect::<Vec<_>>());
+            0
+        }
+        Err(e) => {
+            out::eprint_stop(
+                Command::Uninstall,
+                &msg::write_failed(
+                    repo::SATELLITES_PATH,
+                    e,
+                    msg::after_fix_owner_runs(crate::moves::command(&[
+                        "adr",
+                        "uninstall",
+                        "--satellite",
+                        &shown,
+                    ])),
+                ),
+            );
+            1
+        }
     }
 }
 

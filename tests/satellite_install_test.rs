@@ -654,3 +654,146 @@ fn install_satellite_again_from_the_same_primary_is_not_refused() {
     let out = adr(&p1, &["install", "--satellite", &rel(&p1, &sat)], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
 }
+
+/// The primary of a pair with its satellite moved to a sibling name, and the
+/// path the primary lists for the satellite.
+fn moved_satellite() -> (PathBuf, PathBuf, String) {
+    let (primary, sat, _) = satellite_pair();
+    let listed = rel(&primary, &sat);
+    let gone = sat.with_file_name(format!(
+        "{}-gone",
+        sat.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::rename(&sat, &gone).unwrap();
+    (primary, gone, listed)
+}
+
+fn primary_files(primary: &Path) -> Vec<(String, Vec<u8>)> {
+    tracked(primary)
+        .into_iter()
+        .map(|f| {
+            let bytes = std::fs::read(primary.join(&f)).unwrap_or_default();
+            (f, bytes)
+        })
+        .collect()
+}
+
+// adr: 59e73422-5d55-4b4c-9793-25f78f5f9586
+#[test]
+fn uninstall_satellite_drops_the_row_of_a_moved_satellite_and_nothing_else() {
+    let (primary, _gone, listed) = moved_satellite();
+    let before = primary_files(&primary);
+    let hooks = stdout(&run_git(&primary, &["config", "core.hooksPath"]));
+    let out = adr_owner(&primary, &["uninstall", "--satellite", &listed], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        stdout(&out).trim(),
+        "written: adrdom/state/satellites.tsv",
+        "{}",
+        stdout(&out)
+    );
+    assert_eq!(satellites_tsv(&primary), "");
+    let after = primary_files(&primary);
+    let changed: Vec<_> = before
+        .iter()
+        .zip(&after)
+        .filter(|(b, a)| b != a)
+        .map(|(b, _)| b.0.clone())
+        .collect();
+    assert_eq!(before.len(), after.len());
+    assert_eq!(changed, vec!["adrdom/state/satellites.tsv".to_string()]);
+    assert!(primary.join(".githooks/pre-commit").exists());
+    assert!(primary.join("AGENTS.md").exists());
+    assert_eq!(
+        stdout(&run_git(&primary, &["config", "core.hooksPath"])),
+        hooks
+    );
+}
+
+// adr: 59e73422-5d55-4b4c-9793-25f78f5f9586
+#[test]
+fn uninstall_satellite_refuses_a_satellite_still_at_its_path() {
+    let (primary, _, _) = satellite_pair();
+    let listed = rel(&primary, &sat_of(&primary));
+    let before = primary_files(&primary);
+    let out = adr_owner(&primary, &["uninstall", "--satellite", &listed], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("a checkout is at"), "{}", err);
+    assert!(err.contains("adr uninstall"), "{}", err);
+    assert_eq!(primary_files(&primary), before);
+}
+
+/// The directory the only row of `primary` names.
+fn sat_of(primary: &Path) -> PathBuf {
+    let row = satellites_tsv(primary);
+    let path = row.lines().next().unwrap().split('\t').next().unwrap();
+    std::fs::canonicalize(primary.join(path)).unwrap()
+}
+
+// adr: 59e73422-5d55-4b4c-9793-25f78f5f9586
+#[test]
+fn uninstall_satellite_refuses_a_path_with_no_row() {
+    let (primary, _gone, _) = moved_satellite();
+    let before = primary_files(&primary);
+    let out = adr_owner(&primary, &["uninstall", "--satellite", "../nowhere"], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("no satellite is listed at ../nowhere"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(primary_files(&primary), before);
+}
+
+// adr: 59e73422-5d55-4b4c-9793-25f78f5f9586
+#[test]
+fn uninstall_satellite_in_a_satellite_names_the_primary_and_writes_nothing() {
+    let (primary, sat, _) = satellite_pair();
+    let listed = rel(&primary, &sat);
+    let before = primary_files(&primary);
+    let sat_before = primary_files(&sat);
+    let out = adr_owner(&sat, &["uninstall", "--satellite", "../elsewhere"], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("uninstall: the record is at"), "{}", err);
+    assert!(err.contains("adr uninstall --satellite"), "{}", err);
+    assert_eq!(primary_files(&primary), before);
+    assert_eq!(primary_files(&sat), sat_before);
+    assert!(satellites_tsv(&primary).starts_with(&listed));
+}
+
+// adr: 59e73422-5d55-4b4c-9793-25f78f5f9586
+#[test]
+fn uninstall_satellite_is_refused_to_an_agent() {
+    let (primary, _gone, listed) = moved_satellite();
+    let before = primary_files(&primary);
+    let out = adr(&primary, &["uninstall", "--satellite", &listed], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("refusing: this is the owner's command"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(primary_files(&primary), before);
+}
+
+// adr: 59e73422-5d55-4b4c-9793-25f78f5f9586
+#[test]
+fn uninstall_satellite_reads_the_path_from_a_subdirectory_and_through_a_gone_parent() {
+    let (primary, _gone, listed) = moved_satellite();
+    let deep = primary.join("sub/deeper");
+    std::fs::create_dir_all(&deep).unwrap();
+    // From a subdirectory: two more `..` to reach the primary's parent.
+    let from_sub = format!("../../{}", listed);
+    let out = adr_owner(&deep, &["uninstall", "--satellite", &from_sub], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(satellites_tsv(&primary), "");
+
+    // Through components that do not exist: `x/missing/child/../..` folds to `x`.
+    let (primary, _gone, listed) = moved_satellite();
+    let through = format!("{}/missing/child/../..", listed);
+    let out = adr_owner(&primary, &["uninstall", "--satellite", &through], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(satellites_tsv(&primary), "");
+}

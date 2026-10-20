@@ -140,6 +140,28 @@ pub fn satellite_of_another(given: &str, satellite: &str, other: &str) -> String
     )
 }
 
+/// `uninstall --satellite <path>`: the primary lists no satellite at the
+/// path (per "What drops the row of a satellite the primary no longer finds
+/// at its path?", 59e73422-5d55-4b4c-9793-25f78f5f9586 A).
+pub fn satellite_not_listed(given: &str) -> String {
+    refuse(
+        format!("uninstall: no satellite is listed at {}", given),
+        Next::owner(Act::Rewrites("the path after --satellite".to_string())),
+    )
+}
+
+/// `uninstall --satellite <path>`: a checkout is at the path, so the
+/// satellite is found there and drops its own row.
+pub fn satellite_still_there(given: &str) -> String {
+    refuse(
+        format!("uninstall: a checkout is at {}", given),
+        Next::owner_then_runs(
+            Act::ChangesInto(given.to_string()),
+            Cmd::fixed("adr uninstall"),
+        ),
+    )
+}
+
 /// `install --claude`, `--codex` or `--planning` in a satellite.
 pub fn satellite_takes_no_flag(flag: &str) -> String {
     refuse(

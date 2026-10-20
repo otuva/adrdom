@@ -32,7 +32,11 @@ enum Command {
         satellite: Option<PathBuf>,
     },
     /// Owner: remove what install wrote outside adrdom/
-    Uninstall,
+    Uninstall {
+        /// Drop the row of the satellite no longer at this path, and remove nothing else
+        #[arg(long)]
+        satellite: Option<PathBuf>,
+    },
     /// Ask the owner the unasked questions of a topic file
     Ask {
         /// The topic file, adrdom/decisions/<topic>.md
@@ -139,7 +143,7 @@ fn main() {
             planning,
             satellite,
         } => commands::install::run(claude, codex, planning, satellite),
-        Command::Uninstall => commands::uninstall::run(),
+        Command::Uninstall { satellite } => commands::uninstall::run(satellite),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Plan { topic_file } => commands::plan::run(topic_file),
         Command::Read => commands::read::run(),

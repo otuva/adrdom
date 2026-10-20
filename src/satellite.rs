@@ -209,6 +209,38 @@ pub fn absolute(given: &Path) -> Result<PathBuf, String> {
     }
 }
 
+/// `given` resolved against `base` by its words alone: `.` and `..` are
+/// folded away, then the longest part that exists is made canonical, so a
+/// path whose last components are gone still compares equal to the same
+/// path built another way.
+pub fn lexical(base: &Path, given: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for c in base.join(given).components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    let mut tail = Vec::new();
+    let mut head = out.as_path();
+    loop {
+        if let Ok(real) = fs::canonicalize(head) {
+            return tail.iter().rev().fold(real, |p, n| p.join(n));
+        }
+        match (head.parent(), head.file_name()) {
+            (Some(up), Some(name)) => {
+                tail.push(name.to_os_string());
+                head = up;
+            }
+            _ => return out,
+        }
+    }
+}
+
 /// `url` without the userinfo of an http or https url (`user:token@`); any
 /// other url is returned as it is.
 pub fn without_userinfo(url: &str) -> String {
