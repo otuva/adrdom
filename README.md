@@ -55,6 +55,8 @@ adr uninstall          # owner only; leaves adrdom/ and the cache
 
 `--planning` refuses on Intel Macs (no onnxruntime build); everything else works there.
 
+A hook the repository already has moves to `.githooks/<name>.own` and runs once check passes. Install stops while another hook manager holds `core.hooksPath`.
+
 ## The loop
 
 ```
