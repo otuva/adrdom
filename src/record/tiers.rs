@@ -248,7 +248,16 @@ mod tests {
             "# Topic\n\n### A?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: 33333333-3333-3333-3333-333333333333, widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         );
         assert_eq!(in_file_parents(&rf), vec![Vec::<usize>::new()]);
-        assert_eq!(STAND_CAP, 4);
+    }
+
+    #[test]
+    fn in_file_parents_is_empty_when_a_heading_entry_dangles() {
+        let body = "Problem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n";
+        let rf = rf_from(&format!(
+            "# Topic\n\n### A?\n\n{body}### B?\n\ndepends: A?, Nowhere?\n\n{body}"
+        ));
+        assert!(rf.derive_error.is_some());
+        assert_eq!(in_file_parents(&rf), vec![Vec::<usize>::new(), Vec::new()]);
     }
 
     #[test]

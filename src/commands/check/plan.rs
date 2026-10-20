@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// `plan`: the plan findings `approve` refuses on (per "What does a depends
-/// line name?", "Does the tool derive tiers from the depends lines?", "Does
-/// the tool cap the questions in a tier?", "Does a depends entry carry the
+/// line name?", "Does the tool derive tiers from the depends lines?", "What
+/// bounds the questions standing on one question?", "Does a depends entry carry the
 /// answers it holds under?", "Does the agent write the bodies before
 /// approve?" and the planning records of "What does the agent do to plan a
 /// topic file?" -- the `plan` findings of the file's judgement, computed

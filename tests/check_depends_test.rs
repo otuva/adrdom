@@ -1,5 +1,5 @@
 // The `## ` tier-heading shape error, the "no depends line" rule, entry
-// resolution (term/decision/dangling/cycle), and the tier cap; the tiers
+// resolution (term/decision/dangling/cycle), and the stand cap; the tiers
 // are no line of check's (bd83aa22). Fixtures are hand-written and approved via
 // hand-written ledger rows (`approve_via_ledger`, `approve_minimal_terms`),
 // never through a real `adr ask`/`adr approve`.

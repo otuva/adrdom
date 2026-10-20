@@ -390,7 +390,6 @@ pub fn cap_finding(
     replaced: &HashSet<String>,
     led: &Ledger,
 ) -> Option<Finding> {
-    rf.tiers.as_ref()?;
     let (parent, open, answered) = state::over_cap_headings(led, rf, replaced)?;
     Some(Finding::said(
         Class::Plan,

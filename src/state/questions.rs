@@ -28,8 +28,8 @@ pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
 /// True when `sec`'s latest ledger state is `refused`, `superseded`, or
 /// `withdrawn`: the question is closed and out of play -- a refused
 /// question is done, a superseded decision has been replaced, a withdrawn
-/// question no longer stands in the file -- so it no longer holds its tier
-/// for the cap (per "Does the tool cap the questions in a tier?").
+/// question no longer stands in the file -- so it is no member the cap counts
+/// (per "What bounds the questions standing on one question?").
 /// `answered` is still live for this purpose (only
 /// `is_frozen`'s edit-lock treats it as closed); a section with no id yet
 /// is live. A `dropped` question is out of play too
@@ -39,9 +39,9 @@ pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
 }
 
 /// True when `sec` is named on the supersedes line of a question not
-/// answered yet (`depends::replaced_ids`): it is left out of its tier's
-/// count, so the cap holds by what the tier holds once that question is
-/// answered.
+/// answered yet (`depends::replaced_ids`): it is left out of the cap's count
+/// (per "Does the cap count a decision an open question supersedes?"), so
+/// the cap holds by what stands once that question is answered.
 fn is_replaced(sec: &Section, replaced: &std::collections::HashSet<String>) -> bool {
     sec.id.as_ref().is_some_and(|id| replaced.contains(id))
 }
@@ -91,6 +91,9 @@ pub fn over_cap_headings(
     rf: &RecordFile,
     replaced: &std::collections::HashSet<String>,
 ) -> Option<(Option<String>, Vec<String>, usize)> {
+    // Depends lines that do not resolve are a derive error, reported on its
+    // own; the groups are read only off lines that resolve.
+    rf.tiers.as_ref()?;
     let live: Vec<bool> = rf
         .sections
         .iter()
