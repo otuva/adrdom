@@ -318,47 +318,6 @@ Standard: a dependency is resolved before what rests on it; a build never links 
 
 **Answer:** A
 
-### What bounds the questions at one tier?
-depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2=*
-supersedes: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e, 14180eab-60a4-48d3-8efc-c1b23a96ce3a
-unrelated: 946263aa-519a-47aa-b743-5cdcf52f5d35, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, d808917b-0717-45ad-ab83-9fa274b9a9d4, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 7d47885f-3a45-45f9-a092-4314301f0d7b, 1fb71321-bb84-492f-b9d5-1444c9c444af, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 292a10b8-c287-4d71-b2bd-840da0a6de61, 7327cd58-ac58-40a4-8ef2-00072fb552b2, da59b448-1afb-4469-b40e-69eda8f253c2, e3200081-9995-4bbe-983f-2f430dc341e7, 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40, 49a1c3a8-07ea-448a-8926-2362c0617758, da80931c-68cf-4c51-acce-060307bbd973, 9bf76db8-4821-4257-ac49-4c22c2a0e538, 86d5e944-ecfa-44bc-9819-83ee4b96890d, 010901e0-c02d-49eb-98bc-d584756d7f51, 9afe335c-2a7a-4625-b115-f74d3f091cac, 1d7c758d-1fd5-4e0c-8559-517315b15aaa
-id: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
-terms: approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, topic=292a10b8-c287-4d71-b2bd-840da0a6de61
-
-Problem: nothing bounds how many questions stand at one height, and a plan passes by being wide instead of deep.
-Standard: kanban caps work in progress at every column and stops a pull past the cap.
-
-- A) A cap of four set in the tool; approve and ask stop a plan with a tier over it.
-  Why: the harm of one bad question is bounded, and a large plan passes only by being deep.
-  Costs: a topic with more than four questions standing on terms alone needs a higher question or a split.
-- B) Nothing: a tier holds as many questions as the plan puts in it.
-  Why: nothing new in the tool, and the owner reads the plan whole at approve.
-  Costs: a plan passes by being wide, and one bad question sits among many at one height.
-- C) A cap of four the owner moves with an owner command the ledger records.
-  Why: the value moves without a question or a release.
-  Costs: one more owner command and ledger event to guard, for a value no plan has pushed against.
-
-**Answer:** A
-
-### Does the tier cap count a decision an open question supersedes?
-depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 2bae531b-c4df-48a0-89a0-3d52726741ea, e2533580-1486-4dc9-8697-e6c53605fe72, 0e38f001-0226-4927-9a78-2e9fc1ec18d4=A|C
-supersedes: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
-unrelated: de1c5329-e448-45eb-b14c-88b8654447a4, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 7327cd58-ac58-40a4-8ef2-00072fb552b2, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e, 1fb71321-bb84-492f-b9d5-1444c9c444af, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 6b3d8e59-e145-49e1-860d-a79d753d745c, f4f667ad-8714-4e65-897b-c7002e423c28, 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40, 49a1c3a8-07ea-448a-8926-2362c0617758, da80931c-68cf-4c51-acce-060307bbd973, 9bf76db8-4821-4257-ac49-4c22c2a0e538, f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2, 010901e0-c02d-49eb-98bc-d584756d7f51, 9afe335c-2a7a-4625-b115-f74d3f091cac, 1d7c758d-1fd5-4e0c-8559-517315b15aaa
-id: 86d5e944-ecfa-44bc-9819-83ee4b96890d
-terms: approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, move=d904dc0d-231f-4e93-ac74-7babe888107d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refused=0942e445-0163-423e-8ba7-84dd8ac07045, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
-
-Problem: a question replacing a decision in a full tier is refused on the cap when old and new count together, so a decision in a full tier cannot be replaced in its own file.
-Standard: a limit on a set is judged on the set as the change leaves it.
-
-- A) No.
-  Why: a replacement in a full tier is a legal move, and the file holding a subject keeps holding it.
-  Costs: approve and ask count from open supersedes lines, and a refused replacement puts the old back in the count.
-- B) Yes.
-  Why: one count, read straight off the file.
-  Costs: a full tier takes no replacement in its own file, so the replacement lands away from its subject.
-
-**Answer:** A
-
 ### What bounds the questions standing on one question?
 depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 9afe335c-2a7a-4625-b115-f74d3f091cac, 010901e0-c02d-49eb-98bc-d584756d7f51
 supersedes: 0e38f001-0226-4927-9a78-2e9fc1ec18d4, 86d5e944-ecfa-44bc-9819-83ee4b96890d
@@ -379,6 +338,8 @@ Standard: an issue tree bounds the branches under each node, a handful per node,
   Why: nothing to count, and the owner reads the plan whole at approve.
   Costs: thirty questions standing on one decision pass, and one supersede drops all of them.
 
+**Answer:** A
+
 ### Does the cap count a decision an open question supersedes?
 depends: 2bae531b-c4df-48a0-89a0-3d52726741ea, e2533580-1486-4dc9-8697-e6c53605fe72, b30c29aa-f2b4-4792-9c9f-acc645a29d4e=A|B
 supersedes: 86d5e944-ecfa-44bc-9819-83ee4b96890d
@@ -396,6 +357,8 @@ Standard: a limit on a set is judged on the set as the change leaves it.
   Why: one count, read straight off the file.
   Costs: a full place takes no replacement, so the replacement lands away from its subject.
 
+**Answer:** A
+
 ### Does the cap stop a plan whose questions over it are all answered?
 depends: b36113a1-1384-4e4c-a798-8399f4181366, b30c29aa-f2b4-4792-9c9f-acc645a29d4e=A|B, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
 unrelated: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, da59b448-1afb-4469-b40e-69eda8f253c2, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 86d5e944-ecfa-44bc-9819-83ee4b96890d, d984e425-3e88-4756-88fb-18241f9f62a7, 010901e0-c02d-49eb-98bc-d584756d7f51, 0e38f001-0226-4927-9a78-2e9fc1ec18d4, fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94, 9bf76db8-4821-4257-ac49-4c22c2a0e538, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 6b3d8e59-e145-49e1-860d-a79d753d745c, c3127af2-4c96-48d5-a164-bac49a9a09ec, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, 9c1b476c-9296-444b-a51c-e2957ad40ff5, e4a2ef0c-3354-4c9b-a8d9-9e204e544d85
@@ -411,3 +374,5 @@ Standard: a linter run on a change reports what the change touches, not every ol
 - B) Yes.
   Why: one rule over the whole file at every run.
   Costs: a file holding such a question stops every plan until a supersede, and each decision standing on it falls too.
+
+**Answer:** A
