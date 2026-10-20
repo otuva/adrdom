@@ -24,13 +24,22 @@ impl Place {
     pub fn is_satellite(&self) -> bool {
         self.primary.is_some()
     }
+
+    /// The path to the primary as a move printed here names it
+    /// (`from_checkout`), in a satellite.
+    pub fn primary_shown(&self) -> Option<String> {
+        self.primary
+            .as_deref()
+            .map(|p| from_checkout(&self.code, p))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Located {
     NotARepo,
     Here(Place),
-    /// A satellite whose primary has no record at the path it holds.
+    /// A satellite whose primary has no record at the path it holds;
+    /// `primary` is that path from the checkout (`from_checkout`).
     RecordMissing {
         code: PathBuf,
         primary: String,
@@ -71,7 +80,10 @@ pub fn locate() -> Located {
             record,
             primary: Some(primary),
         }),
-        _ => Located::RecordMissing { code, primary },
+        _ => Located::RecordMissing {
+            primary: from_checkout(&code, &primary),
+            code,
+        },
     }
 }
 
@@ -146,13 +158,31 @@ pub fn drop_row(primary_root: &Path, path: &str) -> Result<Option<Event>, String
     save(primary_root, &all).map(Some)
 }
 
-/// The directory a row of the primary at `primary_root` names: its path
-/// resolved against the primary's main working tree (per "What does a path
-/// under adrdom to another repository resolve against?",
-/// 0320a987-f8b2-4105-9b27-64bf484026e6 A), whichever worktree of the
-/// primary `primary_root` is.
-pub fn row_dir(primary_root: &Path, row: &Row) -> PathBuf {
-    repo::main_root(primary_root).join(&row.path)
+/// The path `held`, a line of `adrdom/primary`, as the checkout at `code`
+/// reaches it: resolved against the main working tree (per "What does a
+/// path under adrdom to another repository resolve against?",
+/// 0320a987-f8b2-4105-9b27-64bf484026e6 A), then written from `code`, so a
+/// move printed in a linked worktree leads to the primary. In the main
+/// working tree it is the line as held.
+pub fn from_checkout(code: &Path, held: &str) -> String {
+    let base = repo::main_root(code);
+    let here = fs::canonicalize(code).unwrap_or_else(|_| code.to_path_buf());
+    if here == base {
+        return held.to_string();
+    }
+    relative_path(&here, &lexical(&base, Path::new(held)))
+}
+
+/// The row of the primary at `primary_root` whose path, resolved against
+/// the primary's main working tree (per "What does a path under adrdom to
+/// another repository resolve against?", 0320a987-f8b2-4105-9b27-64bf484026e6
+/// A), is the directory `dir` (canonical). The one lookup install's refusal
+/// and uninstall in a satellite share, so the row one finds the other drops.
+pub fn row_at(primary_root: &Path, dir: &Path) -> Option<Row> {
+    let base = repo::main_root(primary_root);
+    rows(primary_root)
+        .into_iter()
+        .find(|r| fs::canonicalize(base.join(&r.path)).is_ok_and(|d| d == dir))
 }
 
 /// The primary that holds the satellite at `sat` besides the one at
@@ -163,16 +193,20 @@ pub fn row_dir(primary_root: &Path, row: &Row) -> PathBuf {
 /// the satellite. A path to no record, or a list without the row, holds
 /// nothing.
 pub fn held_by_another(sat: &Path, primary: &Path) -> Option<PathBuf> {
-    let held = primary_of(sat)?;
-    let other = fs::canonicalize(repo::main_root(sat).join(held)).ok()?;
-    if !has_record(&other) || repo::main_root(&other) == repo::main_root(primary) {
-        return None;
-    }
     let here = repo::main_root(sat);
-    rows(&other)
-        .iter()
-        .any(|r| fs::canonicalize(row_dir(&other, r)).is_ok_and(|d| d == here))
-        .then_some(other)
+    let mine = repo::main_root(primary);
+    // The line is read in the checkout given and in the satellite's main
+    // working tree: a linked worktree may lack the file the other holds.
+    let mut held: Vec<String> = [sat, here.as_path()]
+        .into_iter()
+        .filter_map(primary_of)
+        .collect();
+    held.dedup();
+    held.into_iter().find_map(|line| {
+        let other = fs::canonicalize(here.join(line)).ok()?;
+        (has_record(&other) && repo::main_root(&other) != mine && row_at(&other, &here).is_some())
+            .then_some(other)
+    })
 }
 
 /// The rows whose satellite has no git checkout at its path.

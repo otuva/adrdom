@@ -43,7 +43,12 @@ pub(crate) fn refused_in_satellite(
     let shown: Vec<&str> = shown.iter().map(String::as_str).collect();
     crate::out::eprint_stop(
         cmd,
-        &crate::msg::record_elsewhere(cmd.as_str(), &shown, actor, &primary),
+        &crate::msg::record_elsewhere(
+            cmd.as_str(),
+            &shown,
+            actor,
+            &crate::satellite::from_checkout(root, &primary),
+        ),
     );
     true
 }

@@ -154,11 +154,13 @@ fn git_bytes(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
     for name in ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"] {
         cmd.env_remove(name);
     }
-    let own = find_root()
-        .zip(std::fs::canonicalize(root).ok())
-        .is_some_and(|(r, c)| std::fs::canonicalize(r).is_ok_and(|r| r == c));
-    if !own {
-        cmd.env_remove("GIT_INDEX_FILE");
+    if std::env::var_os("GIT_INDEX_FILE").is_some() {
+        let own = find_root()
+            .zip(std::fs::canonicalize(root).ok())
+            .is_some_and(|(r, c)| std::fs::canonicalize(r).is_ok_and(|r| r == c));
+        if !own {
+            cmd.env_remove("GIT_INDEX_FILE");
+        }
     }
     let out = cmd.output().ok()?;
     out.status.success().then_some(out.stdout)

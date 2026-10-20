@@ -64,11 +64,8 @@ pub fn run(satellite: Option<PathBuf>) -> i32 {
     // In a satellite the row it has in the primary's list goes too (per
     // "Does uninstall in a satellite drop its row from the primary?"); with
     // no record at the primary's path nothing is removed.
-    let (root, primary_root) = if place.is_satellite() {
-        (
-            place.code,
-            Some((place.record, place.primary.unwrap_or_default())),
-        )
+    let (root, primary_root) = if let Some(shown) = place.primary_shown() {
+        (place.code, Some((place.record, shown)))
     } else {
         (place.code, None)
     };
@@ -89,13 +86,10 @@ pub fn run(satellite: Option<PathBuf>) -> i32 {
         // 490cdbb6-0482-41ba-8f57-36a6136b166f A), so this run lets go of
         // every row install would see.
         let here = repo::main_root(&sat);
-        let path = satellite::rows(record)
-            .into_iter()
-            .find(|r| fs::canonicalize(satellite::row_dir(record, r)).is_ok_and(|d| d == here))
-            .map_or_else(
-                || satellite::relative_path(&repo::main_root(record), &here),
-                |r| r.path,
-            );
+        let path = satellite::row_at(record, &here).map_or_else(
+            || satellite::relative_path(&repo::main_root(record), &here),
+            |r| r.path,
+        );
         match satellite::drop_row(record, &path) {
             Ok(Some(Event::FileWritten { path })) => events.push(written(&format!(
                 "{}/{}",
@@ -136,11 +130,11 @@ fn drop_missing(given: &Path, place: &Place) -> i32 {
         return 1;
     };
     let wanted = satellite::lexical(&cwd, given);
-    if let Some(primary) = &place.primary {
+    if let Some(primary) = place.primary_shown() {
         let rel = satellite::relative_path(&main, &wanted);
         out::eprint_stop(
             Command::Uninstall,
-            &msg::record_elsewhere("uninstall", &["--satellite", &rel], Actor::Owner, primary),
+            &msg::record_elsewhere("uninstall", &["--satellite", &rel], Actor::Owner, &primary),
         );
         return 1;
     }

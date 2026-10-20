@@ -837,3 +837,119 @@ fn install_satellite_refusal_clears_when_the_row_names_the_directory_in_another_
     let out = adr(&p2, &["install", "--satellite", &rel(&p2, &sat)], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
 }
+
+/// The path a refusal prints after `marker`, up to the next whitespace.
+fn path_after(text: &str, marker: &str) -> String {
+    let at = text.find(marker).unwrap_or_else(|| panic!("{}", text)) + marker.len();
+    text[at..]
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .trim_end_matches(';')
+        .to_string()
+}
+
+/// `base` joined with `rel`, with `.` and `..` folded away without the disk.
+fn folded(base: &Path, rel: &str) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in base.join(rel).components() {
+        match c {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// A linked worktree of `sat` at `<sat>-far/away/wt`, placed away from any
+/// sibling layout.
+fn far_worktree(sat: &Path) -> PathBuf {
+    let wt = PathBuf::from(format!("{}-far", sat.display())).join("away/wt");
+    std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
+    let made = run_git(
+        sat,
+        &["worktree", "add", "-q", "-b", "far", wt.to_str().unwrap()],
+    );
+    assert!(made.status.success(), "{}", stderr(&made));
+    std::fs::canonicalize(&wt).unwrap()
+}
+
+// adr: 0320a987-f8b2-4105-9b27-64bf484026e6
+// adr: 0e16fbf3-1401-4538-bd12-25303994af10
+#[test]
+fn a_writing_command_in_a_far_linked_worktree_of_a_satellite_names_a_path_that_leads_to_the_primary(
+) {
+    let (primary, sat, _) = satellite_pair();
+    let wt = far_worktree(&sat);
+    let topic = "adrdom/decisions/x.md";
+    let out = adr(&wt, &["ask", topic], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let shown = path_after(&err, "the record is at ");
+    assert_eq!(
+        std::fs::canonicalize(wt.join(&shown)).unwrap(),
+        std::fs::canonicalize(&primary).unwrap(),
+        "{}",
+        err
+    );
+    // In the main working tree the line is printed as adrdom/primary holds it.
+    let held = std::fs::read_to_string(sat.join("adrdom/primary")).unwrap();
+    let main = adr(&sat, &["ask", topic], &[], "");
+    assert!(!main.status.success());
+    assert!(
+        stderr(&main).contains(&format!("the record is at {}", held.trim_end())),
+        "{}",
+        stderr(&main)
+    );
+}
+
+// adr: 0320a987-f8b2-4105-9b27-64bf484026e6
+#[test]
+fn check_in_a_far_linked_worktree_with_the_primary_moved_names_where_the_primary_was() {
+    let (primary, sat, _) = satellite_pair();
+    let wt = far_worktree(&sat);
+    let was = std::fs::canonicalize(&primary).unwrap();
+    std::fs::rename(&primary, format!("{}-moved", primary.display())).unwrap();
+    let out = adr(&wt, &["check"], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let shown = path_after(&err, "record not found at ");
+    assert_eq!(folded(&wt, &shown), was, "{}", err);
+}
+
+// adr: 490cdbb6-0482-41ba-8f57-36a6136b166f
+#[test]
+fn install_satellite_refuses_a_linked_worktree_whose_main_working_tree_holds_the_line() {
+    let (p1, sat) = primary_and_plain();
+    std::fs::write(sat.join("README"), "x\n").unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "chore: seed"]] {
+        assert!(run_git(&sat, args).status.success());
+    }
+    let out = adr(&p1, &["install", "--satellite", &rel(&p1, &sat)], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    // adrdom/primary stays uncommitted, so the worktree lacks it.
+    let wt = far_worktree(&sat);
+    assert!(!wt.join("adrdom/primary").exists());
+    let p2 = init_repo();
+    assert!(adr(&p2, &["install"], &[], "").status.success());
+    let before = (status(&p2), status(&wt), satellites_tsv(&p2), tracked(&wt));
+    let out = adr(
+        &p2,
+        &["install", "--satellite", wt.to_str().unwrap()],
+        &[],
+        "",
+    );
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let other = std::fs::canonicalize(&p1).unwrap();
+    assert!(err.contains(&other.display().to_string()), "{}", err);
+    assert_eq!(satellites_tsv(&p2), "");
+    assert!(!wt.join("adrdom/primary").exists());
+    assert_eq!(
+        before,
+        (status(&p2), status(&wt), satellites_tsv(&p2), tracked(&wt))
+    );
+}

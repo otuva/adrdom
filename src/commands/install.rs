@@ -1060,7 +1060,12 @@ fn run_in_satellite(
         let rel = satellite::relative_path(&repo::main_root(&place.record), &abs);
         out::eprint_stop(
             Command::Install,
-            &msg::record_elsewhere("install", &["--satellite", &rel], Actor::Agent, &primary),
+            &msg::record_elsewhere(
+                "install",
+                &["--satellite", &rel],
+                Actor::Agent,
+                &place.primary_shown().unwrap_or_default(),
+            ),
         );
         return 1;
     }
