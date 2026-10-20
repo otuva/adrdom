@@ -369,10 +369,10 @@ terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04
 Problem: a cap on the questions at one height makes unrelated questions share its places, so a question hangs on whichever question leaves a place free.
 Standard: an issue tree bounds the branches under each node, a handful per node, and grows by depth where a node fills.
 
-- A) Approve and ask stop a plan where five questions, answered or not, stand on one question or on terms alone.
+- A) Four at most, answered or not, stand on one question or on terms alone; approve and ask stop a fifth.
   Why: a question names the question it stands on, and only a question gathering a fifth is refused.
   Costs: the cap no longer bounds how many questions sit at one height of a file.
-- B) Approve and ask stop a plan where five questions, answered or not, sit at one tier.
+- B) Four at most, answered or not, sit at one tier; approve and ask stop a fifth.
   Why: one count per height, read off the tiers.
   Costs: unrelated questions share the places of a tier, so a question hangs on whichever question leaves a place free.
 - C) Nothing: as many questions stand on one question as the plan writes.
