@@ -579,3 +579,78 @@ fn install_satellite_from_a_linked_worktree_of_the_primary_writes_paths_between_
         format!("{}\n", rel_back(&primary, &sat))
     );
 }
+
+/// A satellite installed under a first primary, and a second primary with a
+/// record.
+fn held_satellite() -> (PathBuf, PathBuf, PathBuf) {
+    let (p1, sat) = primary_and_plain();
+    let out = adr(&p1, &["install", "--satellite", &rel(&p1, &sat)], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let p2 = init_repo();
+    assert!(adr(&p2, &["install"], &[], "").status.success());
+    (p1, p2, sat)
+}
+
+// adr: 490cdbb6-0482-41ba-8f57-36a6136b166f
+#[test]
+fn install_satellite_refuses_a_satellite_held_by_another_primary_and_writes_nothing() {
+    let (p1, p2, sat) = held_satellite();
+    let before = (
+        status(&p2),
+        status(&sat),
+        satellites_tsv(&p2),
+        std::fs::read_to_string(sat.join("adrdom/primary")).unwrap(),
+    );
+    let out = adr(&p2, &["install", "--satellite", &rel(&p2, &sat)], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let other = std::fs::canonicalize(&p1).unwrap();
+    assert!(err.contains(&other.display().to_string()), "{}", err);
+    assert!(err.contains("adr uninstall"), "{}", err);
+    assert_eq!(satellites_tsv(&p2), "");
+    assert_eq!(
+        before,
+        (
+            status(&p2),
+            status(&sat),
+            satellites_tsv(&p2),
+            std::fs::read_to_string(sat.join("adrdom/primary")).unwrap(),
+        )
+    );
+    assert!(satellites_tsv(&p1).starts_with(&format!("{}\t", rel(&p1, &sat))));
+}
+
+// adr: 490cdbb6-0482-41ba-8f57-36a6136b166f
+#[test]
+fn install_satellite_takes_a_satellite_after_uninstall_in_it() {
+    let (_, p2, sat) = held_satellite();
+    assert!(adr_owner(&sat, &["uninstall"], "").status.success());
+    let out = adr(&p2, &["install", "--satellite", &rel(&p2, &sat)], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        std::fs::read_to_string(sat.join("adrdom/primary")).unwrap(),
+        format!("{}\n", rel_back(&p2, &sat))
+    );
+    assert!(satellites_tsv(&p2).starts_with(&format!("{}\t", rel(&p2, &sat))));
+}
+
+// adr: 490cdbb6-0482-41ba-8f57-36a6136b166f
+#[test]
+fn install_satellite_takes_a_satellite_whose_primary_is_gone() {
+    let (p1, p2, sat) = held_satellite();
+    std::fs::rename(&p1, format!("{}-moved", p1.display())).unwrap();
+    let out = adr(&p2, &["install", "--satellite", &rel(&p2, &sat)], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        std::fs::read_to_string(sat.join("adrdom/primary")).unwrap(),
+        format!("{}\n", rel_back(&p2, &sat))
+    );
+}
+
+// adr: 490cdbb6-0482-41ba-8f57-36a6136b166f
+#[test]
+fn install_satellite_again_from_the_same_primary_is_not_refused() {
+    let (p1, _, sat) = held_satellite();
+    let out = adr(&p1, &["install", "--satellite", &rel(&p1, &sat)], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+}

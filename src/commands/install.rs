@@ -992,6 +992,13 @@ fn run_satellite_of(root: &Path, given: &Path) -> i32 {
     if !satellite::has_record(&primary) {
         return refuse(msg::satellite_without_record(&shown));
     }
+    if let Some(other) = satellite::held_by_another(&sat, &primary) {
+        return refuse(msg::satellite_of_another(
+            &shown,
+            &sat.display().to_string(),
+            &other.display().to_string(),
+        ));
+    }
 
     // Per "What does a path under adrdom to another repository resolve
     // against?" (0320a987-f8b2-4105-9b27-64bf484026e6 A): both paths run

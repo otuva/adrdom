@@ -123,6 +123,23 @@ pub fn satellite_without_record(given: &str) -> String {
     )
 }
 
+/// `install --satellite <path>`: the satellite is held by another primary,
+/// at `other` (per "Does install take a satellite that holds the path of
+/// another primary?", 490cdbb6-0482-41ba-8f57-36a6136b166f A). The owner
+/// uninstalls in the satellite, then the agent installs it here.
+pub fn satellite_of_another(given: &str, satellite: &str, other: &str) -> String {
+    refuse(
+        format!("install: {} is held by the primary at {}", given, other),
+        Next::all(vec![
+            Next::owner_then_runs(
+                Act::ChangesInto(satellite.to_string()),
+                Cmd::fixed("adr uninstall"),
+            ),
+            Next::agent_runs(command(&["adr", "install", "--satellite", given])),
+        ]),
+    )
+}
+
 /// `install --claude`, `--codex` or `--planning` in a satellite.
 pub fn satellite_takes_no_flag(flag: &str) -> String {
     refuse(

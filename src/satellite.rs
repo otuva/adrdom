@@ -155,6 +155,26 @@ pub fn row_dir(primary_root: &Path, row: &Row) -> PathBuf {
     repo::main_root(primary_root).join(&row.path)
 }
 
+/// The primary that holds the satellite at `sat` besides the one at
+/// `primary`, if any (per "Does install take a satellite that holds the path
+/// of another primary?", 490cdbb6-0482-41ba-8f57-36a6136b166f A): the path in
+/// `adrdom/primary`, resolved against the satellite's main working tree,
+/// reaches another repository with a record whose list still has a row for
+/// the satellite. A path to no record, or a list without the row, holds
+/// nothing.
+pub fn held_by_another(sat: &Path, primary: &Path) -> Option<PathBuf> {
+    let held = primary_of(sat)?;
+    let other = fs::canonicalize(repo::main_root(sat).join(held)).ok()?;
+    if !has_record(&other) || repo::main_root(&other) == repo::main_root(primary) {
+        return None;
+    }
+    let here = repo::main_root(sat);
+    rows(&other)
+        .iter()
+        .any(|r| fs::canonicalize(row_dir(&other, r)).is_ok_and(|d| d == here))
+        .then_some(other)
+}
+
 /// The rows whose satellite has no git checkout at its path.
 pub fn missing(primary_root: &Path) -> Vec<Row> {
     let base = repo::main_root(primary_root);
