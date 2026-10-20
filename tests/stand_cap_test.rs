@@ -274,6 +274,81 @@ fn a_question_naming_two_questions_counts_under_each() {
     );
 }
 
+// adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
+#[test]
+fn a_question_naming_two_questions_counts_under_the_second_too() {
+    let dir = setup();
+    let mut c = format!("# A\n{}{}", terms(P), terms(Q));
+    for i in 1..=4 {
+        c.push_str(&on(&h(i), Q));
+    }
+    c.push_str(&sec(&h(5), &format!("{}=*, {}=*", P, Q), None));
+    write_record(&dir, &rel("a"), &c);
+    let out = approve(&dir, "a");
+    refused_with(
+        &out,
+        &[&format!("5 questions stand on \"{}\", the most is 4", Q)],
+    );
+    assert!(
+        !said_cap(&out).contains(&format!("stand on \"{}\"", P)),
+        "{}",
+        said_cap(&out)
+    );
+}
+
+// adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
+#[test]
+fn a_child_of_a_refused_question_counts_under_it() {
+    let dir = setup();
+    let a = write_record(&dir, &rel("a"), &under_p(4));
+    approve_ok(&dir, "a");
+    ask_ok(&dir, "a");
+    let out = adr_answer(&dir, &id_of(&a, P), "refuse");
+    assert!(out.status.success(), "refuse failed: {}", stderr(&out));
+    append(&a, &sec(&h(5), &id_of(&a, P), None));
+    let out = approve(&dir, "a");
+    refused_with(
+        &out,
+        &[&format!("5 questions stand on \"{}\", the most is 4", P)],
+    );
+}
+
+// adr: 9c1b476c-9296-444b-a51c-e2957ad40ff5
+#[test]
+fn an_open_replacement_frees_a_place_under_a_question() {
+    let dir = setup();
+    let a = write_record(&dir, &rel("a"), &under_p(4));
+    approve_ok(&dir, "a");
+    ask_ok(&dir, "a");
+    let out = adr_answer(&dir, &id_of(&a, P), "A");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
+    for i in 1..=4 {
+        let out = adr_answer(&dir, &id_of(&a, &h(i)), "A");
+        assert!(out.status.success(), "answer failed: {}", stderr(&out));
+    }
+    append(&a, &sec(&h(5), &id_of(&a, P), Some(&h(1))));
+    approve_ok(&dir, "a");
+    ask_ok(&dir, "a");
+}
+
+// adr: 4555583f-3499-4963-993b-34556fe519f7
+#[test]
+fn ask_passes_a_group_whose_questions_are_all_answered() {
+    let dir = setup();
+    let a = five_answered(&dir);
+    approve_ok(&dir, "a");
+    let first = id_of(&a, &h(1));
+    append(&a, &sec("Is widget extra chosen?", &first, None));
+    approve_ok(&dir, "a");
+    let out = ask(&dir, "a");
+    assert!(out.status.success(), "ask failed: {}", said_cap(&out));
+    assert!(
+        !said_cap(&out).contains("the most is 4"),
+        "{}",
+        said_cap(&out)
+    );
+}
+
 /// a.md with five questions on terms alone, all answered, written the way a
 /// plan approved before the cap would stand (ids, answers and ledger rows by
 /// hand: approve would stop a fifth).
