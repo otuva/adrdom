@@ -358,3 +358,50 @@ Standard: a limit on a set is judged on the set as the change leaves it.
   Costs: a full tier takes no replacement in its own file, so the replacement lands away from its subject.
 
 **Answer:** A
+
+### What bounds the questions standing on one question?
+depends: question, depends, What does a depends entry name?, What bounds the questions a depends line names?
+supersedes: What bounds the questions at one tier?, Does the tier cap count a decision an open question supersedes?
+unrelated: Does answer take a question standing on a question that has no decision?, Does one question heading stand in two topic files?, What are the tiers derived from?, What does ask put to the owner at one run?, Does ask stop a question outside the plan?, Does a refused question hold the tiers above it?, What stops a question that has no depends line?, What stands under a question's heading?, Does the cap count a decision an open question supersedes?, Does the cap stop a plan whose questions over it are all answered?, answer set, tier, topic
+
+Problem: a cap on the questions at one height makes unrelated questions share its places, so a question hangs on whichever question leaves a place free.
+Standard: an issue tree bounds the branches under each node, a handful per node, and grows by depth where a node fills.
+
+- A) Approve and ask stop a plan where five questions, answered or not, stand on one question or on terms alone.
+  Why: a question names the question it stands on, and only a question gathering a fifth is refused.
+  Costs: the cap no longer bounds how many questions sit at one height of a file.
+- B) Approve and ask stop a plan where five questions, answered or not, sit at one tier.
+  Why: one count per height, read off the tiers.
+  Costs: unrelated questions share the places of a tier, so a question hangs on whichever question leaves a place free.
+- C) Nothing: as many questions stand on one question as the plan writes.
+  Why: nothing to count, and the owner reads the plan whole at approve.
+  Costs: thirty questions standing on one decision pass, and one supersede drops all of them.
+
+### Does the cap count a decision an open question supersedes?
+depends: supersedes, current, What bounds the questions standing on one question?=A|B
+supersedes: Does the tier cap count a decision an open question supersedes?
+unrelated: Does a finding hold the identifier of the decision it judges?, Does a refused question hold the tiers above it?, Does answer take a question standing on a question that has no decision?, Does ask refuse an option over a word limit?, Does ask stop a question outside the plan?, Does the agent that asks a question build its decision?, What bounds the questions at one tier?, What does check do with a decision row no question names?, Does one decision supersede several?, Does a supersedes line name every current decision standing on its target?, Does a decision change after it is answered?, Does the owner answer a question with a refusal?, Does the owner override a stop in the tool?, Does the cap stop a plan whose questions over it are all answered?
+
+Problem: when old and new count together, a decision among four standing on one question cannot be replaced where it stands.
+Standard: a limit on a set is judged on the set as the change leaves it.
+
+- A) No.
+  Why: a replacement in a full place is a legal move, and the file holding a subject keeps holding it.
+  Costs: approve and ask count from open supersedes lines, and a refused replacement puts the old back in the count.
+- B) Yes.
+  Why: one count, read straight off the file.
+  Costs: a full place takes no replacement, so the replacement lands away from its subject.
+
+### Does the cap stop a plan whose questions over it are all answered?
+depends: answered, What bounds the questions standing on one question?=A|B, Does a decision change after it is answered?
+unrelated: Does approve withdraw an asked question struck from the plan?, Does ask stop a question outside the plan?, Does the agent that asks a question build its decision?, Does the tier cap count a decision an open question supersedes?, Does the tool bring a plan's own questions as neighbours of each other?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What holds a retire of a term?, What stops a question that has no depends line?, Does a supersedes line name every current decision standing on its target?, Does a refused question stay in its topic file?, Does the agent build what no current decision covers?, Does the owner override a stop in the tool?, Does the cap count a decision an open question supersedes?, withdraw
+
+Problem: when five answered decisions stand on one question, no edit of the plan clears the cap, since an answered decision never changes.
+Standard: a linter run on a change reports what the change touches, not every old line of the file.
+
+- A) No.
+  Why: a plan moves while answered decisions over the cap stand; the cap judges them once an open question joins them.
+  Costs: a question loaded with answered decisions stays loaded until a new question stands on it or it is superseded.
+- B) Yes.
+  Why: one rule over the whole file at every run.
+  Costs: a file holding such a question stops every plan until a supersede, and each decision standing on it falls too.
