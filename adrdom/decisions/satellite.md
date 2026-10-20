@@ -208,3 +208,65 @@ Standard: what one command writes on two sides, its reverse removes on both.
   Costs: the owner edits the primary's list by hand.
 
 **Answer:** A
+
+### What does a path under adrdom to another repository resolve against?
+depends: What does check in a satellite read the record from?, What does the primary hold of a satellite?
+unrelated: Does a repository keep hooks of its own beside the tool's?, Does check fail a planner's commit that reaches outside adrdom?, Does check hold the merge rule install writes for the ledger?, Does install move a hook it finds into the repository's own hook file?, Does install put the embedding model outside the repository?, Does install stop when git's hooksPath points away from its hook directory?, Does install write a merge rule for the ledger?, Does install write outside adrdom?, Does the tool keep everything it owns under one directory?, What does install write in a satellite?, Does check hold git's hooksPath?, Does check at a commit read the staged files?, Does show in a satellite print the directory it read the record from?, What drops the row of a satellite the primary no longer finds at its path?, Does install take a satellite that holds the path of another primary?
+
+Problem: a checkout in a linked worktree sits elsewhere than the one install ran in, and the relative path finds nothing.
+Standard: a tool that links sibling repositories by relative path resolves it from one fixed root per repository.
+
+- A) The main working tree of the repository the command runs in, when install writes it and check reads it.
+  Why: every worktree of a repository finds the same primary or satellite; nothing is guessed.
+  Costs: tests written in a worktree count, and answers bind, only once they reach the main working tree.
+- B) The directory of the checkout the command runs in.
+  Why: no git call; the path is read as written.
+  Costs: a worktree placed elsewhere finds nothing, and its hook refuses every commit.
+- C) Nothing; the path is written absolute.
+  Why: any checkout on the machine resolves it.
+  Costs: the tracked row breaks on every other machine and in CI.
+
+### Does show in a satellite print the directory it read the record from?
+depends: Does show in a satellite name its primary?, What does a path under adrdom to another repository resolve against?=*
+unrelated: Does a command that writes the record run in a satellite?, Does install take the path of a satellite?, Does show print the reference lines of a question that is answered?, Does show print what a file holds past its latest approval?, Does the ui render what the commands print?, What does a command print when it writes nothing?, What does check in a satellite read the record from?, What does show print for a file under adrdom?, What does show print when no file is named?, What does the tool print for a build move in a planner session?, Does check at a commit read the staged files?, What does a blame file hold of its origin?, What drops the row of a satellite the primary no longer finds at its path?, Does install take a satellite that holds the path of another primary?
+
+Problem: the first line of show names the path as held; from a worktree that path, read as written, points at nothing.
+Standard: a tool that resolves a configured path reports the resolved one when it says where it read.
+
+- A) Yes.
+  Why: the line names the directory the record came from; an agent in a worktree sees where.
+  Costs: the line differs between checkouts of one repository.
+- B) No.
+  Why: the line prints the path as the satellite holds it, the same everywhere.
+  Costs: an agent in a worktree resolves the path itself.
+
+### What drops the row of a satellite the primary no longer finds at its path?
+depends: primary, What does the primary hold of a satellite?, What does check in the primary report for a satellite missing at its path?
+unrelated: Does check hold a satellite's brief to the primary's?, Does check in the primary count a tie in a satellite?, Does install take the path of a satellite?, Does show in a satellite name its primary?, Does uninstall in a satellite drop its row from the primary?, What does check in a satellite read the record from?, What does install write in a satellite?, What does answer write for a removed question?, What does a path under adrdom to another repository resolve against?, Does show in a satellite print the directory it read the record from?, Does install take a satellite that holds the path of another primary?
+
+Problem: a satellite moved or deleted leaves its row, and the primary reports it missing at every check.
+Standard: a hub removes a spoke from its list by one command at the hub, with the spoke absent.
+
+- A) Uninstall in the primary, given the satellite's path, with no checkout at it.
+  Why: the row is the primary's; the command that removes rows removes it.
+  Costs: one flag more on uninstall, and a row dropped while the satellite is merely unmounted.
+- B) Install in the primary, given the satellite's new path, drops the row of the old.
+  Why: a move is one command.
+  Costs: install has to guess which old row the new satellite was.
+- C) The owner, by editing the primary's list by hand.
+  Why: no command.
+  Costs: a tracked file of the tool written by hand.
+
+### Does install take a satellite that holds the path of another primary?
+depends: primary, satellite, Does install take the path of a satellite?, What does install write in a satellite?
+unrelated: Does check hold a satellite's brief to the primary's?, Does check in the primary count a tie in a satellite?, Does install move a hook it finds into the repository's own hook file?, Does show in a satellite name its primary?, Does uninstall in a satellite drop its row from the primary?, What does check in the primary report for a satellite missing at its path?, What does the primary hold of a satellite?, Does uninstall belong to the owner?, Does a command that writes the record run in a satellite?, What does a path under adrdom to another repository resolve against?, Does show in a satellite print the directory it read the record from?, What drops the row of a satellite the primary no longer finds at its path?
+
+Problem: install in a primary claims a satellite of another record, and the other primary's row keeps pointing at it.
+Standard: a tool refuses to claim what another instance owns until that one lets go.
+
+- A) No.
+  Why: the refusal names the primary the satellite holds; uninstall there first, then install here.
+  Costs: moving a satellite between primaries is two commands in two repositories.
+- B) Yes.
+  Why: one command moves a satellite.
+  Costs: the old primary's row stays and reports the satellite missing for ever.
