@@ -125,10 +125,14 @@ pub const ANSWER_SET_ON_OPEN_QUESTION_ONLY: Rule = Rule {
     decisions: &["462e22c6-8b23-4061-9a2a-bbf8691fce60"],
 };
 
-/// Decision: What bounds the questions at one tier?
-pub const TIER_QUESTION_LIMIT: Rule = Rule {
-    name: "tier_question_limit",
-    decisions: &["0e38f001-0226-4927-9a78-2e9fc1ec18d4"],
+/// Decision: What bounds the questions standing on one question?
+pub const STAND_QUESTION_LIMIT: Rule = Rule {
+    name: "stand_question_limit",
+    decisions: &[
+        "b30c29aa-f2b4-4792-9c9f-acc645a29d4e",
+        "9c1b476c-9296-444b-a51c-e2957ad40ff5",
+        "4555583f-3499-4963-993b-34556fe519f7",
+    ],
 };
 
 /// Decision: What bounds the questions a depends line names?
@@ -1023,7 +1027,7 @@ pub const ALL: &[&Rule] = &[
     &ANSWERED_DEPENDS_LINE_FROZEN,
     &DEPENDS_ENTRY_HAS_ANSWER_SET,
     &ANSWER_SET_ON_OPEN_QUESTION_ONLY,
-    &TIER_QUESTION_LIMIT,
+    &STAND_QUESTION_LIMIT,
     &DEPENDS_LINE_QUESTION_LIMIT,
     &QUESTION_HAS_BODY,
     &NEIGHBOUR_IS_ON_A_LINE,

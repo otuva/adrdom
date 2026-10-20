@@ -478,17 +478,15 @@ Standard: plain words.
 // --- cap -------------------------------------------------------------------
 
 //
-// core: "four questions per tier, a value set in the tool; approve and ask
-// stop a plan with a tier over four". Five root questions (one tier) is one
-// past TIER_CAP: `approve` refuses naming the exact cap ("5 questions would
-// be put to the owner together, the most is 4") and does not modify the
+// core: "four at most, answered or not, stand on one question or on terms
+// alone; approve and ask stop a fifth". Five questions on terms alone is one
+// past STAND_CAP: `approve` refuses naming the cap and does not modify the
 // file. This test shows only the approve side: `ask` on this never-approved
 // file stops on "plan not approved" before it reads the cap, so the ask
-// side of the cap is shown by `ask_stops_a_tier_that_a_refused_replacement_
-// in_another_file_took_over_the_cap` in supersede_cap_test.rs.
-// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
+// side of the cap is shown in stand_cap_test.rs and supersede_cap_test.rs.
+// adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
 #[test]
-fn approve_refuses_a_tier_over_the_cap() {
+fn approve_refuses_five_questions_on_terms_alone() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -507,7 +505,7 @@ fn approve_refuses_a_tier_over_the_cap() {
     let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!approve_out.status.success());
     assert!(
-        stderr(&approve_out).contains("5 questions in one tier, the most is 4"),
+        stderr(&approve_out).contains("5 questions stand on terms alone, the most is 4"),
         "{}",
         stderr(&approve_out)
     );

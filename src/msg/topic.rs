@@ -355,35 +355,48 @@ pub fn bad_option_letter(rel: &str, dependent: &str, target: &str, letter: char)
     )
 }
 
-/// `open` are the questions of the tier that are not answered yet, in file
+/// `parent` is the question the group stands on, `None` for terms alone.
+/// `open` are the questions of the group that are not answered yet, in file
 /// order; `answered` counts the ones the owner answered, which hold their
 /// place and are never moved.
-pub fn tier_cap_exceeded(rel: &str, open: &[String], answered: usize, cap: usize) -> Said {
+pub fn stand_cap_exceeded(
+    rel: &str,
+    parent: Option<&str>,
+    open: &[String],
+    answered: usize,
+    cap: usize,
+) -> Said {
     let names = open
         .iter()
         .map(|h| format!("\"{}\"", h))
         .collect::<Vec<_>>()
         .join(", ");
+    let on = match parent {
+        Some(h) => format!("on \"{}\"", h),
+        None => "on terms alone".to_string(),
+    };
     let found = if answered == 0 {
         format!(
-            "{}: {} questions in one tier, the most is {}: {}",
+            "{}: {} questions stand {}, the most is {}: {}",
             rel,
             open.len(),
+            on,
             cap,
             names
         )
     } else {
         format!(
-            "{}: {} questions in one tier, {} answered, the most is {}: {}",
+            "{}: {} questions stand {}, {} answered, the most is {}: {}",
             rel,
             open.len() + answered,
+            on,
             answered,
             cap,
             names
         )
     };
     let next = Next::agent(Act::Writes("the question these stand on".into()));
-    said(&rule::TIER_QUESTION_LIMIT, found, next)
+    said(&rule::STAND_QUESTION_LIMIT, found, next)
 }
 
 // `derive_tiers`' three failure shapes (record::DeriveError), each with two

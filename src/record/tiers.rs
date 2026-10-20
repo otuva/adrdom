@@ -1,13 +1,15 @@
-//! The tier of every section, derived from its `depends:` entries, and the cap
-//! on a tier.
+//! The tier of every section, derived from its `depends:` entries, and the
+//! in-file questions each section stands on.
 
 use super::*;
 
 // --- tiers ---
 
-/// The cap on how many live questions one derived tier may hold. A different
-/// value is a new question and a new release; no owner command sets it.
-pub const TIER_CAP: usize = 4;
+/// The cap on how many live questions may stand on one question, or on terms
+/// alone (per "What bounds the questions standing on one question?"). A
+/// different value is a new question and a new release; no owner command sets
+/// it.
+pub const STAND_CAP: usize = 4;
 
 /// The most questions one depends line may name (per "What bounds the
 /// questions a depends line names?"): terms do not count.
@@ -23,6 +25,24 @@ pub const DEPENDS_LINE_CAP: usize = 2;
 /// before any tier is computed; a cycle is found by the recursive descent
 /// below and reports the headings on the cycle in traversal order.
 pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
+    let n = rf.sections.len();
+    let deps = heading_deps(rf)?;
+
+    let mut tier: Vec<Option<usize>> = vec![None; n];
+    let mut state: Vec<u8> = vec![0; n];
+    let mut path: Vec<usize> = Vec::new();
+    for i in 0..n {
+        if state[i] == 0 {
+            derive_visit(i, rf, &deps, &mut tier, &mut state, &mut path)?;
+        }
+    }
+    Ok(tier.into_iter().map(|t| t.unwrap_or(1)).collect())
+}
+
+/// The in-file questions each section names on its depends line, as indexes
+/// into `rf.sections`, in line order: what the tiers and the stand cap are
+/// read from. Self-dep and dangling entries are errors.
+fn heading_deps(rf: &RecordFile) -> Result<Vec<Vec<usize>>, DeriveError> {
     let n = rf.sections.len();
 
     let mut id_idx: HashMap<&str, usize> = HashMap::new();
@@ -78,16 +98,7 @@ pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
             }
         }
     }
-
-    let mut tier: Vec<Option<usize>> = vec![None; n];
-    let mut state: Vec<u8> = vec![0; n];
-    let mut path: Vec<usize> = Vec::new();
-    for i in 0..n {
-        if state[i] == 0 {
-            derive_visit(i, rf, &deps, &mut tier, &mut state, &mut path)?;
-        }
-    }
-    Ok(tier.into_iter().map(|t| t.unwrap_or(1)).collect())
+    Ok(deps)
 }
 
 fn derive_visit(
@@ -129,22 +140,26 @@ fn derive_visit(
     Ok(t)
 }
 
-/// `(tier, count)` for every tier that has at least one section, sorted by
-/// tier.
-pub fn tier_sizes(tiers: &[usize]) -> Vec<(usize, usize)> {
-    let mut counts: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
-    for &t in tiers {
-        *counts.entry(t).or_insert(0) += 1;
+/// `heading_deps` with repeats dropped: the questions of its file each
+/// section stands on. A section with an empty list stands on terms alone.
+/// Empty lists throughout when the depends lines do not resolve (a derive
+/// error, reported on its own).
+pub fn in_file_parents(rf: &RecordFile) -> Vec<Vec<usize>> {
+    match heading_deps(rf) {
+        Ok(deps) => deps
+            .into_iter()
+            .map(|ds| {
+                let mut out: Vec<usize> = Vec::new();
+                for j in ds {
+                    if !out.contains(&j) {
+                        out.push(j);
+                    }
+                }
+                out
+            })
+            .collect(),
+        Err(_) => vec![Vec::new(); rf.sections.len()],
     }
-    counts.into_iter().collect()
-}
-
-/// The first (lowest-numbered) tier holding more than `TIER_CAP` sections,
-/// if any (per "Does the tool cap the questions in a tier?").
-pub fn over_cap(tiers: &[usize]) -> Option<(usize, usize)> {
-    tier_sizes(tiers)
-        .into_iter()
-        .find(|&(_, count)| count > TIER_CAP)
 }
 
 #[cfg(test)]
@@ -209,18 +224,41 @@ mod tests {
     }
 
     #[test]
-    fn over_cap_finds_the_first_tier_past_the_cap() {
-        assert_eq!(TIER_CAP, 4);
-        let tiers = vec![1, 1, 1, 1, 1];
-        assert_eq!(over_cap(&tiers), Some((1, 5)));
-        assert_eq!(tier_sizes(&tiers), vec![(1, 5)]);
+    fn in_file_parents_resolves_ids_and_headings() {
+        let body = "Problem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n";
+        let i1 = "11111111-1111-1111-1111-111111111111";
+        let i2 = "22222222-2222-2222-2222-222222222222";
+        let text = format!(
+            "# Topic\n\n\
+             ### A?\n\nid: {i1}\n\n{body}\
+             ### B?\n\nid: {i2}\n\ndepends: {i1}, A?, {i1}\n\n{body}\
+             ### C?\n\ndepends: B?, A?, widget\n\n{body}"
+        );
+        let rf = rf_from(&text);
+        assert!(rf.derive_error.is_none(), "{:?}", rf.derive_error);
+        // B: id entry resolved, the heading text entry and the repeated id
+        // name the same section and are skipped.
+        // C: heading entries in line order, the term entry skipped.
+        assert_eq!(in_file_parents(&rf), vec![vec![], vec![0], vec![1, 0]]);
+    }
 
-        let ok = vec![1, 1, 1, 1];
-        assert_eq!(over_cap(&ok), None);
+    #[test]
+    fn in_file_parents_skips_self_and_unresolved_entries() {
+        let rf = rf_from(
+            "# Topic\n\n### A?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: 33333333-3333-3333-3333-333333333333, widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert_eq!(in_file_parents(&rf), vec![Vec::<usize>::new()]);
+        assert_eq!(STAND_CAP, 4);
+    }
 
-        let mixed = vec![1, 1, 2, 2, 2, 2, 2];
-        assert_eq!(over_cap(&mixed), Some((2, 5)));
-        assert_eq!(tier_sizes(&mixed), vec![(1, 2), (2, 5)]);
+    #[test]
+    fn in_file_parents_skips_a_self_entry() {
+        // A self entry is a derive error, but the sections still parse.
+        let rf = rf_from(
+            "# Topic\n\n### A?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: 11111111-1111-1111-1111-111111111111, A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.derive_error.is_some());
+        assert_eq!(in_file_parents(&rf), vec![Vec::<usize>::new()]);
     }
 
     #[test]

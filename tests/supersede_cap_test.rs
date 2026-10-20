@@ -1,6 +1,7 @@
 // A decision named on the supersedes line of a question not yet answered is
-// left out of its tier's count, so the cap (4) holds by what the tier holds
-// once the replacement is answered.
+// left out of the count of the questions standing on one question (here, on
+// terms alone), so the cap (4) holds by what stands there once the
+// replacement is answered.
 mod common;
 
 use common::*;
@@ -72,8 +73,8 @@ fn cap_refusal(out: &std::process::Output) -> bool {
     stderr(out).contains("the most is 4") || stdout(out).contains("the most is 4")
 }
 
-/// a.md with four tier-1 questions, approved, asked and answered A.
-fn full_tier(dir: &Path) -> PathBuf {
+/// a.md with four questions on terms alone, approved, asked and answered A.
+fn full_group(dir: &Path) -> PathBuf {
     assert!(adr(dir, &["install"], &[], "").status.success());
     approve_minimal_terms(dir, "widget");
     let mut c = String::from("# A\n");
@@ -91,11 +92,11 @@ fn full_tier(dir: &Path) -> PathBuf {
     p
 }
 
-// adr: 86d5e944-ecfa-44bc-9819-83ee4b96890d
+// adr: 9c1b476c-9296-444b-a51c-e2957ad40ff5
 #[test]
 fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     let dir = init_repo();
-    let a = full_tier(&dir);
+    let a = full_group(&dir);
     append(&a, &sec(&h(5), Some(&h(1)), true));
     let out = approve(&dir, "a");
     assert!(
@@ -118,10 +119,11 @@ fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     );
 }
 
+// adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
 #[test]
 fn a_fifth_heading_superseding_nothing_still_fails_the_cap() {
     let dir = init_repo();
-    let a = full_tier(&dir);
+    let a = full_group(&dir);
     append(&a, &sec(&h(5), None, true));
     let out = approve(&dir, "a");
     assert!(
@@ -133,9 +135,9 @@ fn a_fifth_heading_superseding_nothing_still_fails_the_cap() {
 }
 
 #[test]
-fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
+fn two_replacements_of_one_decision_in_a_full_group_fail_the_cap() {
     let dir = init_repo();
-    let a = full_tier(&dir);
+    let a = full_group(&dir);
     append(&a, &sec(&h(5), Some(&h(1)), true));
     append(&a, &sec(&h(6), Some(&h(1)), true));
     let out = approve(&dir, "a");
@@ -147,11 +149,11 @@ fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
-// adr: 86d5e944-ecfa-44bc-9819-83ee4b96890d
+// adr: 9c1b476c-9296-444b-a51c-e2957ad40ff5
 #[test]
 fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     let dir = init_repo();
-    let a = full_tier(&dir);
+    let a = full_group(&dir);
     append(&a, &sec(&h(5), Some(&h(1)), true));
     approve_ok(&dir, "a");
     let out = ask(&dir, "a");
@@ -174,9 +176,9 @@ fn a_refused_replacement_returns_the_old_decision_to_the_count() {
 }
 
 #[test]
-fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
+fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_group() {
     let dir = init_repo();
-    let a = full_tier(&dir);
+    let a = full_group(&dir);
     write_record(
         &dir,
         &rel("b"),
@@ -188,17 +190,17 @@ fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
     assert!(out.status.success(), "a.md counts 3 + 1: {}", stderr(&out));
 }
 
-// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
-// adr: 86d5e944-ecfa-44bc-9819-83ee4b96890d
+// adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
+// adr: 9c1b476c-9296-444b-a51c-e2957ad40ff5
 //
 // a.md holds four answered questions and a fifth approved while an open
 // question of b.md replaced one of the four. When b.md's question is
-// refused, the old decision is back in the count: a.md's tier holds five
+// refused, the old decision is back in the count: a.md's group holds five
 // and `ask` stops it on the cap, though a.md's plan is still approved.
 #[test]
-fn ask_stops_a_tier_that_a_refused_replacement_in_another_file_took_over_the_cap() {
+fn ask_stops_a_group_that_a_refused_replacement_in_another_file_took_over_the_cap() {
     let dir = init_repo();
-    let a = full_tier(&dir);
+    let a = full_group(&dir);
     let b = write_record(
         &dir,
         &rel("b"),

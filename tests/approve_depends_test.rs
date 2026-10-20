@@ -568,9 +568,9 @@ fn approve_refuses_a_heading_that_depends_on_itself() {
 
 // --- cap (8.8 A) -----------------------------------------------------------
 
-// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
+// adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
 #[test]
-fn approve_refuses_five_root_questions_in_one_tier() {
+fn approve_refuses_five_questions_standing_on_terms_alone() {
     let dir = init_repo();
     setup(&dir);
     let mut content = String::from("# Example\n\n");
@@ -587,7 +587,7 @@ fn approve_refuses_five_root_questions_in_one_tier() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("5 questions in one tier, the most is 4"),
+        err.contains("5 questions stand on terms alone, the most is 4"),
         "{}",
         err
     );
@@ -603,7 +603,7 @@ fn approve_refuses_five_root_questions_in_one_tier() {
 }
 
 #[test]
-fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
+fn approve_accepts_two_new_headings_when_two_standing_on_terms_are_dead() {
     let dir = init_repo();
     setup(&dir);
     let term_id = "99999999-9999-9999-9999-999999999999";
@@ -654,17 +654,17 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "approve should accept a tier with only 4 live questions: {}",
+        "approve should accept 4 live questions on terms alone: {}",
         stderr(&out)
     );
     // Live count only (8.8 A fix): the two dead questions (refused A,
-    // superseded B) do not count toward the tier, so no cap refusal.
+    // superseded B) do not count toward the cap, so no cap refusal.
     assert!(!stderr(&out).contains("holds"), "{}", stderr(&out));
 }
 
-// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
+// adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
 #[test]
-fn approve_accepts_four_root_questions_in_one_tier() {
+fn approve_accepts_four_questions_standing_on_terms_alone() {
     let dir = init_repo();
     setup(&dir);
     let mut content = String::from("# Example\n\n");

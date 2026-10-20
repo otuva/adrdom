@@ -95,7 +95,7 @@ fn parity_tier_over_cap() {
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
-    // Five roots (no heading deps): one tier, five questions, over TIER_CAP
+    // Five roots (no heading deps): five on terms alone, over STAND_CAP
     // (4).
     let content = "# Example\n\n\
 ### 1.1 Q1?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
@@ -105,7 +105,11 @@ fn parity_tier_over_cap() {
 ### 1.5 Q5?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(&dir, &record, "5 questions in one tier, the most is 4");
+    assert_parity_note(
+        &dir,
+        &record,
+        "5 questions stand on terms alone, the most is 4",
+    );
 }
 
 // a depends list split across

@@ -405,7 +405,7 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
     std::fs::write(&path, text).unwrap();
 
     let refusal = format!(
-        "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget gate five hold?\"; \
+        "{}: 5 questions stand on terms alone, 4 answered, the most is 4: \"Is the widget gate five hold?\"; \
 agent writes the question these stand on",
         REL
     );
