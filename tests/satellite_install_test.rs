@@ -803,12 +803,13 @@ fn uninstall_satellite_reads_the_path_from_a_subdirectory_and_through_a_gone_par
 #[test]
 fn install_satellite_refusal_clears_when_the_row_names_the_directory_in_another_form() {
     let (p1, p2, sat) = held_satellite();
-    // The same directory through a segment that goes down and back up.
+    // The same directory through a segment that goes down into the
+    // primary and back up: `./x/../../<name>` for `../<name>`.
     let listed = rel(&p1, &sat);
     let name = sat.file_name().unwrap().to_string_lossy().to_string();
     let parent = p1.parent().unwrap();
     assert!(parent.join(&name).exists());
-    let other_form = format!("./{}", listed.replace("../", "../x/../"));
+    let other_form = format!("./x/../{}", listed);
     std::fs::create_dir_all(p1.join("x")).unwrap();
     let tsv = p1.join("adrdom/state/satellites.tsv");
     let text = std::fs::read_to_string(&tsv).unwrap();
