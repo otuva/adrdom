@@ -797,3 +797,43 @@ fn uninstall_satellite_reads_the_path_from_a_subdirectory_and_through_a_gone_par
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(satellites_tsv(&primary), "");
 }
+
+// adr: 490cdbb6-0482-41ba-8f57-36a6136b166f
+// adr: da777c6e-f22a-41fa-ba6f-1f1544382710
+#[test]
+fn install_satellite_refusal_clears_when_the_row_names_the_directory_in_another_form() {
+    let (p1, p2, sat) = held_satellite();
+    // The same directory through a segment that goes down and back up.
+    let listed = rel(&p1, &sat);
+    let name = sat.file_name().unwrap().to_string_lossy().to_string();
+    let parent = p1.parent().unwrap();
+    assert!(parent.join(&name).exists());
+    let other_form = format!("./{}", listed.replace("../", "../x/../"));
+    std::fs::create_dir_all(p1.join("x")).unwrap();
+    let tsv = p1.join("adrdom/state/satellites.tsv");
+    let text = std::fs::read_to_string(&tsv).unwrap();
+    let url = text.trim_end().split('\t').nth(1).unwrap_or("").to_string();
+    let row = if url.is_empty() {
+        format!("{}\n", other_form)
+    } else {
+        format!("{}\t{}\n", other_form, url)
+    };
+    std::fs::write(&tsv, row).unwrap();
+    assert_ne!(other_form, listed);
+
+    let out = adr(&p2, &["install", "--satellite", &rel(&p2, &sat)], &[], "");
+    assert!(!out.status.success());
+    let other = std::fs::canonicalize(&p1).unwrap();
+    assert!(stderr(&out).contains(&other.display().to_string()));
+
+    let un = adr_owner(&sat, &["uninstall"], "");
+    assert!(un.status.success(), "{}", stderr(&un));
+    assert!(
+        !satellites_tsv(&p1).contains(&name),
+        "{}",
+        satellites_tsv(&p1)
+    );
+
+    let out = adr(&p2, &["install", "--satellite", &rel(&p2, &sat)], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+}

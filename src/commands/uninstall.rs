@@ -83,8 +83,19 @@ pub fn run(satellite: Option<PathBuf>) -> i32 {
         let sat = std::fs::canonicalize(&root).unwrap_or_else(|_| root.clone());
         // Per "What does a path under adrdom to another repository resolve
         // against?" (0320a987-f8b2-4105-9b27-64bf484026e6 A): between the
-        // main working trees.
-        let path = satellite::relative_path(&repo::main_root(record), &repo::main_root(&sat));
+        // main working trees. The row is found by the directory it names, as
+        // install finds the row that holds a satellite (per "Does install
+        // take a satellite that holds the path of another primary?",
+        // 490cdbb6-0482-41ba-8f57-36a6136b166f A), so this run lets go of
+        // every row install would see.
+        let here = repo::main_root(&sat);
+        let path = satellite::rows(record)
+            .into_iter()
+            .find(|r| fs::canonicalize(satellite::row_dir(record, r)).is_ok_and(|d| d == here))
+            .map_or_else(
+                || satellite::relative_path(&repo::main_root(record), &here),
+                |r| r.path,
+            );
         match satellite::drop_row(record, &path) {
             Ok(Some(Event::FileWritten { path })) => events.push(written(&format!(
                 "{}/{}",
