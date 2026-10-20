@@ -183,6 +183,8 @@ Standard: hook managers such as pre-commit and lefthook keep the hook they find 
   Why: one hook per name, the tool's, and check judges the whole directory.
   Costs: install silences a hook the repository had, and the owner finds it another home by hand.
 
+**Answer:** A
+
 ### Does the hook run the repository's own hook once check passes?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A
 unrelated: 19e1c023-a678-4842-a414-bb0e45c41601, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 8cba4463-6ee3-4590-a819-94462ef80224, a26876ba-5789-4d05-965e-853d00d9edd2, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 0d977e39-a657-4596-8eca-8ceb335f3081, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, cd83e277-ebf0-4458-a77a-c526ab4cfeca, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 05141f49-d9d2-407c-b60c-ebb195a05864, d8a9dfff-de89-442c-a08c-8276efab3f36, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 897b52a7-f6d2-467e-ba14-9f4ce4865664, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138, 4f04bae4-98e3-48eb-9403-3257268e2d87
@@ -198,6 +200,8 @@ Standard: a chaining hook runs the next hook with its own arguments and input an
 - B) No.
   Why: the repository's hook runs first and may format or stage before check reads the staged files.
   Costs: check judges what the own hook left, and a hook that stages files changes the commit under check.
+
+**Answer:** A
 
 ### Does install move a hook it finds into the repository's own hook file?
 depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 6ac1dde1-fe11-47af-861a-334dbf917b11=A, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A
@@ -215,6 +219,8 @@ Standard: pre-commit renames the hook it finds to .legacy and runs it from its o
   Why: install writes only its own files, and the owner moves the hook knowing what moved.
   Costs: the hook install found is silent until the owner moves it by hand.
 
+**Answer:** A
+
 ### Does install stop when git's hooksPath points away from its hook directory?
 depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A, 6ac1dde1-fe11-47af-861a-334dbf917b11=A
 unrelated: 19e1c023-a678-4842-a414-bb0e45c41601, 459c1b77-82dd-469f-a60c-784b6f3d7b81, 0d977e39-a657-4596-8eca-8ceb335f3081, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, db56a285-946f-48b1-b073-bb1e90192185, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, c304b7da-1843-43ad-930c-b01b3310483d, a8280dd1-4bfa-4eeb-9656-1cd06381590a, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138
@@ -231,6 +237,8 @@ Standard: pre-commit refuses to install while core.hooksPath is set.
   Why: install finishes, and the own hook file calls the hook at the old path, so both run.
   Costs: the other manager sets hooksPath back at its next run and the tool's hooks go silent.
 
+**Answer:** A
+
 ### Does check hold git's hooksPath?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
 unrelated: 19e1c023-a678-4842-a414-bb0e45c41601, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 0d977e39-a657-4596-8eca-8ceb335f3081, db07a54d-4d80-4035-a9ef-eabcc0c872b3, a26876ba-5789-4d05-965e-853d00d9edd2, bd83aa22-94fc-49ac-b215-a82990ff8c65, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, 0c3d498a-c540-47f3-8384-050fc044c109, d8a9dfff-de89-442c-a08c-8276efab3f36, 6ac1dde1-fe11-47af-861a-334dbf917b11, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 897b52a7-f6d2-467e-ba14-9f4ce4865664
@@ -246,3 +254,5 @@ Standard: a tool that depends on a setting verifies the setting, not only the fi
 - B) No.
   Why: check judges files; git's configuration is the owner's machine.
   Costs: a manager that repoints hooksPath silences the tool's hooks, and only a commit that should have failed shows it.
+
+**Answer:** A
