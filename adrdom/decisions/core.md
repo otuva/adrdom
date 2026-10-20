@@ -360,9 +360,11 @@ Standard: a limit on a set is judged on the set as the change leaves it.
 **Answer:** A
 
 ### What bounds the questions standing on one question?
-depends: question, depends, What does a depends entry name?, What bounds the questions a depends line names?
-supersedes: What bounds the questions at one tier?, Does the tier cap count a decision an open question supersedes?
-unrelated: Does answer take a question standing on a question that has no decision?, Does one question heading stand in two topic files?, What are the tiers derived from?, What does ask put to the owner at one run?, Does ask stop a question outside the plan?, Does a refused question hold the tiers above it?, What stops a question that has no depends line?, What stands under a question's heading?, Does the cap count a decision an open question supersedes?, Does the cap stop a plan whose questions over it are all answered?, answer set, tier, topic
+depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 9afe335c-2a7a-4625-b115-f74d3f091cac, 010901e0-c02d-49eb-98bc-d584756d7f51
+supersedes: 0e38f001-0226-4927-9a78-2e9fc1ec18d4, 86d5e944-ecfa-44bc-9819-83ee4b96890d
+unrelated: da80931c-68cf-4c51-acce-060307bbd973, 23f21671-e34c-44aa-8804-6163d975807f, f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2, 1d7c758d-1fd5-4e0c-8559-517315b15aaa, da59b448-1afb-4469-b40e-69eda8f253c2, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, 9bf76db8-4821-4257-ac49-4c22c2a0e538, 178a232e-b51c-4122-a1a9-9e9ed6970748, 9c1b476c-9296-444b-a51c-e2957ad40ff5, 4555583f-3499-4963-993b-34556fe519f7, 9d634996-475e-4ddc-8113-05c404ad9d5c, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 292a10b8-c287-4d71-b2bd-840da0a6de61
+id: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refused=0942e445-0163-423e-8ba7-84dd8ac07045, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, tiers=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 
 Problem: a cap on the questions at one height makes unrelated questions share its places, so a question hangs on whichever question leaves a place free.
 Standard: an issue tree bounds the branches under each node, a handful per node, and grows by depth where a node fills.
@@ -378,9 +380,11 @@ Standard: an issue tree bounds the branches under each node, a handful per node,
   Costs: thirty questions standing on one decision pass, and one supersede drops all of them.
 
 ### Does the cap count a decision an open question supersedes?
-depends: supersedes, current, What bounds the questions standing on one question?=A|B
-supersedes: Does the tier cap count a decision an open question supersedes?
-unrelated: Does a finding hold the identifier of the decision it judges?, Does a refused question hold the tiers above it?, Does answer take a question standing on a question that has no decision?, Does ask refuse an option over a word limit?, Does ask stop a question outside the plan?, Does the agent that asks a question build its decision?, What bounds the questions at one tier?, What does check do with a decision row no question names?, Does one decision supersede several?, Does a supersedes line name every current decision standing on its target?, Does a decision change after it is answered?, Does the owner answer a question with a refusal?, Does the owner override a stop in the tool?, Does the cap stop a plan whose questions over it are all answered?
+depends: 2bae531b-c4df-48a0-89a0-3d52726741ea, e2533580-1486-4dc9-8697-e6c53605fe72, b30c29aa-f2b4-4792-9c9f-acc645a29d4e=A|B
+supersedes: 86d5e944-ecfa-44bc-9819-83ee4b96890d
+unrelated: 24bdcbde-d9f4-45a0-8c3d-37e53569e950, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, da80931c-68cf-4c51-acce-060307bbd973, d808917b-0717-45ad-ab83-9fa274b9a9d4, da59b448-1afb-4469-b40e-69eda8f253c2, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 0e38f001-0226-4927-9a78-2e9fc1ec18d4, a469ecb9-a4f1-4a2a-89c5-7378cc1138b4, f4f667ad-8714-4e65-897b-c7002e423c28, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, b782664f-7465-4e1e-99e0-13f6dd2de774, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, 4555583f-3499-4963-993b-34556fe519f7
+id: 9c1b476c-9296-444b-a51c-e2957ad40ff5
+terms: approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, move=d904dc0d-231f-4e93-ac74-7babe888107d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refused=0942e445-0163-423e-8ba7-84dd8ac07045, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea
 
 Problem: when old and new count together, a decision among four standing on one question cannot be replaced where it stands.
 Standard: a limit on a set is judged on the set as the change leaves it.
@@ -393,8 +397,10 @@ Standard: a limit on a set is judged on the set as the change leaves it.
   Costs: a full place takes no replacement, so the replacement lands away from its subject.
 
 ### Does the cap stop a plan whose questions over it are all answered?
-depends: answered, What bounds the questions standing on one question?=A|B, Does a decision change after it is answered?
-unrelated: Does approve withdraw an asked question struck from the plan?, Does ask stop a question outside the plan?, Does the agent that asks a question build its decision?, Does the tier cap count a decision an open question supersedes?, Does the tool bring a plan's own questions as neighbours of each other?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What holds a retire of a term?, What stops a question that has no depends line?, Does a supersedes line name every current decision standing on its target?, Does a refused question stay in its topic file?, Does the agent build what no current decision covers?, Does the owner override a stop in the tool?, Does the cap count a decision an open question supersedes?, withdraw
+depends: b36113a1-1384-4e4c-a798-8399f4181366, b30c29aa-f2b4-4792-9c9f-acc645a29d4e=A|B, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
+unrelated: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, da59b448-1afb-4469-b40e-69eda8f253c2, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 86d5e944-ecfa-44bc-9819-83ee4b96890d, d984e425-3e88-4756-88fb-18241f9f62a7, 010901e0-c02d-49eb-98bc-d584756d7f51, 0e38f001-0226-4927-9a78-2e9fc1ec18d4, fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94, 9bf76db8-4821-4257-ac49-4c22c2a0e538, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 6b3d8e59-e145-49e1-860d-a79d753d745c, c3127af2-4c96-48d5-a164-bac49a9a09ec, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, 9c1b476c-9296-444b-a51c-e2957ad40ff5, e4a2ef0c-3354-4c9b-a8d9-9e204e544d85
+id: 4555583f-3499-4963-993b-34556fe519f7
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, moves=d904dc0d-231f-4e93-ac74-7babe888107d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea
 
 Problem: when five answered decisions stand on one question, no edit of the plan clears the cap, since an answered decision never changes.
 Standard: a linter run on a change reports what the change touches, not every old line of the file.
