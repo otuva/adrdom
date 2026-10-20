@@ -168,8 +168,10 @@ Standard: a tool that integrates with several agents calls the one configured fo
 **Answer:** A
 
 ### Does a repository keep hooks of its own beside the tool's?
-depends: install, Does install write outside adrdom?, Does check hold the files install writes?
-unrelated: Does git track a file the tool can get again without the owner?, Does install put the embedding model outside the repository?, What holds the list of loaded phrases?, Does check look at the ledger before a push?, Does every ledger row carry the tool version?, Does install fetch the embedding model?, satellite, Does the tool keep everything it owns under one directory?, Does an owner command commit?, Does check at a commit read the staged files?, Does check hold the merge rule install writes for the ledger?, Does install write a merge rule for the ledger?, Does the hook run the repository's own hook once check passes?, Does install move a hook it finds into the repository's own hook file?, Does install stop when git's hooksPath points away from its hook directory?, Does check hold git's hooksPath?
+depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+unrelated: 0d977e39-a657-4596-8eca-8ceb335f3081, 459c1b77-82dd-469f-a60c-784b6f3d7b81, 149c9a73-16eb-46aa-9806-2950423ee1a2, 19e1c023-a678-4842-a414-bb0e45c41601, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, e1c305af-af94-494a-9fdb-3faffafa0e06, dd50488e-a8cd-4778-aecc-72295ffd8671, 16a71892-b348-4b9b-82c5-a9d375187bd3, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, db56a285-946f-48b1-b073-bb1e90192185, 6ac1dde1-fe11-47af-861a-334dbf917b11, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 897b52a7-f6d2-467e-ba14-9f4ce4865664, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138
+id: d6112bd7-1649-4a47-ab3f-0681e4d0e8f6
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 
 Problem: a repository with a hook of its own loses it when install points git's hooksPath at the tool's directory.
 Standard: hook managers such as pre-commit and lefthook keep the hook they find and run it after their own.
@@ -182,8 +184,10 @@ Standard: hook managers such as pre-commit and lefthook keep the hook they find 
   Costs: install silences a hook the repository had, and the owner finds it another home by hand.
 
 ### Does the hook run the repository's own hook once check passes?
-depends: check, install, Does a repository keep hooks of its own beside the tool's?=A
-unrelated: Does check look at the ledger before a push?, Does check at a commit read the staged files?, Does check fail a planner's commit that reaches outside adrdom?, Does a commit run the reading of the whole set?, Does check in CI compare the ledger with the commit before the push?, Does a command refuse what check lets pass?, Does check hold the merge rule install writes for the ledger?, Does git track a file the tool can get again without the owner?, Does an owner command commit?, Does check fail an answered question whose text changed?, Does install write outside adrdom?, What does check do with a fault on a file awaiting approval?, What does the ban scan read?, Does install move a hook it finds into the repository's own hook file?, Does install stop when git's hooksPath points away from its hook directory?, Does check hold git's hooksPath?, Does ban refuse a word that appears in the repository?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A
+unrelated: 19e1c023-a678-4842-a414-bb0e45c41601, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 8cba4463-6ee3-4590-a819-94462ef80224, a26876ba-5789-4d05-965e-853d00d9edd2, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 0d977e39-a657-4596-8eca-8ceb335f3081, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, cd83e277-ebf0-4458-a77a-c526ab4cfeca, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 05141f49-d9d2-407c-b60c-ebb195a05864, d8a9dfff-de89-442c-a08c-8276efab3f36, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 897b52a7-f6d2-467e-ba14-9f4ce4865664, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138, 4f04bae4-98e3-48eb-9403-3257268e2d87
+id: 6ac1dde1-fe11-47af-861a-334dbf917b11
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, refuses=0942e445-0163-423e-8ba7-84dd8ac07045
 
 Problem: the hook text is fixed and check judges it line by line, so a line the repository adds to it fails every commit.
 Standard: a chaining hook runs the next hook with its own arguments and input and returns its exit code.
@@ -196,8 +200,10 @@ Standard: a chaining hook runs the next hook with its own arguments and input an
   Costs: check judges what the own hook left, and a hook that stages files changes the commit under check.
 
 ### Does install move a hook it finds into the repository's own hook file?
-depends: install, Does the hook run the repository's own hook once check passes?=A, Does a repository keep hooks of its own beside the tool's?=A
-unrelated: Does install put the embedding model outside the repository?, Does check look at the ledger before a push?, Does install fetch the embedding model?, Does install take the path of a satellite?, Does git track a file the tool can get again without the owner?, Does check hold the merge rule install writes for the ledger?, Does a command compute a move of its own?, Does install write a merge rule for the ledger?, Does install write outside adrdom?, Does an owner command commit?, Does check at a commit read the staged files?, Does check hold the files install writes?, Does uninstall remove a file install created?, Does install stop when git's hooksPath points away from its hook directory?, Does check hold git's hooksPath?
+depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 6ac1dde1-fe11-47af-861a-334dbf917b11=A, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A
+unrelated: 459c1b77-82dd-469f-a60c-784b6f3d7b81, 19e1c023-a678-4842-a414-bb0e45c41601, e1c305af-af94-494a-9fdb-3faffafa0e06, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 0d977e39-a657-4596-8eca-8ceb335f3081, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, aac5c313-dedd-466b-a0c3-ead5e99ce913, db56a285-946f-48b1-b073-bb1e90192185, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, c304b7da-1843-43ad-930c-b01b3310483d, 897b52a7-f6d2-467e-ba14-9f4ce4865664, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138
+id: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0
+terms: install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, move=d904dc0d-231f-4e93-ac74-7babe888107d, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 
 Problem: a hook under .git/hooks stops running once hooksPath points elsewhere, and a hook in the tool's directory is overwritten.
 Standard: pre-commit renames the hook it finds to .legacy and runs it from its own hook.
@@ -210,8 +216,10 @@ Standard: pre-commit renames the hook it finds to .legacy and runs it from its o
   Costs: the hook install found is silent until the owner moves it by hand.
 
 ### Does install stop when git's hooksPath points away from its hook directory?
-depends: install, Does a repository keep hooks of its own beside the tool's?=A, Does the hook run the repository's own hook once check passes?=A
-unrelated: Does check look at the ledger before a push?, Does install put the embedding model outside the repository?, Does git track a file the tool can get again without the owner?, Does install take the path of a satellite?, Does check hold the merge rule install writes for the ledger?, Does install write a merge rule for the ledger?, Does check fail a planner's commit that reaches outside adrdom?, Does check hold the files install writes?, Does install write outside adrdom?, Does uninstall remove a file install created?, What does install write in a satellite?, Does install move a hook it finds into the repository's own hook file?, Does check hold git's hooksPath?
+depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A, 6ac1dde1-fe11-47af-861a-334dbf917b11=A
+unrelated: 19e1c023-a678-4842-a414-bb0e45c41601, 459c1b77-82dd-469f-a60c-784b6f3d7b81, 0d977e39-a657-4596-8eca-8ceb335f3081, 937bc0a6-691d-4d67-91c6-cc9e956ebc96, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, db56a285-946f-48b1-b073-bb1e90192185, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, c304b7da-1843-43ad-930c-b01b3310483d, a8280dd1-4bfa-4eeb-9656-1cd06381590a, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, db76c9a0-b4fc-4aa2-8afb-47cd78ef7138
+id: 897b52a7-f6d2-467e-ba14-9f4ce4865664
+terms: install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, refuses=0942e445-0163-423e-8ba7-84dd8ac07045
 
 Problem: a hooksPath another hook manager set is repointed at the tool's directory without a word, and that manager sets it back at its next run.
 Standard: pre-commit refuses to install while core.hooksPath is set.
@@ -224,8 +232,10 @@ Standard: pre-commit refuses to install while core.hooksPath is set.
   Costs: the other manager sets hooksPath back at its next run and the tool's hooks go silent.
 
 ### Does check hold git's hooksPath?
-depends: check, Does a repository keep hooks of its own beside the tool's?=A, Does check hold the files install writes?
-unrelated: Does check look at the ledger before a push?, Does check hold the merge rule install writes for the ledger?, Does check at a commit read the staged files?, Does git track a file the tool can get again without the owner?, Does check fail a planner's commit that reaches outside adrdom?, Does check in CI compare the ledger with the commit before the push?, Does check print a line with no move on it?, Does check at a merge look for the ledger rows of both branches?, Does install write outside adrdom?, Does check fail a ledger whose rows changed place?, What does check do when an origin is absent?, What does the ban scan read?, Does the hook run the repository's own hook once check passes?, Does install move a hook it finds into the repository's own hook file?, Does install stop when git's hooksPath points away from its hook directory?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, d6112bd7-1649-4a47-ab3f-0681e4d0e8f6=A, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+unrelated: 19e1c023-a678-4842-a414-bb0e45c41601, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 0d977e39-a657-4596-8eca-8ceb335f3081, db07a54d-4d80-4035-a9ef-eabcc0c872b3, a26876ba-5789-4d05-965e-853d00d9edd2, bd83aa22-94fc-49ac-b215-a82990ff8c65, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, 0c3d498a-c540-47f3-8384-050fc044c109, d8a9dfff-de89-442c-a08c-8276efab3f36, 6ac1dde1-fe11-47af-861a-334dbf917b11, 60cfa0ba-9085-43b8-9ed4-fd94808c33e0, 897b52a7-f6d2-467e-ba14-9f4ce4865664
+id: db76c9a0-b4fc-4aa2-8afb-47cd78ef7138
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, move=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 
 Problem: a hooksPath set away from the tool's directory leaves every hook file in place and current while none of them runs.
 Standard: a tool that depends on a setting verifies the setting, not only the files behind it.
