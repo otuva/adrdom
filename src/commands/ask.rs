@@ -100,7 +100,7 @@ pub fn run(given: PathBuf) -> i32 {
     // in conflict takes priority over everything else this run -- whatever
     // tier it is in, whether or not the file has other questions to ask.
     // Handled and reported on its own, ahead of every other gate below
-    // (shape, plan/context approval, tier cap): none of that bears on
+    // (shape, plan/context approval, stand cap): none of that bears on
     // re-asking a question whose text never moved. When the file has other
     // questions to ask, only the conflict is asked this run; a further
     // `ask` run asks the rest.
@@ -262,9 +262,9 @@ pub fn run(given: PathBuf) -> i32 {
         return 1;
     }
 
-    // Cap refusal (per "Does the tool cap the questions in a tier?"): any
-    // derived tier over `TIER_CAP` live questions,
-    // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
+    // Cap refusal (per "What bounds the questions standing on one question?"):
+    // any question, or terms alone, with over `STAND_CAP` live questions
+    // standing on it, file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(f) = rules::cap_finding(&rel, &rf, &replaced, &led) {
         out::eprint(&[Line::Finding(f)]);
@@ -539,7 +539,7 @@ fn strip_answer_line(rf: &mut record::RecordFile, idx: usize) {
 /// `assumes` rows) exactly as an ordinary ask of that question would --
 /// the section's text never moved, so its hash is the same one the
 /// question was first asked under. Bypasses every other gate `run` applies
-/// to an ordinary candidate (plan/context approval, the tier cap, the open
+/// to an ordinary candidate (plan/context approval, the stand cap, the open
 /// tier, banned/terms checks): none of them bear on re-asking text
 /// that hasn't changed.
 fn do_conflict_reask(

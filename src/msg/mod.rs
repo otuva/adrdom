@@ -608,8 +608,8 @@ mod tests {
             )
             .0
             .text(),
-            tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4).text(),
-            tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4).text(),
+            stand_cap_exceeded("x.md", None, &["heading".to_string()], 0, 4).text(),
+            stand_cap_exceeded("x.md", Some("parent?"), &["heading".to_string()], 3, 4).text(),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())).text(),
             answered_id_missing("id-1", "heading").text(),
             id_not_found("id-1"),

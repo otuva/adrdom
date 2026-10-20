@@ -173,7 +173,7 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
     let path = write_record(&dir, rel, &plan("widget"));
 
     let refusal = format!(
-        "{}: 5 questions in one tier, the most is 4: \
+        "{}: 5 questions stand on terms alone, the most is 4: \
 \"Is the widget one hold?\", \"Is the widget two hold?\", \"Is the widget three hold?\", \
 \"Is the widget four hold?\", \"{}\"; \
 agent writes the question these stand on",
@@ -220,7 +220,7 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
     std::fs::write(&path, content).unwrap();
 
     let refusal = format!(
-        "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget five hold?\"; \
+        "{}: 5 questions stand on terms alone, 4 answered, the most is 4: \"Is the widget five hold?\"; \
 agent writes the question these stand on",
         rel
     );

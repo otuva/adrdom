@@ -18,7 +18,7 @@ pub use hash::{
 use parse::analyze_shape;
 pub(crate) use parse::{detail_line, parse_option_line, Detail};
 pub use parse::{non_question_heading_lines, parse_sections};
-pub use tiers::{derive_tiers, over_cap, tier_sizes, DEPENDS_LINE_CAP, TIER_CAP};
+pub use tiers::{derive_tiers, in_file_parents, DEPENDS_LINE_CAP, STAND_CAP};
 
 #[derive(Debug, Clone)]
 pub struct OptionRec {

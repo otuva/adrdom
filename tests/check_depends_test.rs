@@ -1,5 +1,5 @@
 // The `## ` tier-heading shape error, the "no depends line" rule, entry
-// resolution (term/decision/dangling/cycle), and the tier cap; the tiers
+// resolution (term/decision/dangling/cycle), and the stand cap; the tiers
 // are no line of check's (bd83aa22). Fixtures are hand-written and approved via
 // hand-written ledger rows (`approve_via_ledger`, `approve_minimal_terms`),
 // never through a real `adr ask`/`adr approve`.
@@ -504,11 +504,11 @@ fn check_passes_a_depends_set_whose_letters_are_all_options_the_target_has() {
 }
 
 #[test]
-fn check_fails_a_tier_over_the_cap() {
+fn check_fails_five_questions_on_terms_alone() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    // Five roots (no heading deps): one tier, five questions, over TIER_CAP
+    // Five roots (no heading deps): five on terms alone, over STAND_CAP
     // (4).
     let content = "# Topic\n\n\
 ### 1.1 Q1?\ndepends: widget\n\n\
@@ -523,7 +523,7 @@ fn check_fails_a_tier_over_the_cap() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("adrdom/decisions/cap.md: 5 questions in one tier, the most is 4: "),
+        text.contains("adrdom/decisions/cap.md: 5 questions stand on terms alone, the most is 4: "),
         "{}",
         text
     );

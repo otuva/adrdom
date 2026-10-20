@@ -28,8 +28,8 @@ pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
 /// True when `sec`'s latest ledger state is `refused`, `superseded`, or
 /// `withdrawn`: the question is closed and out of play -- a refused
 /// question is done, a superseded decision has been replaced, a withdrawn
-/// question no longer stands in the file -- so it no longer holds its tier
-/// for the cap (per "Does the tool cap the questions in a tier?").
+/// question no longer stands in the file -- so it is no member the cap counts
+/// (per "What bounds the questions standing on one question?").
 /// `answered` is still live for this purpose (only
 /// `is_frozen`'s edit-lock treats it as closed); a section with no id yet
 /// is live. A `dropped` question is out of play too
@@ -39,9 +39,9 @@ pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
 }
 
 /// True when `sec` is named on the supersedes line of a question not
-/// answered yet (`depends::replaced_ids`): it is left out of its tier's
-/// count, so the cap holds by what the tier holds once that question is
-/// answered.
+/// answered yet (`depends::replaced_ids`): it is left out of the cap's count
+/// (per "Does the cap count a decision an open question supersedes?"), so
+/// the cap holds by what stands once that question is answered.
 fn is_replaced(sec: &Section, replaced: &std::collections::HashSet<String>) -> bool {
     sec.id.as_ref().is_some_and(|id| replaced.contains(id))
 }
@@ -68,38 +68,71 @@ pub fn is_open_again(led: &Ledger, id: &str) -> bool {
             .any(|r| r.id == id && matches!(r.event.as_str(), "answered" | "refused"))
 }
 
-/// The live questions of the first tier over the cap, `None` when no tier
-/// is over it: the headings of those not answered yet, in file order, and
-/// the count of the answered ones. An answered question holds its place in
-/// the tier (`live_tiers`) but its depends line is never edited again
-/// (`is_frozen`), so the cap refusal (per "Does a refusal name the command
-/// that clears it?") names only the ones the agent can still move. Read by
+/// The first group of live questions over the cap (per "What bounds the
+/// questions standing on one question?"), `None` when none is. The groups
+/// are the questions standing on terms alone, then the questions standing on
+/// each question in file order; a question naming two in-file questions
+/// stands in the group of each. Only live questions count: a refused,
+/// superseded or withdrawn one does not, nor a decision an open question
+/// supersedes (`replaced`; per "Does the cap count a decision an open
+/// question supersedes?"). What a question stands on is its depends line, as
+/// for the tiers (per "What are the tiers derived from?"), whatever state the
+/// question it names is in. A group whose members are all answered is not
+/// judged (per "Does the cap stop a plan whose questions over it are all
+/// answered?"); one that holds an open question is, and the refusal names
+/// that group's parent heading (`None` for terms alone), the headings of the
+/// open members in file order, and the count of the answered ones. Answered
+/// members hold their place but their depends line is never edited again
+/// (`is_frozen`), so the refusal (per "Does a refusal name the command that
+/// clears it?") names only the ones the agent can still move. Read by
 /// `approve` and `check` through `record_refusals` and by `ask`.
 pub fn over_cap_headings(
     led: &Ledger,
     rf: &RecordFile,
-    tiers: &[usize],
     replaced: &std::collections::HashSet<String>,
-) -> Option<(Vec<String>, usize)> {
-    let live: Vec<(&Section, usize)> = rf
+) -> Option<(Option<String>, Vec<String>, usize)> {
+    // Depends lines that do not resolve are a derive error, reported on its
+    // own; the groups are read only off lines that resolve.
+    rf.tiers.as_ref()?;
+    let live: Vec<bool> = rf
         .sections
         .iter()
-        .zip(tiers)
-        .filter(|(sec, _)| !is_dead(led, sec) && !is_replaced(sec, replaced))
-        .map(|(sec, &t)| (sec, t))
+        .map(|sec| !is_dead(led, sec) && !is_replaced(sec, replaced))
         .collect();
-    let live_tiers: Vec<usize> = live.iter().map(|(_, t)| *t).collect();
-    let (tier, _) = crate::record::over_cap(&live_tiers)?;
-    let mut open = Vec::new();
-    let mut answered = 0;
-    for (sec, _) in live.into_iter().filter(|(_, t)| *t == tier) {
-        if sec.id.as_deref().is_some_and(|id| is_current(led, id)) {
-            answered += 1;
+    let parents = crate::record::in_file_parents(rf);
+    let n = rf.sections.len();
+    // groups[0] is terms alone; groups[p + 1] holds what stands on section p.
+    let mut groups: Vec<Vec<usize>> = vec![Vec::new(); n + 1];
+    for c in (0..n).filter(|&c| live[c]) {
+        // What a question stands on is read off its depends line alone,
+        // whatever state the question it names is in.
+        if parents[c].is_empty() {
+            groups[0].push(c);
         } else {
-            open.push(sec.heading_text.clone());
+            for &p in &parents[c] {
+                groups[p + 1].push(c);
+            }
         }
     }
-    Some((open, answered))
+    let is_answered = |c: &usize| {
+        rf.sections[*c]
+            .id
+            .as_deref()
+            .is_some_and(|id| is_current(led, id))
+    };
+    let (g, kids) = groups
+        .into_iter()
+        .enumerate()
+        .find(|(_, kids)| kids.len() > crate::record::STAND_CAP && !kids.iter().all(is_answered))?;
+    let (answered, open): (Vec<usize>, Vec<usize>) = kids.into_iter().partition(is_answered);
+    Some((
+        g.checked_sub(1)
+            .map(|p| rf.sections[p].heading_text.clone()),
+        open.into_iter()
+            .map(|c| rf.sections[c].heading_text.clone())
+            .collect(),
+        answered.len(),
+    ))
 }
 
 /// True when `sec` has no letter answer yet: no `**Answer:** <letter>`

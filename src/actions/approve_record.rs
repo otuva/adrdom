@@ -78,7 +78,7 @@ pub(super) fn do_approve_record(
 
     // Every refusal this file can earn -- shape, tells, a missing
     // depends line, depends resolution (including a frozen section's
-    // edit and the derived-tiers error), and the tier cap -- collected
+    // edit and the derived-tiers error), and the stand cap -- collected
     // here (`record_refusals`, shared with `check`) instead of returned at
     // the first, so one `approve` call tells the agent everything it owes
     // the owner before asking again.

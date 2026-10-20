@@ -378,20 +378,21 @@ pub fn depends_line_cap_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Ve
     out
 }
 
-/// The cap (per "What bounds the questions at one tier?"): no derived tier may
-/// hold more than `TIER_CAP` live questions. Only judged when tiers were
-/// derived; a refused, superseded or withdrawn question does not count, nor
-/// a decision an open question supersedes (`replaced`).
+/// The cap (per "What bounds the questions standing on one question?"): no
+/// more than `STAND_CAP` live questions stand on one question, and no more
+/// than `STAND_CAP` stand on terms alone. Only judged when tiers were derived
+/// (a derive error is reported first); a refused, superseded or withdrawn
+/// question does not count, nor a decision an open question supersedes
+/// (`replaced`).
 pub fn cap_finding(
     rel: &str,
     rf: &RecordFile,
     replaced: &HashSet<String>,
     led: &Ledger,
 ) -> Option<Finding> {
-    let tiers = rf.tiers.as_ref()?;
-    let (open, answered) = state::over_cap_headings(led, rf, tiers, replaced)?;
+    let (parent, open, answered) = state::over_cap_headings(led, rf, replaced)?;
     Some(Finding::said(
         Class::Plan,
-        msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP),
+        msg::stand_cap_exceeded(rel, parent.as_deref(), &open, answered, record::STAND_CAP),
     ))
 }
