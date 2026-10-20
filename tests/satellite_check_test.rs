@@ -418,3 +418,109 @@ fn terms_brief_drift_is_found_in_a_satellite_when_the_terms_were_approved_one_en
         stderr(&out)
     );
 }
+
+/// A linked worktree of `main` at `<main>-wt/<name>/deep`, a place no layout
+/// of siblings reaches.
+fn linked_worktree(main: &Path, name: &str) -> PathBuf {
+    let wt = PathBuf::from(format!("{}-wt", main.display()))
+        .join(name)
+        .join("deep");
+    std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
+    let out = run_git(
+        main,
+        &["worktree", "add", "-q", "-b", name, wt.to_str().unwrap()],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    wt
+}
+
+// adr: 0320a987-f8b2-4105-9b27-64bf484026e6
+#[test]
+fn a_linked_worktree_of_a_satellite_finds_the_primary_from_the_main_working_tree() {
+    let (primary, sat, id) = satellite_pair();
+    let wt = linked_worktree(&sat, "satwt");
+    for args in [&["check"][..], &["show"], &["show", "--ids"]] {
+        let out = adr(&wt, args, &[], "");
+        assert!(out.status.success(), "{:?}: {}", args, stderr(&out));
+        assert!(
+            !stderr(&out).contains("record not found"),
+            "{}",
+            stderr(&out)
+        );
+    }
+    let shown = stdout(&adr(&wt, &["show", "--ids"], &[], ""));
+    assert!(shown.contains(&id), "{}", shown);
+    assert!(
+        shown.contains(&primary.file_name().unwrap().to_string_lossy().to_string()),
+        "{}",
+        shown
+    );
+}
+
+// adr: 0320a987-f8b2-4105-9b27-64bf484026e6
+#[test]
+fn a_linked_worktree_of_the_primary_finds_its_satellite_and_counts_the_tie_in_it() {
+    let (primary, sat, id) = satellite_pair();
+    let wt = linked_worktree(&primary, "primwt");
+    let out = adr(&wt, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("not found"), "{}", text);
+    assert!(text.contains("no tracked file holds its tie"), "{}", text);
+    assert!(commit_file(&sat, "tied.txt", &format!("adr: {}\n", id))
+        .status
+        .success());
+    for args in [&["check"][..], &["show"]] {
+        let out = adr(&wt, args, &[], "");
+        let text = stdout(&out);
+        assert!(out.status.success(), "{:?}: {}", args, text);
+        assert!(!text.contains("not found"), "{:?}: {}", args, text);
+        assert!(
+            !text.contains("no tracked file holds its tie")
+                && !text.contains("in a test that shows it"),
+            "{:?}: {}",
+            args,
+            text
+        );
+    }
+}
+
+// adr: 0320a987-f8b2-4105-9b27-64bf484026e6
+#[test]
+fn a_commit_in_a_linked_worktree_of_a_satellite_runs_its_hook_against_the_primary() {
+    let (primary, sat, _) = satellite_pair();
+    let wt = linked_worktree(&sat, "satcommit");
+    let ok = commit_file(&wt, "notes.txt", "a plain line\n");
+    assert!(ok.status.success(), "{}", stderr(&ok));
+    ban(&primary, "gadgetword");
+    let c = commit_file(&wt, "more.txt", "a gadgetword here\n");
+    assert!(!c.status.success(), "{}", stderr(&c));
+    assert!(stderr(&c).contains("banned"), "{}", stderr(&c));
+}
+
+// adr: 0320a987-f8b2-4105-9b27-64bf484026e6
+#[test]
+fn a_commit_in_a_linked_worktree_of_the_primary_counts_the_tie_in_the_satellite() {
+    let (primary, sat, id) = satellite_pair();
+    assert!(commit_file(&sat, "tied.txt", &format!("adr: {}\n", id))
+        .status
+        .success());
+    let wt = linked_worktree(&primary, "primcommit");
+    // The hook scans the satellite from the primary's main working tree; a
+    // scan that read the worktree's index would find no tie and no satellite.
+    let c = commit_file(&wt, "notes.txt", "a plain line\n");
+    assert!(c.status.success(), "{}", stderr(&c));
+    let text = format!("{}{}", stdout(&c), stderr(&c));
+    assert!(!text.contains("not found"), "{}", text);
+    assert!(!text.contains("no tracked file holds its tie"), "{}", text);
+    // A stale tie in the satellite is reported with the satellite's path.
+    assert!(commit_file(&sat, "stale.txt", &format!("adr: {}\n", STRAY))
+        .status
+        .success());
+    let c = commit_file(&wt, "more.txt", "another line\n");
+    let text = format!("{}{}", stdout(&c), stderr(&c));
+    assert!(
+        text.contains(&format!("{}/stale.txt:1", sat_path(&primary, &sat))),
+        "{}",
+        text
+    );
+}

@@ -23,10 +23,10 @@ pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> 
     // also reads each satellite of its list that has a checkout, from its
     // working tree. One that is missing is not scanned, never cloned.
     for row in crate::satellite::rows(root) {
-        if !root.join(&row.path).join(".git").exists() {
+        let dir = crate::satellite::row_dir(root, &row);
+        if !dir.join(".git").exists() {
             continue;
         }
-        let dir = root.join(&row.path);
         scan(
             &dir,
             &Source::WorkingTree,

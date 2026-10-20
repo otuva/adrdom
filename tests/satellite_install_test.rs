@@ -541,3 +541,41 @@ fn a_write_failure_in_install_satellite_names_the_command_with_the_path() {
     );
     assert_eq!(satellites_tsv(&primary), "");
 }
+
+// adr: 0320a987-f8b2-4105-9b27-64bf484026e6
+#[test]
+fn install_satellite_from_a_linked_worktree_of_the_primary_writes_paths_between_main_working_trees()
+{
+    let (primary, sat) = primary_and_plain();
+    for args in [
+        &["add", "-A"][..],
+        &["commit", "-q", "-m", "chore: install"],
+    ] {
+        assert!(run_git(&primary, args).status.success());
+    }
+    let wt = PathBuf::from(format!("{}-wt", primary.display())).join("deep");
+    std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
+    let made = run_git(
+        &primary,
+        &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+    );
+    assert!(made.status.success(), "{}", stderr(&made));
+    let out = adr(
+        &wt,
+        &["install", "--satellite", sat.to_str().unwrap()],
+        &[],
+        "",
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    // The row is written where the command ran, from the main working tree.
+    let row = std::fs::read_to_string(wt.join("adrdom/state/satellites.tsv")).unwrap();
+    assert!(
+        row.starts_with(&format!("{}\t", rel(&primary, &sat))),
+        "{}",
+        row
+    );
+    assert_eq!(
+        std::fs::read_to_string(sat.join("adrdom/primary")).unwrap(),
+        format!("{}\n", rel_back(&primary, &sat))
+    );
+}

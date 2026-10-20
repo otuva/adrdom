@@ -993,15 +993,20 @@ fn run_satellite_of(root: &Path, given: &Path) -> i32 {
         return refuse(msg::satellite_without_record(&shown));
     }
 
-    let to_primary = satellite::relative_path(&sat, &primary);
-    let to_sat = satellite::relative_path(&primary, &sat);
+    // Per "What does a path under adrdom to another repository resolve
+    // against?" (0320a987-f8b2-4105-9b27-64bf484026e6 A): both paths run
+    // between the main working trees; the files are written in the
+    // checkouts, and their events are shown from the one the command runs in.
+    let to_primary = satellite::relative_path(&repo::main_root(&sat), &repo::main_root(&primary));
+    let to_sat = satellite::relative_path(&repo::main_root(&primary), &repo::main_root(&sat));
+    let shown_from = format!("{}/", satellite::relative_path(&primary, &sat));
     let mut events: Vec<Event> = Vec::new();
     let again = command(&["adr", "install", "--satellite", &shown]);
     let mut result = install_satellite_files(
         &sat,
         &primary,
         &to_primary,
-        &format!("{}/", to_sat),
+        &shown_from,
         again.clone(),
         &mut events,
     );
@@ -1045,7 +1050,7 @@ fn run_in_satellite(
             );
             return 1;
         };
-        let rel = satellite::relative_path(&place.record, &abs);
+        let rel = satellite::relative_path(&repo::main_root(&place.record), &abs);
         out::eprint_stop(
             Command::Install,
             &msg::record_elsewhere("install", &["--satellite", &rel], Actor::Agent, &primary),

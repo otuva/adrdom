@@ -62,7 +62,10 @@ pub fn locate() -> Located {
             primary: None,
         });
     };
-    match fs::canonicalize(code.join(&primary)) {
+    // Per "What does a path under adrdom to another repository resolve
+    // against?" (0320a987-f8b2-4105-9b27-64bf484026e6 A): the main working
+    // tree of the repository, so every worktree finds the same primary.
+    match fs::canonicalize(repo::main_root(&code).join(&primary)) {
         Ok(record) if has_record(&record) => Located::Here(Place {
             code,
             record,
@@ -143,11 +146,21 @@ pub fn drop_row(primary_root: &Path, path: &str) -> Result<Option<Event>, String
     save(primary_root, &all).map(Some)
 }
 
+/// The directory a row of the primary at `primary_root` names: its path
+/// resolved against the primary's main working tree (per "What does a path
+/// under adrdom to another repository resolve against?",
+/// 0320a987-f8b2-4105-9b27-64bf484026e6 A), whichever worktree of the
+/// primary `primary_root` is.
+pub fn row_dir(primary_root: &Path, row: &Row) -> PathBuf {
+    repo::main_root(primary_root).join(&row.path)
+}
+
 /// The rows whose satellite has no git checkout at its path.
 pub fn missing(primary_root: &Path) -> Vec<Row> {
+    let base = repo::main_root(primary_root);
     rows(primary_root)
         .into_iter()
-        .filter(|r| !primary_root.join(&r.path).join(".git").exists())
+        .filter(|r| !base.join(&r.path).join(".git").exists())
         .collect()
 }
 

@@ -65,7 +65,10 @@ pub fn run() -> i32 {
     let mut failed = remove_all(&root, &mut events).err();
     if let (None, Some((record, shown))) = (&failed, &primary_root) {
         let sat = std::fs::canonicalize(&root).unwrap_or_else(|_| root.clone());
-        let path = satellite::relative_path(record, &sat);
+        // Per "What does a path under adrdom to another repository resolve
+        // against?" (0320a987-f8b2-4105-9b27-64bf484026e6 A): between the
+        // main working trees.
+        let path = satellite::relative_path(&repo::main_root(record), &repo::main_root(&sat));
         match satellite::drop_row(record, &path) {
             Ok(Some(Event::FileWritten { path })) => events.push(written(&format!(
                 "{}/{}",
