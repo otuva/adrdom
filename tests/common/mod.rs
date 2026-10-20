@@ -9,6 +9,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// The hook texts install writes, as the hooks on disk hold them.
+pub const PRE_COMMIT_TEXT: &str = "#!/bin/sh\n# The repository's own hook goes in .githooks/pre-commit.own and runs once adr check passes.\nadr check --staged || exit $?\nown=\"$(dirname \"$0\")/pre-commit.own\"\n[ -x \"$own\" ] || exit 0\nexec \"$own\" \"$@\"\n";
+pub const COMMIT_MSG_TEXT: &str = "#!/bin/sh\n# The repository's own hook goes in .githooks/commit-msg.own and runs once adr check passes.\nadr check --message \"$1\" || exit $?\nown=\"$(dirname \"$0\")/commit-msg.own\"\n[ -x \"$own\" ] || exit 0\nexec \"$own\" \"$@\"\n";
+pub const PRE_PUSH_TEXT: &str = "#!/bin/sh\n# The repository's own hook goes in .githooks/pre-push.own and runs once adr check passes.\ninput=$(cat)\n[ -z \"$input\" ] || input=\"$input\n\"\nprintf '%s' \"$input\" | adr check --push || exit $?\nown=\"$(dirname \"$0\")/pre-push.own\"\n[ -x \"$own\" ] || exit 0\nprintf '%s' \"$input\" | \"$own\" \"$@\"\n";
+
 pub fn adr_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_adr"))
 }

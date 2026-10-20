@@ -40,7 +40,10 @@ fn checkout(dir: &Path, name: &str) {
 
 fn commit_all(dir: &Path, msg: &str) {
     run_git(dir, &["add", "-A"]);
-    let out = run_git(dir, &["commit", "-q", "-m", msg]);
+    let out = run_git(
+        dir,
+        &["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", msg],
+    );
     assert!(
         out.status.success(),
         "commit '{}' failed: {}",
@@ -49,8 +52,8 @@ fn commit_all(dir: &Path, msg: &str) {
     );
 }
 
-/// A repo with `adr install`ed and the hook wiring immediately switched off
-/// (`core.hooksPath` unset), so a plain `git commit` here is never gated by
+/// A repo with `adr install`ed; fixture commits skip the hooks per command
+/// (`-c core.hooksPath=/dev/null`), so a fixture commit is never gated by
 /// the pre-commit hook -- these tests drive `adr check`/`adr check
 /// --staged` directly instead, at exactly the point in the merge each case
 /// wants to look at.
@@ -58,12 +61,14 @@ fn new_repo() -> PathBuf {
     let dir = init_repo();
     git_ok(&dir, &["config", "merge.conflictStyle", "merge"]);
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    run_git(&dir, &["config", "--unset", "core.hooksPath"]);
     dir
 }
 
 fn finish_merge_commit(dir: &Path) {
-    let out = run_git(dir, &["commit", "--no-edit"]);
+    let out = run_git(
+        dir,
+        &["-c", "core.hooksPath=/dev/null", "commit", "--no-edit"],
+    );
     assert!(
         out.status.success(),
         "merge commit failed: {}",
@@ -348,6 +353,9 @@ fn d_a_shallow_clone_of_a_merge_commit_fails_until_deepened() {
         "shallow clone failed: {}",
         stderr(&clone_out)
     );
+
+    // A fresh clone has no hooksPath until install runs there (db76c9a0 Costs).
+    git_ok(&clone_dir, &["config", "core.hooksPath", ".githooks"]);
 
     // The premise this case depends on: a shallow clone really does hide
     // the merge commit's second parent from `rev-parse`.

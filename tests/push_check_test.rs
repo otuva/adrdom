@@ -146,7 +146,7 @@ fn a_install_writes_an_executable_pre_push_hook_check_holds_and_install_restores
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(&hook_path).unwrap(),
-        "#!/bin/sh\nadr check --push\nexit $?\n",
+        common::PRE_PUSH_TEXT,
         "install must rewrite an edited pre-push hook back to exactly its content"
     );
     assert!(adr(&dir, &["check"], &[], "").status.success());

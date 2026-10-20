@@ -95,14 +95,29 @@ pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 
 /// The commit hooks run check as it is by hand: a pass prints nothing, and
 /// every line is a finding with its move (per "Does check print a line with no
-/// move on it?", bd83aa22 A).
-pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
-pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
-/// Decision P (19e1c023-a678-4842-a414-bb0e45c41601): a plain `sh` script,
-/// same shape as the other two hooks, that hands `adr check --push` git's
-/// own pre-push input -- the script never redirects its own stdin, so the
-/// lines git writes to the hook's stdin reach the command unchanged.
-pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
+/// move on it?", bd83aa22 A). Once check passes, each hook runs the
+/// repository's own hook of the same name, `.githooks/<name>.own`, with git's
+/// arguments and input, and returns its exit code
+/// (adr-code: 6ac1dde1-fe11-47af-861a-334dbf917b11).
+pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\n# The repository's own hook goes in .githooks/pre-commit.own and runs once adr check passes.\nadr check --staged || exit $?\nown=\"$(dirname \"$0\")/pre-commit.own\"\n[ -x \"$own\" ] || exit 0\nexec \"$own\" \"$@\"\n";
+pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\n# The repository's own hook goes in .githooks/commit-msg.own and runs once adr check passes.\nadr check --message \"$1\" || exit $?\nown=\"$(dirname \"$0\")/commit-msg.own\"\n[ -x \"$own\" ] || exit 0\nexec \"$own\" \"$@\"\n";
+/// Decision P (19e1c023-a678-4842-a414-bb0e45c41601): `adr check --push`
+/// reads git's own pre-push input from stdin. The script reads that input
+/// once, one trailing newline restored (the shell drops them all, git wrote
+/// one), and hands the same bytes to check and then to the own hook.
+pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\n# The repository's own hook goes in .githooks/pre-push.own and runs once adr check passes.\ninput=$(cat)\n[ -z \"$input\" ] || input=\"$input\n\"\nprintf '%s' \"$input\" | adr check --push || exit $?\nown=\"$(dirname \"$0\")/pre-push.own\"\n[ -x \"$own\" ] || exit 0\nprintf '%s' \"$input\" | \"$own\" \"$@\"\n";
+
+/// The texts earlier installs wrote for each hook: the tool's own, so a hook
+/// holding one is overwritten and never moved to the own hook file.
+const EARLIER_PRE_COMMIT: [&str; 2] = [
+    "#!/bin/sh\nadr check --staged\nexit $?\n",
+    "#!/bin/sh\nadr check --staged --quiet\nexit $?\n",
+];
+const EARLIER_COMMIT_MSG: [&str; 2] = [
+    "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n",
+    "#!/bin/sh\nadr check --message \"$1\" --quiet\nexit $?\n",
+];
+const EARLIER_PRE_PUSH: [&str; 1] = ["#!/bin/sh\nadr check --push\nexit $?\n"];
 
 /// `adrdom/.gitattributes`'s whole content (Decision 7,
 /// db56a285-946f-48b1-b073-bb1e90192185): the one merge rule that keeps
@@ -190,6 +205,7 @@ fn install_all(
     events: &mut Vec<Event>,
 ) -> Result<(), String> {
     let cmd = &install_command(claude, codex, planning);
+    let (hooks_state, moves) = plan_hooks(root, "", cmd)?;
     for dir in [repo::DECISIONS_DIR, repo::STATE_DIR] {
         let path = root.join(dir);
         fs::create_dir_all(&path).map_err(|e| {
@@ -238,11 +254,8 @@ fn install_all(
             msg::after_fix_agent_runs(cmd.clone()),
         )
     })?;
-    for (rel, content) in [
-        (repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK),
-        (repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK),
-        (repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK),
-    ] {
+    for (rel, _, content, _) in HOOKS {
+        move_planned(&moves, rel, "", events, cmd)?;
         events.extend(
             create_hook(root, rel, content)
                 .map_err(|e| msg::write_failed(rel, e, msg::after_fix_agent_runs(cmd.clone())))?,
@@ -251,8 +264,7 @@ fn install_all(
 
     // Without this git runs none of the hooks written above. A change of
     // git's configuration is a write: one line, when it changes.
-    let hooks_path = repo::git(root, &["config", "core.hooksPath"]).map(|v| v.trim().to_string());
-    if hooks_path.as_deref() != Some(".githooks") {
+    if hooks_state == repo::HooksPath::Unset {
         if repo::git(root, &["config", "core.hooksPath", ".githooks"]).is_none() {
             return Err(msg::hooks_path_failed(
                 "set",
@@ -300,6 +312,159 @@ fn install_all(
         return Err(msg::model_missing());
     }
     Ok(())
+}
+
+/// The three hooks install writes: path under the root, name, current text,
+/// and the texts earlier installs wrote.
+const HOOKS: [(&str, &str, &str, &[&str]); 3] = [
+    (
+        repo::PRE_COMMIT_HOOK_PATH,
+        "pre-commit",
+        PRE_COMMIT_HOOK,
+        &EARLIER_PRE_COMMIT,
+    ),
+    (
+        repo::COMMIT_MSG_HOOK_PATH,
+        "commit-msg",
+        COMMIT_MSG_HOOK,
+        &EARLIER_COMMIT_MSG,
+    ),
+    (
+        repo::PRE_PUSH_HOOK_PATH,
+        "pre-push",
+        PRE_PUSH_HOOK,
+        &EARLIER_PRE_PUSH,
+    ),
+];
+
+/// A hook install moves into the repository's own hook file.
+struct HookMove {
+    from: PathBuf,
+    /// The source as events and refusals name it.
+    from_shown: String,
+    /// Whether the source is in `.githooks`, where the tool's hook is written
+    /// over its place at once.
+    in_githooks: bool,
+    own: PathBuf,
+    own_shown: String,
+}
+
+/// Whether the hook file at `path` holds a text this tool wrote, now or in an
+/// earlier install. A checkout's carriage returns aside: such a copy is still
+/// the tool's, rewritten in place, never moved.
+fn is_tools_hook(path: &Path, current: &str, earlier: &[&str]) -> bool {
+    let Ok(existing) = fs::read_to_string(path) else {
+        return false;
+    };
+    let existing = existing.replace("\r\n", "\n");
+    hook_is_current(&existing, current) || earlier.iter().any(|t| hook_is_current(&existing, t))
+}
+
+/// What install checks before it writes anything, from `git config
+/// core.hooksPath` and the hook files: the stop when another program holds
+/// hooksPath (897b52a7-f6d2-467e-ba14-9f4ce4865664), and the hooks to move
+/// into their own hook files (60cfa0ba-9085-43b8-9ed4-fd94808c33e0) -- a
+/// `.githooks` hook that is not the tool's, and, while hooksPath is unset and
+/// git ran `.git/hooks`, the hook there. A move onto a file that is there, or
+/// onto a file another move fills, stops install with nothing written.
+/// `shown` leads the paths under `root` in what is printed.
+fn plan_hooks(
+    root: &Path,
+    shown: &str,
+    install: &Cmd,
+) -> Result<(repo::HooksPath, Vec<HookMove>), String> {
+    let state = repo::hooks_path_state(root);
+    if let repo::HooksPath::Foreign(v) = &state {
+        return Err(msg::hooks_path_foreign(v, install.clone()));
+    }
+    let git_dir = match state {
+        repo::HooksPath::Unset => repo::git_hooks_dir(root),
+        _ => None,
+    };
+    let mut moves = Vec::new();
+    for (rel, name, current, earlier) in HOOKS {
+        let own_rel = format!("{}.own", rel);
+        let own = root.join(&own_rel);
+        let own_shown = format!("{}{}", shown, own_rel);
+        let ours = root.join(rel);
+        let mut sources: Vec<(PathBuf, String, bool)> = Vec::new();
+        if fs::symlink_metadata(&ours).is_ok() && !is_tools_hook(&ours, current, earlier) {
+            sources.push((ours, format!("{}{}", shown, rel), true));
+        }
+        if let Some(dir) = &git_dir {
+            let theirs = dir.join(name);
+            if theirs.is_file() {
+                let shown_path = match theirs.strip_prefix(root) {
+                    Ok(r) => format!("{}{}", shown, r.display()),
+                    Err(_) => theirs.display().to_string(),
+                };
+                sources.push((theirs, shown_path, false));
+            }
+        }
+        if sources.is_empty() {
+            continue;
+        }
+        if fs::symlink_metadata(&own).is_ok() {
+            return Err(msg::hook_move_blocked(
+                &sources[0].1,
+                &own_shown,
+                install.clone(),
+            ));
+        }
+        if sources.len() > 1 {
+            return Err(msg::hook_move_twice(
+                &sources[0].1,
+                &sources[1].1,
+                &own_shown,
+                install.clone(),
+            ));
+        }
+        let (from, from_shown, in_githooks) = sources.remove(0);
+        moves.push(HookMove {
+            from,
+            from_shown,
+            in_githooks,
+            own,
+            own_shown,
+        });
+    }
+    Ok((state, moves))
+}
+
+/// Moves a hook to its own hook file, keeping its mode: a rename, or a copy
+/// and a removal when the rename crosses devices.
+fn move_hook(m: &HookMove, events: &mut Vec<Event>, again: &Cmd) -> Result<(), String> {
+    let failed = |e: std::io::Error| {
+        msg::write_failed(&m.own_shown, e, msg::after_fix_agent_runs(again.clone()))
+    };
+    if fs::rename(&m.from, &m.own).is_err() {
+        fs::copy(&m.from, &m.own).map_err(failed)?;
+        fs::remove_file(&m.from).map_err(failed)?;
+    }
+    events.push(Event::FileWritten {
+        path: m.own_shown.clone(),
+    });
+    if !m.in_githooks {
+        events.push(Event::FileRemoved {
+            path: m.from_shown.clone(),
+        });
+    }
+    Ok(())
+}
+
+/// Moves the hook found for `rel`, if one was planned.
+fn move_planned(
+    moves: &[HookMove],
+    rel: &str,
+    shown: &str,
+    events: &mut Vec<Event>,
+    again: &Cmd,
+) -> Result<(), String> {
+    let own_shown = format!("{}{}.own", shown, rel);
+    match moves.iter().find(|m| m.own_shown == own_shown) {
+        Some(m) => move_hook(m, events, again),
+        None => Ok(()),
+    }
 }
 
 /// The event of a file written at `rel`.
@@ -630,6 +795,7 @@ fn install_satellite_files(
         Some(Event::FileWritten { path }) => Some(Event::FileWritten { path: at(&path) }),
         other => other,
     };
+    let (hooks_state, moves) = plan_hooks(sat, shown, &cmd)?;
     let state = sat.join(repo::STATE_DIR);
     fs::create_dir_all(&state)
         .map_err(|e| msg::create_failed(&state.display().to_string(), e, again()))?;
@@ -667,17 +833,13 @@ fn install_satellite_files(
     let hooks = sat.join(".githooks");
     fs::create_dir_all(&hooks)
         .map_err(|e| msg::create_failed(&hooks.display().to_string(), e, again()))?;
-    for (rel, content) in [
-        (repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK),
-        (repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK),
-        (repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK),
-    ] {
+    for (rel, _, content, _) in HOOKS {
+        move_planned(&moves, rel, shown, events, &cmd)?;
         events.extend(lead(
             create_hook(sat, rel, content).map_err(|e| msg::write_failed(&at(rel), e, again()))?,
         ));
     }
-    let hooks_path = repo::git(sat, &["config", "core.hooksPath"]).map(|v| v.trim().to_string());
-    if hooks_path.as_deref() != Some(".githooks") {
+    if hooks_state == repo::HooksPath::Unset {
         if repo::git(sat, &["config", "core.hooksPath", ".githooks"]).is_none() {
             return Err(msg::hooks_path_failed("set", again()));
         }

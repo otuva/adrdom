@@ -464,6 +464,25 @@ pub fn hook_missing(path: &str) -> Said {
     )
 }
 
+/// `check` on git's `core.hooksPath` (db76c9a0-b4fc-4aa2-8afb-47cd78ef7138):
+/// not set, so git runs no hook of the tool's.
+pub fn hooks_path_unset() -> Said {
+    said(
+        &crate::rule::HOOKS_PATH_IS_GITHOOKS,
+        "core.hooksPath is not set",
+        Next::agent_runs(Cmd::fixed("adr install")),
+    )
+}
+
+/// Same check as `hooks_path_unset`, but the setting points elsewhere.
+pub fn hooks_path_not_ours(value: &str) -> Said {
+    said(
+        &crate::rule::HOOKS_PATH_IS_GITHOOKS,
+        format!("core.hooksPath is {}, not .githooks", value),
+        Next::agent_runs(Cmd::fixed("adr install")),
+    )
+}
+
 pub fn codex_rules_stale() -> Said {
     said(
         &crate::rule::CODEX_RULES_MATCH_INSTALL,
