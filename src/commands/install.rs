@@ -347,6 +347,15 @@ struct HookMove {
     in_githooks: bool,
     own: PathBuf,
     own_shown: String,
+    /// Where the moved symlink points, when its target is relative: written
+    /// so the link resolves to the file it resolved to before the move.
+    link_to: Option<PathBuf>,
+}
+
+/// Whether `path` is a regular file, or a symlink to one: the only entries
+/// that are hooks.
+fn is_hook_file(path: &Path) -> bool {
+    fs::metadata(path).map(|m| m.is_file()).unwrap_or(false)
 }
 
 /// Whether the hook file at `path` holds a text this tool wrote, now or in an
@@ -388,12 +397,12 @@ fn plan_hooks(
         let own_shown = format!("{}{}", shown, own_rel);
         let ours = root.join(rel);
         let mut sources: Vec<(PathBuf, String, bool)> = Vec::new();
-        if fs::symlink_metadata(&ours).is_ok() && !is_tools_hook(&ours, current, earlier) {
+        if is_hook_file(&ours) && !is_tools_hook(&ours, current, earlier) {
             sources.push((ours, format!("{}{}", shown, rel), true));
         }
         if let Some(dir) = &git_dir {
             let theirs = dir.join(name);
-            if theirs.is_file() {
+            if is_hook_file(&theirs) && !is_tools_hook(&theirs, current, earlier) {
                 let shown_path = match theirs.strip_prefix(root) {
                     Ok(r) => format!("{}{}", shown, r.display()),
                     Err(_) => theirs.display().to_string(),
@@ -426,9 +435,80 @@ fn plan_hooks(
             in_githooks,
             own,
             own_shown,
+            link_to: None,
         });
     }
+    retarget_links(root, &mut moves);
     Ok((state, moves))
+}
+
+/// Gives each moved symlink with a relative target the path that resolves,
+/// from the own hook file's directory, to the file it resolved to before: the
+/// own file of another hook this install moves, or the resolved file itself.
+fn retarget_links(root: &Path, moves: &mut [HookMove]) {
+    if cfg!(not(unix)) {
+        return;
+    }
+    let Ok(canon_root) = fs::canonicalize(root) else {
+        return;
+    };
+    let own_dir = canon_root.join(".githooks");
+    // Each move's source as a path with its directory resolved.
+    let sources: Vec<Option<PathBuf>> = moves
+        .iter()
+        .map(|m| {
+            let parent = fs::canonicalize(m.from.parent()?).ok()?;
+            Some(parent.join(m.from.file_name()?))
+        })
+        .collect();
+    let mut targets: Vec<Option<PathBuf>> = Vec::new();
+    for m in moves.iter() {
+        let target = match fs::read_link(&m.from) {
+            Ok(t) if t.is_relative() => t,
+            _ => {
+                targets.push(None);
+                continue;
+            }
+        };
+        let direct = m
+            .from
+            .parent()
+            .and_then(|p| fs::canonicalize(p).ok())
+            .map(|p| normalized(&p.join(&target)));
+        let hook = direct.and_then(|d| {
+            sources
+                .iter()
+                .position(|s| s.as_deref() == Some(d.as_path()))
+        });
+        let to = match hook {
+            Some(i) => moves[i]
+                .own
+                .file_name()
+                .map(|n| PathBuf::from(n.to_os_string())),
+            None => fs::canonicalize(&m.from)
+                .ok()
+                .map(|r| PathBuf::from(satellite::relative_path(&own_dir, &r))),
+        };
+        targets.push(to);
+    }
+    for (m, t) in moves.iter_mut().zip(targets) {
+        m.link_to = t;
+    }
+}
+
+/// `path` with its `.` and `..` components folded, without touching disk.
+fn normalized(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 /// Moves a hook to its own hook file, keeping its mode: a rename, or a copy
@@ -437,9 +517,24 @@ fn move_hook(m: &HookMove, events: &mut Vec<Event>, again: &Cmd) -> Result<(), S
     let failed = |e: std::io::Error| {
         msg::write_failed(&m.own_shown, e, msg::after_fix_agent_runs(again.clone()))
     };
-    if fs::rename(&m.from, &m.own).is_err() {
-        fs::copy(&m.from, &m.own).map_err(failed)?;
-        fs::remove_file(&m.from).map_err(failed)?;
+    match &m.link_to {
+        Some(to) => {
+            link_to(to, &m.own).map_err(failed)?;
+            if let Err(e) = fs::remove_file(&m.from) {
+                let _ = fs::remove_file(&m.own);
+                return Err(failed(e));
+            }
+        }
+        None => {
+            if fs::rename(&m.from, &m.own).is_err() {
+                fs::copy(&m.from, &m.own).map_err(failed)?;
+                if let Err(e) = fs::remove_file(&m.from) {
+                    // No half-done move: a rerun would refuse on the copy.
+                    let _ = fs::remove_file(&m.own);
+                    return Err(failed(e));
+                }
+            }
+        }
     }
     events.push(Event::FileWritten {
         path: m.own_shown.clone(),
@@ -450,6 +545,19 @@ fn move_hook(m: &HookMove, events: &mut Vec<Event>, again: &Cmd) -> Result<(), S
         });
     }
     Ok(())
+}
+
+/// A symlink at `at` pointing to `to` (unix; elsewhere no link is retargeted).
+fn link_to(to: &Path, at: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(to, at)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (to, at);
+        Ok(())
+    }
 }
 
 /// Moves the hook found for `rel`, if one was planned.

@@ -642,7 +642,7 @@ fn check_reports_a_hooks_path_that_is_not_set_or_is_foreign() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("core.hooksPath is .husky, not .githooks; agent runs: adr install"),
+        stdout(&out).contains("core.hooksPath is .husky, not .githooks; owner removes the hook manager that set core.hooksPath, then runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -671,14 +671,13 @@ fn check_reports_a_foreign_hooks_path_in_a_satellite() {
     let out = adr(&sat, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("core.hooksPath is .husky, not .githooks; agent runs: adr install"),
+        stdout(&out).contains("core.hooksPath is .husky, not .githooks; owner removes the hook manager that set core.hooksPath, then runs: adr install"),
         "{}",
         stdout(&out)
     );
 }
 
-// adr: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0
-// adr: d6112bd7-1649-4a47-ab3f-0681e4d0e8f6
+// adr: 292359a4-0512-465b-b6a7-79838e66e5a5
 #[test]
 fn uninstall_leaves_the_own_hook_file_in_place() {
     let dir = init_repo();
@@ -695,4 +694,110 @@ fn uninstall_leaves_the_own_hook_file_in_place() {
         std::fs::read_to_string(dir.join(".githooks/pre-commit.own")).unwrap(),
         "#!/bin/sh\necho mine\n"
     );
+}
+
+/// Installs over a repository whose hooks were set up by the caller, then
+/// commits once so the hooks run.
+fn install_and_commit(dir: &Path) {
+    install_ok(dir);
+    approve_empty_terms(dir);
+    run_git(dir, &["add", "-A"]);
+    let c = run_git(dir, &["commit", "-q", "-m", "chore: install"]);
+    assert!(c.status.success(), "{}{}", stdout(&c), stderr(&c));
+}
+
+// adr: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0
+#[test]
+fn a_moved_symlink_to_another_moved_hook_runs_that_hook_once_per_name() {
+    let dir = init_repo();
+    write_mode(
+        &dir.join(".git/hooks/pre-commit"),
+        "#!/bin/sh\necho \"$(basename \"$0\") $#\" >> .git/runs\n",
+        0o755,
+    );
+    std::os::unix::fs::symlink("pre-commit", dir.join(".git/hooks/commit-msg")).unwrap();
+    install_and_commit(&dir);
+    assert_eq!(
+        std::fs::read_link(dir.join(".githooks/commit-msg.own")).unwrap(),
+        PathBuf::from("pre-commit.own")
+    );
+    let mut runs: Vec<String> = std::fs::read_to_string(dir.join(".git/runs"))
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+    runs.sort();
+    assert_eq!(runs, ["commit-msg.own 1", "pre-commit.own 0"]);
+}
+
+// adr: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0
+#[test]
+fn a_moved_symlink_to_a_work_tree_script_still_runs_the_script() {
+    let dir = init_repo();
+    write_mode(
+        &dir.join("scripts/lint.sh"),
+        "#!/bin/sh\ntouch .git/lint-ran\n",
+        0o755,
+    );
+    std::os::unix::fs::symlink("../../scripts/lint.sh", dir.join(".git/hooks/pre-commit")).unwrap();
+    install_and_commit(&dir);
+    assert!(dir.join(".git/lint-ran").exists());
+    assert!(!dir.join(".git/hooks/pre-commit").exists());
+}
+
+// adr: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0
+#[test]
+fn a_dangling_symlink_is_not_a_hook() {
+    let dir = init_repo();
+    std::os::unix::fs::symlink("missing", dir.join(".git/hooks/pre-commit")).unwrap();
+    install_ok(&dir);
+    assert!(std::fs::symlink_metadata(dir.join(".git/hooks/pre-commit")).is_ok());
+    assert!(std::fs::symlink_metadata(dir.join(".githooks/pre-commit.own")).is_err());
+}
+
+// adr: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0
+#[test]
+fn a_directory_in_githooks_is_not_a_hook_and_stays() {
+    let dir = init_repo();
+    run_git(&dir, &["config", "core.hooksPath", ".githooks"]);
+    std::fs::create_dir_all(dir.join(".githooks/pre-commit")).unwrap();
+    let out = adr(&dir, &["install"], &[], "");
+    assert!(dir.join(".githooks/pre-commit").is_dir());
+    assert!(!dir.join(".githooks/pre-commit.own").exists());
+    assert!(!out.status.success());
+}
+
+// adr: 60cfa0ba-9085-43b8-9ed4-fd94808c33e0
+#[test]
+fn the_tools_own_text_in_git_hooks_is_left_where_it_is() {
+    let dir = init_repo();
+    write_mode(&dir.join(".git/hooks/pre-commit"), PRE_COMMIT_TEXT, 0o755);
+    write_mode(&dir.join(".git/hooks/commit-msg"), EARLIER[2].1, 0o755);
+    install_ok(&dir);
+    assert!(!dir.join(".githooks/pre-commit.own").exists());
+    assert!(!dir.join(".githooks/commit-msg.own").exists());
+    assert!(dir.join(".git/hooks/pre-commit").exists());
+    assert!(dir.join(".git/hooks/commit-msg").exists());
+}
+
+// adr: db76c9a0-b4fc-4aa2-8afb-47cd78ef7138
+#[test]
+fn check_expands_a_home_relative_hooks_path_as_git_does() {
+    let dir = init_repo();
+    install_ok(&dir);
+    approve_empty_terms(&dir);
+    let home = dir.parent().unwrap();
+    let rel = dir.file_name().unwrap().to_string_lossy().to_string();
+    run_git(
+        &dir,
+        &["config", "core.hooksPath", &format!("~/{}/.githooks", rel)],
+    );
+    let out = adr(
+        &dir,
+        &["check"],
+        &[("HOME", &home.display().to_string())],
+        "",
+    );
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert_eq!(stdout(&out), "");
 }

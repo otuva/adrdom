@@ -479,7 +479,7 @@ pub fn hooks_path_not_ours(value: &str) -> Said {
     said(
         &crate::rule::HOOKS_PATH_IS_GITHOOKS,
         format!("core.hooksPath is {}, not .githooks", value),
-        Next::agent_runs(Cmd::fixed("adr install")),
+        hooks_path_foreign_next(Cmd::fixed("adr install")),
     )
 }
 

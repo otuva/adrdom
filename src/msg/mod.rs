@@ -363,10 +363,16 @@ pub fn hooks_path_failed(doing: &str, next: Next) -> String {
 pub fn hooks_path_foreign(value: &str, install: Cmd) -> String {
     refuse(
         format!("core.hooksPath is {}, not .githooks", value),
-        Next::owner_then_runs(
-            Act::Removes("the hook manager that set core.hooksPath".into()),
-            install,
-        ),
+        hooks_path_foreign_next(install),
+    )
+}
+
+/// The move that clears a foreign `core.hooksPath`, for install's refusal and
+/// for check's finding alike: install alone leaves it standing.
+fn hooks_path_foreign_next(install: Cmd) -> Next {
+    Next::owner_then_runs(
+        Act::Removes("the hook manager that set core.hooksPath".into()),
+        install,
     )
 }
 

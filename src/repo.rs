@@ -293,7 +293,7 @@ pub enum HooksPath {
 /// directory is the same as `.githooks`
 /// (adr-code: db76c9a0-b4fc-4aa2-8afb-47cd78ef7138).
 pub fn hooks_path_state(root: &Path) -> HooksPath {
-    let Some(value) = git(root, &["config", "core.hooksPath"]) else {
+    let Some(value) = git(root, &["config", "--path", "core.hooksPath"]) else {
         return HooksPath::Unset;
     };
     let value = value.trim();
