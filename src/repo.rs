@@ -325,7 +325,10 @@ pub enum HooksPath {
 
 /// `core.hooksPath` in the repository at `root`. A relative value resolves
 /// against the working-tree root, and `./.githooks` or an absolute path to the
-/// directory is the same as `.githooks`
+/// directory is the same as `.githooks`. The setting is one for every
+/// working tree of a repository, so in a linked worktree an absolute path to
+/// the main working tree's `.githooks` is the tool's directory too: git runs
+/// the hooks there, and they are the files install wrote
 /// (adr-code: db76c9a0-b4fc-4aa2-8afb-47cd78ef7138).
 pub fn hooks_path_state(root: &Path) -> HooksPath {
     let Some(value) = git(root, &["config", "--path", "core.hooksPath"]) else {
@@ -341,13 +344,21 @@ pub fn hooks_path_state(root: &Path) -> HooksPath {
     } else {
         root.join(given)
     };
-    let ours = std::fs::canonicalize(root.join(".githooks"));
-    match (std::fs::canonicalize(&full), ours) {
-        (Ok(a), Ok(b)) if a == b => HooksPath::Ours,
-        // The directory is not there yet: compare the paths as written.
-        _ if lexical(&full) == lexical(&root.join(".githooks")) => HooksPath::Ours,
-        _ => HooksPath::Foreign(value.to_string()),
+    let mut ours = vec![root.join(".githooks")];
+    let main = main_root(root);
+    if std::fs::canonicalize(root).is_ok_and(|r| r != main) {
+        ours.push(main.join(".githooks"));
     }
+    let canon = std::fs::canonicalize(&full);
+    for dir in &ours {
+        match (&canon, std::fs::canonicalize(dir)) {
+            (Ok(a), Ok(b)) if a == &b => return HooksPath::Ours,
+            // The directory is not there yet: compare the paths as written.
+            _ if lexical(&full) == lexical(dir) => return HooksPath::Ours,
+            _ => {}
+        }
+    }
+    HooksPath::Foreign(value.to_string())
 }
 
 /// `path` without its `.` components.

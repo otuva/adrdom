@@ -801,3 +801,52 @@ fn check_expands_a_home_relative_hooks_path_as_git_does() {
     assert!(out.status.success(), "{}", stdout(&out));
     assert_eq!(stdout(&out), "");
 }
+
+/// A linked worktree of `main` at `<main>-wt`.
+fn linked_worktree(main: &Path) -> PathBuf {
+    let wt = main.with_file_name(format!(
+        "{}-wt",
+        main.file_name().unwrap().to_str().unwrap()
+    ));
+    let out = run_git(
+        main,
+        &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    wt
+}
+
+// adr: db76c9a0-b4fc-4aa2-8afb-47cd78ef7138
+#[test]
+fn check_in_a_linked_worktree_takes_the_main_working_trees_directory() {
+    let dir = ready();
+    let wt = linked_worktree(&dir);
+    let absolute = dir.join(".githooks").display().to_string();
+    for value in [".githooks", absolute.as_str()] {
+        run_git(&dir, &["config", "core.hooksPath", value]);
+        for at in [&dir, &wt] {
+            let out = adr(at, &["check"], &[], "");
+            assert!(
+                out.status.success(),
+                "{} at {}: {}",
+                value,
+                at.display(),
+                stdout(&out)
+            );
+            assert_eq!(stdout(&out), "", "{}", value);
+        }
+    }
+
+    // The worktree's own directory, written absolute, is the tool's
+    // directory there and a foreign one in the main working tree.
+    let own = wt.join(".githooks").display().to_string();
+    run_git(&dir, &["config", "core.hooksPath", own.as_str()]);
+    assert!(adr(&wt, &["check"], &[], "").status.success());
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(&format!("core.hooksPath is {}, not .githooks", own)),
+        "{}",
+        stdout(&out)
+    );
+}
