@@ -37,11 +37,6 @@ enum Command {
         #[arg(long)]
         satellite: Option<PathBuf>,
     },
-    /// Ask the owner the unasked questions of a topic file
-    Ask {
-        /// The topic file, adrdom/decisions/<topic>.md
-        topic_file: PathBuf,
-    },
     /// Plan a topic file and print the next move
     Plan {
         /// The topic file, adrdom/decisions/<topic>.md
@@ -49,7 +44,7 @@ enum Command {
     },
     /// Compare every current decision with its neighbours
     Read,
-    /// Owner: approve a topic file, a terms entry or a blame file
+    /// Owner: approve a topic file and ask its questions, a terms entry or a blame file
     Approve {
         /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame
         file: PathBuf,
@@ -144,7 +139,6 @@ fn main() {
             satellite,
         } => commands::install::run(claude, codex, planning, satellite),
         Command::Uninstall { satellite } => commands::uninstall::run(satellite),
-        Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Plan { topic_file } => commands::plan::run(topic_file),
         Command::Read => commands::read::run(),
         Command::Approve { file, entry } => commands::approve::run(file, entry),

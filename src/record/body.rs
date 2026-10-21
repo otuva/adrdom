@@ -441,7 +441,7 @@ mod tests {
     // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
     // "What stands under a question's heading?", the answer line comes last: an
     // `**Answer:**` line with real body content after it is refused, at
-    // the section-parsing level `ask`/`check` both read.
+    // the section-parsing level `approve`/`check` both read.
     #[test]
     fn an_answer_line_before_the_rest_of_the_body_is_a_shape_error() {
         let rf = rf_from(

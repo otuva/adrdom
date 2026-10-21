@@ -17,7 +17,7 @@ fn question(n: usize, heading: &str, supersedes: Option<&str>) -> String {
     )
 }
 
-/// Adds a question to the record, approves, asks and answers it A; returns its id.
+/// Adds a question to the record, approves (which asks) and answers it A; returns its id.
 fn add_answered(
     dir: &Path,
     record: &Path,
@@ -30,13 +30,6 @@ fn add_answered(
     content.push_str(&question(n, heading, supersedes));
     std::fs::write(record, &content).unwrap();
     approve_record(dir, "adrdom/decisions/example.md");
-    let out = adr(dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(
-        out.status.success(),
-        "ask: {}{}",
-        stdout(&out),
-        stderr(&out)
-    );
     let id = extract_ids(&std::fs::read_to_string(record).unwrap())
         .into_iter()
         .find(|i| !before.contains(i))
@@ -198,9 +191,6 @@ fn a_tie_to_a_refused_asked_or_unknown_decision_is_removed_and_fails_nothing() {
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids: Vec<String> = extract_ids(&std::fs::read_to_string(&record).unwrap())
         .into_iter()
         .filter(|i| !before.contains(i))

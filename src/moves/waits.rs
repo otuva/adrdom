@@ -38,8 +38,7 @@ pub enum Waits {
 /// question of its file with no decision, or a question of a lower tier is
 /// refused (per "Does answer take a question standing on a question that has no decision?" and
 /// "Does a refused question hold the tiers above it?"). Every question it waits on is named, each
-/// with the move that clears it: the agent's moves first, one `adr ask` naming every heading, and
-/// the one owner move last.
+/// with the move that clears it: the agent's moves first, and the one owner move last.
 pub fn answer_waits(
     heading: &str,
     rel: &str,
@@ -65,21 +64,6 @@ pub fn answer_waits(
         for m in report.moves {
             if m.actor() == Mover::Owner {
                 owner.get_or_insert(m);
-            } else if let MoveKind::Ask { headings, .. } = &m.kind {
-                let have = agent.iter_mut().find_map(|a| match &mut a.kind {
-                    MoveKind::Ask { headings: h, .. } => Some(h),
-                    _ => None,
-                });
-                match have {
-                    Some(h) => {
-                        for x in headings {
-                            if !h.contains(x) {
-                                h.push(x.clone());
-                            }
-                        }
-                    }
-                    None => agent.push(m),
-                }
             } else if !agent.contains(&m) {
                 agent.push(m);
             }
@@ -187,13 +171,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn answer_waits_merges_the_ask_moves_and_puts_the_owner_last() {
-        let ask = |h: &str| {
-            Move::new(MoveKind::Ask {
-                rel: "x.md".into(),
-                headings: vec![h.into()],
-            })
-        };
+    fn answer_waits_merges_the_agent_moves_and_puts_the_owner_last() {
+        let ask = |_h: &str| Move::new(MoveKind::Plan { rel: "x.md".into() });
         let (said, _) = answer_waits(
             "heading",
             "x.md",
@@ -227,7 +206,7 @@ mod tests {
         );
         assert_eq!(
             said.next.render(),
-            "agent runs: adr ask x.md, owner runs: adr approve x.md"
+            "agent runs: adr plan x.md, owner runs: adr approve x.md"
         );
     }
 }

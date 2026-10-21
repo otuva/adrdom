@@ -1,6 +1,5 @@
 pub mod answer;
 pub mod approve;
-pub mod ask;
 pub mod ban;
 pub mod check;
 pub mod install;
@@ -28,7 +27,7 @@ pub(crate) fn refused_in_satellite(
     // printed from the primary's root when it lies inside it (the other
     // arguments, the entry of approve, as given).
     let mut shown: Vec<String> = args.iter().map(|a| a.to_string()).collect();
-    if matches!(cmd, Command::Plan | Command::Ask | Command::Approve) {
+    if matches!(cmd, Command::Plan | Command::Approve) {
         if let (Some(file), Ok(record)) = (
             shown.first_mut(),
             std::fs::canonicalize(crate::repo::main_root(root).join(&primary)),

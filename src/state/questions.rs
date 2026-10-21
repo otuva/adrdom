@@ -85,7 +85,7 @@ pub fn is_open_again(led: &Ledger, id: &str) -> bool {
 /// members hold their place but their depends line is never edited again
 /// (`is_frozen`), so the refusal (per "Does a refusal name the command that
 /// clears it?") names only the ones the agent can still move. Read by
-/// `approve` and `check` through `record_refusals` and by `ask`.
+/// `approve` and `check` through `record_refusals`.
 pub fn over_cap_headings(
     led: &Ledger,
     rf: &RecordFile,
@@ -223,7 +223,7 @@ pub fn answer_waits(rf: &RecordFile, i: usize) -> AnswerWaits {
 /// against the ledger rows that back it finds (per "Does check fail an
 /// answered question whose text changed?" and "Does the owner answer a
 /// question with a refusal?"). `check`'s per-section answered/refused
-/// comparison and `ask`'s "edited after it closed" gate share this instead
+/// comparison and `approve`'s "edited after it closed" gate share this instead
 /// of each keeping its own copy, so a genuine re-answer -- a harmless edit
 /// followed by a real re-answer at the same letter, which adds a second
 /// `answered` row rather than rewriting the first -- never desyncs the

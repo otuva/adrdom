@@ -46,12 +46,18 @@ pub(super) fn do_approve_record(
 
     // Refuse up front, before a single `depends:` entry is resolved, when
     // adrdom/terms.md is missing, shape-broken, or not yet approved: the
-    // same gate `ask`/`answer`/`refuse` apply via `require_terms`. Without
+    // same gate `approve`/`answer`/`refuse` apply via `require_terms`. Without
     // this, a real term with no id minted yet (an unapproved terms.md mints
     // nothing to disk) silently fails to resolve and every depends entry
     // naming it refuses "which is no term" instead of the one clear "terms
     // not approved" line.
     let tf = require_terms(root, led, rel, Command::Approve)?;
+    // A question in conflict is asked again first and alone (per "Does
+    // check fail a question answered with two different options?",
+    // e3200081 A): none of the gates below bears on text that never moved.
+    if let Some((idx, id)) = super::ask::conflicted_section(&rf, led) {
+        return super::ask::reask_conflict(root, rf, led, idx, &id);
+    }
     // Read off the file as written.
     let planning = rules::planning_rules_apply(led, &rf, rel);
     let terms_list: &[terms::Term] = &tf.terms;
@@ -306,17 +312,23 @@ pub(super) fn do_approve_record(
             .collect();
         work_rf.lines[j] = format!("blame: {}", entries.join(", "));
     }
-    // Reparse once more so `plan_hash`/`context_hash` and everything below
-    // sees the file exactly as it will be written.
-    let work_rf = record::build(work_rf.path.clone(), rel.to_string(), work_rf.lines.clone());
+    // Reparse once more so the ask below and `plan_hash`/`context_hash` see
+    // the file exactly as it will be written.
+    let mut work_rf = record::build(work_rf.path.clone(), rel.to_string(), work_rf.lines.clone());
+
+    // The plan accepted, approve asks every question of it open to ask (per
+    // "Does approve ask the questions of the file?", 3762e14b A): its
+    // `terms:` line written into the file, its rows written with the
+    // approval's below.
+    let asked_rows = super::ask::ask_open_questions(&mut work_rf, terms_list, led, &write_time)?;
 
     let plan_hash = record::plan_hash(&work_rf);
     let context_hash = record::context_hash(&work_rf);
 
     // Whether the save below changes the file's bytes (ids written in, a
     // reference line rewritten to identifiers, line ends made one kind).
-    let bytes_change = std::fs::read_to_string(&work_rf.path).ok().as_deref()
-        != Some(record::join_lines(&work_rf.lines).as_str());
+    let original = std::fs::read_to_string(&work_rf.path).ok();
+    let bytes_change = original.as_deref() != Some(record::join_lines(&work_rf.lines).as_str());
     record::save(&work_rf).map_err(|e| {
         stop(
             Command::Approve,
@@ -355,7 +367,7 @@ pub(super) fn do_approve_record(
     }
     // A set approved while its in-file target is asked and not yet answered
     // stays after the answer (per "Does a depends entry on a question in its
-    // file carry an answer set?"): the `assumes` row `ask` writes for an
+    // file carry an answer set?"): the `assumes` row `approve` writes for an
     // entry, written here for an entry that came after the ask.
     for sec in &work_rf.sections {
         let Some(dep_id) = &sec.id else { continue };
@@ -417,32 +429,36 @@ pub(super) fn do_approve_record(
         });
     }
 
-    ledger::append(ledger_path, &rows).map_err(|e| {
-        stop(
+    // The rows of the ask, then the withdrawn rows, in one append with the
+    // approval's: an `assumes` row approve wrote above for a target asked
+    // again in this run is not written twice.
+    for r in asked_rows {
+        let twice = r.event == "assumes"
+            && rows.iter().any(|w| {
+                w.event == r.event && w.id == r.id && w.hash == r.hash && w.detail == r.detail
+            });
+        if !twice {
+            rows.push(r);
+        }
+    }
+    rows.extend(withdrawn_rows);
+    // The file as it stood goes back when the ledger refuses the rows: never
+    // a file rewritten for rows no ledger holds.
+    if let Err(e) = ledger::append(ledger_path, &rows) {
+        if bytes_change {
+            if let Some(original) = &original {
+                let _ = std::fs::write(&work_rf.path, original);
+            }
+        }
+        return Err(stop(
             Command::Approve,
             msg::update_failed(
                 "ledger",
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", rel])),
             ),
-        )
-    })?;
-
-    // `withdrawn_rows` was computed, and any refusal already returned,
-    // above -- before either write this function has made so far.
-    if !withdrawn_rows.is_empty() {
-        ledger::append(ledger_path, &withdrawn_rows).map_err(|e| {
-            stop(
-                Command::Approve,
-                msg::update_failed(
-                    "ledger",
-                    e,
-                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-                ),
-            )
-        })?;
+        ));
     }
-    rows.extend(withdrawn_rows);
 
     let mut outcome = Outcome::of_rows(
         &rows,
@@ -450,9 +466,9 @@ pub(super) fn do_approve_record(
     );
     // A file written that no row of this run covers is named by one line of
     // its own (per "What does a command that writes print?", 069a6b4a A).
-    let covered = rows
-        .iter()
-        .any(|r| (r.event == "approved" || r.event == "context") && r.detail == rel);
+    let covered = rows.iter().any(|r| {
+        ((r.event == "approved" || r.event == "context") && r.detail == rel) || r.event == "asked"
+    });
     if bytes_change && !covered {
         outcome.events.push(crate::out::Event::FileWritten {
             path: rel.to_string(),

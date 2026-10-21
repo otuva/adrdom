@@ -197,7 +197,7 @@ pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Opt
 pub enum SupersedesMoment {
     /// `approve`: nothing of the question has been asked yet.
     Approve,
-    /// `ask` or `answer`: the question was, or is about to be, asked.
+    /// `approve` or `answer`: the question was, or is about to be, asked.
     Asked,
 }
 
@@ -233,7 +233,8 @@ pub fn supersedes_leaves_out(
         ),
         match moment {
             SupersedesMoment::Approve => Next::agent(add),
-            SupersedesMoment::Asked => Next::agent_then_runs(add, command(&["adr", "ask", rel])),
+            SupersedesMoment::Asked => Next::agent(add)
+                .and_owner_runs(command(&["adr", "approve", rel])),
         },
     )
 }

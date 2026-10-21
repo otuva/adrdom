@@ -45,9 +45,6 @@ fn repo() -> PathBuf {
         &format!("# Base\n{}", section(BASE_Q, &body("base widget"))),
     );
     approve_record(&dir, BASE);
-    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&base).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     dir

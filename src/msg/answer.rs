@@ -78,7 +78,7 @@ pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> Strin
     )
 }
 
-/// A question with a body that no `ask` has put to the owner.
+/// A question with a body that the approve of its file has not put to the owner.
 /// `report`: what the rules find in the question's file and its moves
 /// (`moves::of_unasked_question_in`).
 pub fn not_asked_yet(heading: &str, rel: &str, report: &crate::moves::Report) -> String {
@@ -87,7 +87,7 @@ pub fn not_asked_yet(heading: &str, rel: &str, report: &crate::moves::Report) ->
         heading,
         crate::status::QuestionStatus::NotAsked.name(),
         report
-            .moves_tail(Next::agent_runs(command(&["adr", "ask", rel])))
+            .moves_tail(Next::owner_runs(command(&["adr", "approve", rel])))
             .render()
     )
 }
@@ -206,10 +206,10 @@ pub fn invalid_version_format(version: &str) -> String {
     )
 }
 
-/// The move that writes an asked question's terms line again: `ask` of its
-/// file, which rewrites the line in place.
+/// The move that writes an asked question's terms line again: the approve of
+/// its file, which rewrites the line in place.
 pub(super) fn ask_again(rel: &str) -> Next {
-    Next::agent_runs(command(&["adr", "ask", rel]))
+    Next::owner_runs(command(&["adr", "approve", rel]))
 }
 
 pub fn no_terms_line(rel: &str, id: &str, heading: &str) -> Said {

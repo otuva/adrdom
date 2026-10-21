@@ -284,7 +284,7 @@ mod tests {
         // is already `answered` -- has no path to it except through this
         // very rule's own conflict re-ask (which always re-asks under the
         // *same* hash, the text never having moved -- see
-        // `ask::do_conflict_reask`). There is nothing else to test here.
+        // `actions::ask::reask_conflict`). There is nothing else to test here.
         #[test]
         fn c7_no_existing_flow_reasks_an_answered_id_with_a_different_hash() {}
 

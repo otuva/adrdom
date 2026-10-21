@@ -186,18 +186,16 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> Said {
 /// answered (or one answered and one refused) the same question, and a
 /// merge kept both rows. The topic file's own `**Answer:**` line only shows
 /// one side, so this is caught from the ledger directly, never from the
-/// file text. The move is always the same: the agent re-asks the question,
-/// and the owner answers it again.
-pub fn answer_conflict(rel: &str, heading: &str, id: &str, a: &str, b: &str) -> Said {
+/// file text. The move is always the same: the owner approves the file, which
+/// asks the question again; `adr show` then prints the answer to give.
+pub fn answer_conflict(rel: &str, heading: &str, a: &str, b: &str) -> Said {
     said(
         &crate::rule::ONE_STANDING_ANSWER,
         format!(
             "{}: {}: two standing answers, {} and {}",
             rel, heading, a, b
         ),
-        Next::agent_runs(command(&["adr", "ask", rel])).and_owner_runs(
-            command(&["adr", "answer", &format!("{}@", id)]).then("<version> <letter>"),
-        ),
+        Next::owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -250,12 +248,12 @@ pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> Said {
     )
 }
 
-/// An asked/answered section that carries no `terms:` line at all. `ask`
+/// An asked/answered section that carries no `terms:` line at all. `approve`
 /// always writes one, so an answered section can only lose it through an
 /// edit made after the answer -- and an answered question can never be
 /// re-asked (per "Does a decision change after it is answered?"), so
 /// `answered` picks the legal move: re-asking while the question is still
-/// only asked (`ask` will write the line the next time it runs), or
+/// only asked (`approve` will write the line the next time it runs), or
 /// restoring the edit from git / superseding once it's answered (per "Does
 /// check fail an answered question whose text changed?").
 pub fn section_no_terms_line(rel: &str, heading: &str, answered: bool) -> Said {

@@ -20,7 +20,7 @@ fn section(heading: &str, depends: &str, supersedes: &str) -> String {
     )
 }
 
-/// Appends `sec` to `rel` (creating it with `title`), approves, asks, answers
+/// Appends `sec` to `rel` (creating it with `title`), approves (which asks), answers
 /// A, and returns the id of the new section (the last id in the file).
 fn add_answered(dir: &Path, rel: &str, title: &str, sec: &str) -> String {
     let path = dir.join(rel);
@@ -32,9 +32,6 @@ fn add_answered(dir: &Path, rel: &str, title: &str, sec: &str) -> String {
     content.push_str(sec);
     write_record(dir, rel, &content);
     approve_record(dir, rel);
-    assert!(adr(dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
     let id = ids.last().unwrap().clone();
     let out = adr_answer(dir, &id, "A");

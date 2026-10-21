@@ -92,9 +92,6 @@ fn answer_writes_answer_line_and_ledger_row() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -128,9 +125,6 @@ fn answer_refuses_without_an_interactive_terminal() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -169,9 +163,6 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -198,10 +189,6 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     content.push_str(&second_with_supersedes);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -267,9 +254,6 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let original = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&original)[0].clone();
@@ -353,9 +337,6 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
     content.push_str(&second_with_supersedes);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let new_id = extract_ids(&content)
@@ -399,9 +380,6 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id_1 = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id_1, "A");
@@ -415,9 +393,6 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     content.push_str(SECOND_QUESTION);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id_2 = extract_ids(&content)
         .into_iter()
@@ -444,9 +419,6 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     content.push_str(&third_with_supersedes);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let new_id = extract_ids(&content)
@@ -481,9 +453,6 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&content)[0].clone();
@@ -544,9 +513,6 @@ fn answer_takes_a_two_id_supersedes_when_a_sibling_replaced_one_target_after_the
     let rel = "adrdom/decisions/example.md";
     let record = write_record(&dir, rel, &format!("{}{}", FIRST_QUESTION, SECOND_QUESTION));
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     let (old_id_1, old_id_2) = (ids[0].clone(), ids[1].clone());
     assert!(adr_answer(&dir, &old_id_1, "A").status.success());
@@ -571,11 +537,8 @@ fn answer_takes_a_two_id_supersedes_when_a_sibling_replaced_one_target_after_the
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);
-    // One ask puts 1.4 and 1.3 to the owner together; 1.3's targets are both
+    // One approve puts 1.4 and 1.3 to the owner together; 1.3's targets are both
     // current then. Answering 1.4 supersedes old_id_2.
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     let fourth_id = ids[2].clone();
     assert!(adr_answer(&dir, &fourth_id, "A").status.success());
@@ -600,19 +563,19 @@ fn answer_takes_a_two_id_supersedes_when_a_sibling_replaced_one_target_after_the
     }
 }
 
-// (E3) `ask` now refuses a candidate whose `supersedes:` names an id that
+// (E3) `approve` now refuses a candidate whose `supersedes:` names an id that
 // is not current at ask time, so a target already stale by the time a
-// question is asked can no longer be driven through a real `ask` call the
+// question is asked can no longer be driven through a real approve call the
 // way this test used to reach `answer`'s own refusal. That "stale at ask"
-// path is covered directly against `ask` below
-// (`ask_refuses_a_candidate_whose_supersedes_target_is_stale`). This test
+// path is covered directly against approve
+// (the approve tests). This test
 // keeps its original meaning -- a supersedes target already superseded
 // *before* the question naming it was asked still refuses at `answer` --
-// by asking the third question for real without `supersedes:` (so `ask`'s
+// by approving the third question for real without `supersedes:` (so `approve`'s
 // new gate has nothing to refuse), then hand-editing the file to add the
 // `supersedes:` line and hand-writing the matching `asked` ledger row
 // after old_id's `superseded` row, the way
-// `answer_refuses_a_section_with_no_terms_line` bypasses `ask` for a
+// `answer_refuses_a_section_with_no_terms_line` bypasses `approve` for a
 // hand-crafted ledger state elsewhere in this file.
 #[test]
 fn answer_refuses_a_supersedes_target_already_superseded() {
@@ -621,9 +584,6 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
@@ -646,9 +606,6 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let second_id = extract_ids(&content)
         .into_iter()
@@ -663,15 +620,12 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
 
     // Add and really ask the third question with no `supersedes:` line yet
     // -- old_id is already superseded, so a real ask naming it here would
-    // now be refused by `ask`'s own gate; that is exactly what the next
+    // now be refused by `approve`'s own gate; that is exactly what the next
     // test below checks. This test is about `answer`'s side of the freeze.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(THIRD_QUESTION);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let third_id = extract_ids(&content)
         .into_iter()
@@ -768,9 +722,6 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
@@ -781,7 +732,7 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
     );
 
     // Both the second and third questions supersede old_id while it is
-    // still current, and both get asked in the same `ask` run.
+    // still current, and both get asked in the same approve run.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&SECOND_QUESTION.replacen(
         "### 1.2 What is the second unit of authority called?\n",
@@ -801,8 +752,6 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids: Vec<String> = extract_ids(&content)
@@ -857,9 +806,6 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
@@ -882,9 +828,6 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let second_id = extract_ids(&content)
         .into_iter()
@@ -944,9 +887,6 @@ fn answer_accepts_a_supersedes_target_that_is_current() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &old_id, "A");
@@ -969,9 +909,6 @@ fn answer_accepts_a_supersedes_target_that_is_current() {
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let second_id = extract_ids(&content)
         .into_iter()
@@ -1003,9 +940,6 @@ fn answer_refuses_when_terms_md_is_missing() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -1051,9 +985,6 @@ fn answer_refuses_when_terms_md_holds_an_unapproved_added_term_with_a_shape_erro
 
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -1108,9 +1039,6 @@ fn answer_and_refuse_stop_while_terms_md_holds_an_unapproved_added_term() {
     content.push_str(SECOND_QUESTION);
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let asked = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&asked);
     let (id1, id2) = (ids[0].clone(), ids[1].clone());
@@ -1180,9 +1108,6 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
 
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -1226,14 +1151,11 @@ fn answer_refuses_a_section_with_no_terms_line() {
     let content = "# Example\n\n### 1.1 What is the authority?\ndepends: authority\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: z.\n- B) w.\n  Why: y.\n  Costs: z.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let asked = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&asked)[0].clone();
 
-    // Strip the `terms:` line ask just wrote, restoring the section's text
+    // Strip the `terms:` line approve just wrote, restoring the section's text
     // to exactly what it was before that line existed (`approve`'s id
     // insertion leaves two blank lines where the original single blank
     // line was, so this is derived from the real file rather than
@@ -1253,7 +1175,7 @@ fn answer_refuses_a_section_with_no_terms_line() {
         .unwrap();
     let section_text = without_terms[heading_idx..].trim_end_matches('\n');
     let new_hash = mirror_section_hash(section_text);
-    // Later than the real `asked` row `adr ask` just wrote (today's actual
+    // Later than the real `asked` row `adr approve` just wrote (today's actual
     // clock time, not the fixed 2024 date `append_ledger_row` uses): per
     // "Does the tool take the order of ledger rows from their time?", a
     // row's place in `rows` comes from its time, so this hand-written row
@@ -1276,11 +1198,11 @@ fn answer_refuses_a_section_with_no_terms_line() {
     );
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("{} (\"1.1 What is the authority?\"): no terms line; agent runs: adr ask adrdom/decisions/example.md", id)
+        format!("{} (\"1.1 What is the authority?\"): no terms line; owner runs: adr approve adrdom/decisions/example.md", id)
     );
 }
 
-/// Replaces the `terms: ` line `ask` wrote with `new_terms_line`, then
+/// Replaces the `terms: ` line `approve` wrote with `new_terms_line`, then
 /// hand-writes a matching `asked` ledger row for the section's new hash
 /// (mirrors `answer_refuses_a_section_with_no_terms_line`'s approach, but
 /// keeps the terms line present instead of removing it).
@@ -1305,7 +1227,7 @@ fn corrupt_terms_line(dir: &Path, record: &Path, heading: &str, new_terms_line: 
     let section_text = edited[heading_idx..].trim_end_matches('\n');
     let new_hash = mirror_section_hash(section_text);
     let detail = heading.trim_start_matches("### ");
-    // Later than the real `asked` row `adr ask` already wrote, same reason
+    // Later than the real `asked` row `adr approve` already wrote, same reason
     // as `answer_refuses_a_section_with_no_terms_line`'s own hand-written
     // row above.
     append_ledger_row_at(dir, "asked", &id, &new_hash, detail, "2099-01-01T00:00:00Z");
@@ -1318,9 +1240,6 @@ fn answer_refuses_a_malformed_terms_line() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -1340,7 +1259,7 @@ fn answer_refuses_a_malformed_terms_line() {
     );
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("{} (\"1.1 What is the unit of authority called?\"): malformed terms line; agent runs: adr ask adrdom/decisions/example.md", id)
+        format!("{} (\"1.1 What is the unit of authority called?\"): malformed terms line; owner runs: adr approve adrdom/decisions/example.md", id)
     );
 }
 
@@ -1351,9 +1270,6 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -1374,7 +1290,7 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "{} (\"1.1 What is the unit of authority called?\"): terms line names term 00000000-0000-0000-0000-000000000000 (\"authority\") that no longer exists; agent runs: adr ask adrdom/decisions/example.md",
+            "{} (\"1.1 What is the unit of authority called?\"): terms line names term 00000000-0000-0000-0000-000000000000 (\"authority\") that no longer exists; owner runs: adr approve adrdom/decisions/example.md",
             id
         )
     );
@@ -1387,9 +1303,6 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -1410,7 +1323,7 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "{} (\"1.1 What is the unit of authority called?\"): terms line names retired term \"authority\"; agent runs: adr ask adrdom/decisions/example.md",
+            "{} (\"1.1 What is the unit of authority called?\"): terms line names retired term \"authority\"; owner runs: adr approve adrdom/decisions/example.md",
             id
         )
     );
@@ -1584,9 +1497,6 @@ fn answer_with_the_current_version_succeeds() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -1620,9 +1530,6 @@ fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -1685,7 +1592,7 @@ fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
 // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
 //
 // "a version that no longer matches refuses the answer": editing the
-// question's text and re-asking it moves its hash (and so its version) --
+// question's text and re-approving it moves its hash (and so its version) --
 // the version read before the edit is refused, and nothing is written.
 #[test]
 fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
@@ -1694,9 +1601,6 @@ fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -1704,19 +1608,17 @@ fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
     let stale_version = current_version(&dir, &question_id);
 
     // Edit the question's Problem text (inside the hashed range, before any
-    // Answer) and re-ask: the section's hash -- and so its version -- moves.
+    // Answer) and approve again: the section's hash -- and so its version -- moves.
     let edited = content.replace(
         "names leaked into decisions.",
         "names leaked into decisions, badly.",
     );
     std::fs::write(&record, edited).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
     assert_ne!(
         current_version(&dir, &question_id),
         stale_version,
-        "the re-ask should have moved the version"
+        "the re-approve should have moved the version"
     );
 
     let stale_arg = format!("{}@{}", question_id, stale_version);
@@ -1748,7 +1650,7 @@ fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
 //
 // An answer for a question whose latest ledger state is `withdrawn` (its
 // heading was struck, then the section came back by hand) is told so, not
-// sent to `ask`, which never picks a withdrawn question up.
+// sent to `approve`, which never picks a withdrawn question up.
 #[test]
 fn answer_on_a_withdrawn_question_says_withdrawn_not_edited() {
     let dir = init_repo();
@@ -1756,9 +1658,6 @@ fn answer_on_a_withdrawn_question_says_withdrawn_not_edited() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let full = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&full)[0].clone();
     let version = current_version(&dir, &id);
@@ -1772,7 +1671,7 @@ fn answer_on_a_withdrawn_question_says_withdrawn_not_edited() {
     let err = stderr(&out);
     assert!(err.contains("is already withdrawn; show prints"), "{}", err);
     assert!(err.contains("owner runs: adr show"), "{}", err);
-    assert!(!err.contains("adr ask"), "{}", err);
+    assert!(!err.contains("adr approve"), "{}", err);
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -1788,9 +1687,6 @@ fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_version() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&content)[0].clone();
@@ -1801,8 +1697,6 @@ fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_version() {
     );
     std::fs::write(&record, edited).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
     assert_ne!(current_version(&dir, &question_id), stale_version);
 
     let stale_arg = format!("{}@{}", question_id, stale_version);
@@ -1836,9 +1730,6 @@ fn answer_with_an_uppercased_version_still_succeeds() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -1865,9 +1756,6 @@ fn answer_with_a_malformed_version_is_refused_with_its_own_message_and_writes_no
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -1923,9 +1811,6 @@ fn answer_with_an_invalid_letter_is_refused_and_writes_nothing() {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);

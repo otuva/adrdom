@@ -4,6 +4,7 @@ mod answer;
 mod approve;
 mod approve_record;
 mod approve_terms;
+mod ask;
 
 pub use answer::{do_answer, do_refuse};
 pub use approve::do_approve;
@@ -105,7 +106,7 @@ fn load_terms_or_refuse(root: &Path, cmd: Command) -> Result<terms::TermsFile, S
 /// caller would print. `rel` is the topic file's path, named in the
 /// not-approved message exactly as the caller already prints it. On
 /// success, the loaded, approved terms file is returned. The one gate for
-/// `ask`, `answer`, `refuse`, and approve-of-a-topic-file (per "Does the
+/// `approve`, `answer`, `refuse`, and approve-of-a-topic-file (per "Does the
 /// tool stop while the terms file waits for approval?", aa475aa3 A).
 pub fn require_terms(
     root: &Path,

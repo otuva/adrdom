@@ -12,7 +12,7 @@ use crate::terms::{self, Term, TermsFile};
 pub enum QuestionStatus {
     /// A heading of the plan, its body not written.
     NoBody,
-    /// The body is written, `ask` has not run on it.
+    /// The body is written, `approve` has not run on it.
     NotAsked,
     /// It waits for the owner's answer.
     Asked,
@@ -70,7 +70,7 @@ impl QuestionStatus {
         }
     }
 
-    /// Not yet asked: no body, or a body `ask` has not run on.
+    /// Not yet asked: no body, or a body `approve` has not run on.
     pub fn is_unasked(self) -> bool {
         matches!(self, QuestionStatus::NoBody | QuestionStatus::NotAsked)
     }
@@ -130,11 +130,11 @@ pub fn question_status_of_id(led: &Ledger, id: &str) -> Option<QuestionStatus> {
     }
 }
 
-/// Whether `ask` takes `sec` in this run: a question with a body that has no
+/// Whether `approve` takes `sec` in this run: a question with a body that has no
 /// state, or is asked and edited since (its text no longer the hash of its
 /// latest `asked` row). The one "not yet asked" test every rule on text that
 /// can still change reads (per "Does a command refuse what check passes?",
-/// fe14991d A): `ask` refuses on it what `approve` and `check` find on it.
+/// fe14991d A): `approve` refuses on it what `check` finds on it.
 pub fn open_to_ask(led: &Ledger, rf: &RecordFile, sec: &Section) -> bool {
     open_to_ask_text(led, rf, sec) && !sec.is_skeleton
 }

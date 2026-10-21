@@ -75,8 +75,6 @@ fn gate() -> Gate {
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    let out = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
     let g = Gate {
         one: id_of(&path, ONE),
         two: id_of(&path, TWO),
@@ -116,10 +114,12 @@ fn answer_removes_the_question_and_its_dependents_and_the_file_stays_approved() 
     assert!(ok, "{}", report);
     assert!(!report.contains("awaiting approval"), "{}", report);
 
-    // Four was asked with the others in the first run; nothing is left to ask.
-    let asked = adr(&g.dir, &["ask", g.path.to_str().unwrap()], &[], "");
+    // Four was asked with the others in the first approve; nothing is left to ask.
+    let asked_before = asked_row_count(&g.dir);
+    let asked = adr_owner(&g.dir, &["approve", g.path.to_str().unwrap()], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
-    assert!(stdout(&asked).is_empty(), "{}", stdout(&asked));
+    assert!(!stdout(&asked).contains("asked:"), "{}", stdout(&asked));
+    assert_eq!(asked_row_count(&g.dir), asked_before);
 }
 
 // adr: 462e22c6-8b23-4061-9a2a-bbf8691fce60
@@ -321,9 +321,6 @@ fn a_drop_before_the_latest_approval_is_not_put_back() {
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let one = id_of(&path, ONE);
     let two = id_of(&path, TWO);
     assert!(adr_answer(&dir, &one, "B").status.success());
@@ -366,8 +363,6 @@ fn pair() -> (PathBuf, PathBuf, String, String) {
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    let out = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
     let (one, two) = (id_of(&path, ONE), id_of(&path, TWO));
     commit(&dir, "feat: ask the pair");
     (dir, path, one, two)
@@ -393,7 +388,7 @@ fn an_answer_never_removes_an_answered_question() {
     assert!(adr_answer(&dir, &two, "A").status.success());
     let h1 = row_hash(&dir, "answered", &one);
     append_ledger_row_at(&dir, "answered", &one, &h1, "B", "2099-01-01T00:00:00Z");
-    let asked = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
+    let asked = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
 
     let before = std::fs::read_to_string(&path).unwrap();
@@ -465,9 +460,6 @@ fn chain(refuse_first: bool) -> (PathBuf, String, String, String) {
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = (id_of(&path, ONE), id_of(&path, TWO), id_of(&path, THREE));
     if refuse_first {
         assert!(adr_answer(&dir, &ids.0, "refuse").status.success());

@@ -41,9 +41,6 @@ fn repo() -> PathBuf {
         &format!("# Base\n{}", section(BASE_Q, &body("base widget"))),
     );
     approve_record(&dir, BASE);
-    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&base).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     dir
@@ -254,8 +251,6 @@ fn an_asked_question_with_no_records_prints_no_neighbour_line() {
     let dir = repo();
     write_topic(&dir);
     approve_record(&dir, REL);
-    let asked = adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "");
-    assert!(asked.status.success(), "{}", stderr(&asked));
     let shown = show(&dir, &NO_TOOLS);
     assert!(
         under(&shown, H1)

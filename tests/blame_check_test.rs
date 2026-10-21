@@ -499,7 +499,7 @@ fn an_old_destination_row_fails_check_on_an_approved_file() {
 // adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
 //
 // "No ... no finding, no refusal": an approved blame file with decision rows
-// that no question names is no line of check's, and ask and answer on a
+// that no question names is no line of check's, and approve and answer on a
 // topic file are not refused because of it.
 #[test]
 fn check_is_silent_on_a_decision_row_no_question_names() {
@@ -515,11 +515,11 @@ fn check_is_silent_on_a_decision_row_no_question_names() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    // No question anywhere names the rows; ask and answer run all the same.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    // No question anywhere names the rows; approve and answer run all the same.
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask should not stop for the rows: {}",
+        "approve should not stop for the rows: {}",
         stderr(&out)
     );
     let content = std::fs::read_to_string(&record).unwrap();
@@ -567,12 +567,12 @@ fn check_passes_an_unapproved_blame_file_and_prints_nothing_of_it() {
 }
 
 //
-// `ask` and `answer` stop while the terms file awaits approval ("Does the tool
+// `approve` and `answer` stop while the terms file awaits approval ("Does the tool
 // stop while the terms file waits for approval?"); a blame file awaiting
 // approval is not among what stops them, so both run on an ordinary topic
 // file with one present.
 #[test]
-fn ask_and_answer_ignore_an_unapproved_blame_file() {
+fn approve_and_answer_ignore_an_unapproved_blame_file() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_via_ledger(&dir, BLAME_TERMS);
@@ -589,10 +589,10 @@ fn ask_and_answer_ignore_an_unapproved_blame_file() {
     );
     // Never approved -- a draft the whole time.
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask should ignore blame files: {}",
+        "approve should ignore blame files: {}",
         stderr(&out)
     );
 

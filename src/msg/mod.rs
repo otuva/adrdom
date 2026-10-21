@@ -470,11 +470,11 @@ mod tests {
             );
         }
         let mv = Next::agent(Act::Rewrites("the line".into()))
-            .then(Act::Runs(Cmd::fixed("adr ask x.md")))
+            .then(Act::Runs(Cmd::fixed("adr plan x.md")))
             .and_owner_runs(Cmd::fixed("adr approve x.md"));
         assert_eq!(
             mv.render(),
-            "agent rewrites the line, then runs: adr ask x.md, owner runs: adr approve x.md"
+            "agent rewrites the line, then runs: adr plan x.md, owner runs: adr approve x.md"
         );
         assert_eq!(
             Next::not_yet("after it is approved").render(),
@@ -513,7 +513,7 @@ mod tests {
             create_failed("x", e, Next::agent(Act::RunsAgain)),
             parse_failed("x", e, Next::agent(Act::RunsAgain)),
             stdin_read_failed(Next::agent(Act::RunsAgain)),
-            not_a_repo("ask", &[], Actor::Agent),
+            not_a_repo("plan", &[], Actor::Agent),
             not_a_repo("approve", &["adrdom/decisions/x.md"], Actor::Owner),
             owner_refusal("approve", &["adrdom/decisions/x.md"]),
             owner_refusal("unban", &[]),
@@ -631,8 +631,6 @@ mod tests {
             malformed_terms_line("x.md", "id-1", "heading").text(),
             terms_line_names_gone_term("x.md", "id-1", "heading", "uuid-1", "word").text(),
             terms_line_names_retired_term("x.md", "id-1", "heading", "term").text(),
-            plan_not_approved("x.md", FileStatus::New, &approve_x).text(),
-            context_not_approved("x.md", FileStatus::New, &approve_x).text(),
             missing_answer_set("x.md", "dependent", "target").text(),
             set_on_answered_question("x.md", "dependent", "target").text(),
             question_without_body("x.md", "heading").text(),
@@ -662,15 +660,14 @@ mod tests {
                 &crate::moves::Report {
                     stops: Vec::new(),
                     findings: Vec::new(),
-                    moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Ask {
-                        rel: "x.md".into(),
-                        headings: vec!["heading".into()],
+                    moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve {
+                        path: "x.md".into(),
                     })],
                 },
             )
             .text(),
             answer_set_changed("x.md", "dependent", "heading").text(),
-            answer_conflict("x.md", "heading", "id-1", "A", "B").text(),
+            answer_conflict("x.md", "heading", "A", "B").text(),
             banned_word_at("x.md:3", "").text(),
             banned_missing_from_file("abcdef123456").text(),
             banned_missing_from_ledger("abcdef123456").text(),
@@ -1000,7 +997,7 @@ mod tests {
         let asked =
             term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::Asked("x.md")).text();
         assert!(
-            asked.ends_with("agent rewrites the question, then runs: adr ask x.md"),
+            asked.ends_with("agent rewrites the question, owner runs: adr approve x.md"),
             "{}",
             asked
         );

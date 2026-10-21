@@ -60,15 +60,6 @@ fn approve_ok(dir: &Path, name: &str) {
     );
 }
 
-fn ask(dir: &Path, name: &str) -> std::process::Output {
-    adr(
-        dir,
-        &["ask", dir.join(rel(name)).to_str().unwrap()],
-        &[],
-        "",
-    )
-}
-
 fn cap_refusal(out: &std::process::Output) -> bool {
     stderr(out).contains("the most is 4") || stdout(out).contains("the most is 4")
 }
@@ -83,8 +74,6 @@ fn full_group(dir: &Path) -> PathBuf {
     }
     let p = write_record(dir, &rel("a"), &c);
     approve_ok(dir, "a");
-    let out = ask(dir, "a");
-    assert!(out.status.success(), "ask a failed: {}", stderr(&out));
     for n in 1..=4 {
         let out = adr_answer(dir, &id_of(&p, &h(n)), "A");
         assert!(out.status.success(), "answer failed: {}", stderr(&out));
@@ -94,7 +83,7 @@ fn full_group(dir: &Path) -> PathBuf {
 
 // adr: 9c1b476c-9296-444b-a51c-e2957ad40ff5
 #[test]
-fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
+fn a_fifth_heading_superseding_one_of_four_passes_approve_and_check() {
     let dir = init_repo();
     let a = full_group(&dir);
     append(&a, &sec(&h(5), Some(&h(1)), true));
@@ -110,12 +99,6 @@ fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
         "check printed a cap refusal: {}{}",
         stdout(&chk),
         stderr(&chk)
-    );
-    let out = ask(&dir, "a");
-    assert!(
-        out.status.success(),
-        "ask should pass the cap: {}",
-        stderr(&out)
     );
 }
 
@@ -156,12 +139,6 @@ fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     let a = full_group(&dir);
     append(&a, &sec(&h(5), Some(&h(1)), true));
     approve_ok(&dir, "a");
-    let out = ask(&dir, "a");
-    assert!(
-        out.status.success(),
-        "ask should pass the cap: {}",
-        stderr(&out)
-    );
     let out = adr_answer(&dir, &id_of(&a, &h(5)), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
 
@@ -196,9 +173,9 @@ fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_group() {
 // a.md holds four answered questions and a fifth approved while an open
 // question of b.md replaced one of the four. When b.md's question is
 // refused, the old decision is back in the count: a.md's group holds five
-// and `ask` stops it on the cap, though a.md's plan is still approved.
+// and a new approve stops it on the cap, though a.md's plan is still approved.
 #[test]
-fn ask_stops_a_group_that_a_refused_replacement_in_another_file_took_over_the_cap() {
+fn approve_stops_a_group_that_a_refused_replacement_in_another_file_took_over_the_cap() {
     let dir = init_repo();
     let a = full_group(&dir);
     let b = write_record(
@@ -209,15 +186,13 @@ fn ask_stops_a_group_that_a_refused_replacement_in_another_file_took_over_the_ca
     approve_ok(&dir, "b");
     append(&a, &sec(&h(5), None, true));
     approve_ok(&dir, "a");
-    let out = ask(&dir, "b");
-    assert!(out.status.success(), "ask b failed: {}", stderr(&out));
     let out = adr_answer(&dir, &id_of(&b, &h(9)), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
 
-    let out = ask(&dir, "a");
+    let out = approve(&dir, "a");
     assert!(
         !out.status.success(),
-        "ask a should refuse: {}",
+        "approve a should refuse: {}",
         stdout(&out)
     );
     assert!(cap_refusal(&out), "{}", stderr(&out));

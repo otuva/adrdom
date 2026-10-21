@@ -41,9 +41,6 @@ fn repo() -> PathBuf {
         ),
     );
     approve_record(&dir, BASE);
-    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&base).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     write_test_comment(&dir, &id);
@@ -183,15 +180,11 @@ fn plan_names_the_moves_show_names_at_every_step() {
 
     let a = adr_owner(&dir, &["approve", dir.join(REL).to_str().unwrap()], "");
     assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
-    // Approved: the agent asks, and plan no longer names the owner's approval.
+    // Approved, and approve asked every question: plan no longer names the
+    // owner's approval.
     let out = same_moves(&dir, "approved");
     assert!(!out.contains("owner runs: adr approve"), "{}", out);
 
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     // Asked: the owner's answers.
     let out = same_moves(&dir, "asked");
     assert!(
@@ -305,11 +298,6 @@ fn read_prints_the_marked_pairs_and_the_move_and_nothing_else() {
     write(&dir, &format!("# Topic\n{}", section(H1, &body("one"))));
     let a = adr_owner(&dir, &["approve", dir.join(REL).to_str().unwrap()], "");
     assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     let id = ids(&dir)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
 

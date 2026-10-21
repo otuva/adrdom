@@ -43,9 +43,6 @@ fn ban(primary: &Path, word: &str) {
 fn second_decision(primary: &Path) -> String {
     let record = write_record(primary, "adrdom/decisions/second.md", SECOND);
     approve_record(primary, "adrdom/decisions/second.md");
-    assert!(adr(primary, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(primary, &id, "A").status.success());
     id

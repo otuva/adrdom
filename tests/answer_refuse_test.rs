@@ -48,9 +48,6 @@ fn answer_refuse_writes_the_line_and_the_refused_row() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     let hash_before = {
@@ -96,9 +93,6 @@ fn answer_letter_after_refused_refuses() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &id, "refuse").status.success());
@@ -127,9 +121,6 @@ fn answer_refuse_twice_gives_the_already_refused_message() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &id, "refuse").status.success());
@@ -165,9 +156,6 @@ fn answer_refuse_prints_only_the_refused_line_and_writes_no_superseded_row() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
@@ -186,9 +174,6 @@ fn answer_refuse_prints_only_the_refused_line_and_writes_no_superseded_row() {
     content.push_str(&with_supersedes);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let new_id = extract_ids(&content)

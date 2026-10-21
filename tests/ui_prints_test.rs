@@ -295,7 +295,6 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
     // Approved and asked: the owner's answer move, and what waits.
     let approve = adr(&dir, &["approve", REL], &[("ADR_OWNER_BYPASS", "1")], "");
     assert!(approve.status.success(), "{}", stderr(&approve));
-    assert!(adr(&dir, &["ask", REL], &[], "").status.success());
     assert_page_is_terminal(&dir, &page);
     assert!(
         page.lines("/next")
@@ -376,8 +375,6 @@ fn an_act_from_the_page_shows_the_lines_the_command_prints() {
         "one line per ledger row written"
     );
 
-    assert!(adr(&on_page, &["ask", REL], &[], "").status.success());
-    assert!(adr(&in_terminal, &["ask", REL], &[], "").status.success());
     let id_of =
         |dir: &Path| extract_ids(&std::fs::read_to_string(dir.join(REL)).unwrap())[0].clone();
     let (page_id, cli_id) = (id_of(&on_page), id_of(&in_terminal));

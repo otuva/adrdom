@@ -126,8 +126,8 @@ fn move_of(refusal: &str) -> &str {
 }
 
 /// Asserts every command that reads the state names the move of each line
-/// `refused` holds, word for word: `show`, `show <path>`, and `plan` and
-/// `ask` when the state is a topic file's; `check` names the whole line,
+/// `refused` holds, word for word: `show`, `show <path>`, and `plan`
+/// when the state is a topic file's; `check` names the whole line,
 /// finding and move.
 fn assert_every_command_names(
     dir: &Path,
@@ -149,7 +149,6 @@ fn assert_every_command_names(
     ];
     if topic {
         readers.push(("plan", all_of(dir, &["plan", path.to_str().unwrap()])));
-        readers.push(("ask", all_of(dir, &["ask", path.to_str().unwrap()])));
     }
     let check = all_of(dir, &["check"]);
     for r in refused {
@@ -177,7 +176,7 @@ fn assert_every_command_names(
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
 //
 // One state, one move: for each state approve refuses in, show (with no
-// file and with the file), check, plan and ask name the finding and its
+// file and with the file), check and plan name the finding and its
 // move in the same words approve refuses with.
 #[test]
 fn every_command_names_the_move_approve_refuses_with() {
@@ -240,9 +239,6 @@ fn every_command_names_the_move_for_an_asked_question_edited_with_a_loaded_word(
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&rec).unwrap()).remove(0);
     let version = current_version(&dir, &id);
     let text = std::fs::read_to_string(&rec)
@@ -284,9 +280,6 @@ fn every_command_names_the_move_for_a_removed_file_with_an_asked_question() {
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     std::fs::remove_file(&rec).unwrap();
     let out = approve_unplanned(&dir, &rec);
     let refused = refusal_lines(&out, "approve: ");
@@ -333,7 +326,7 @@ fn every_command_names_the_move_for_a_blame_row_in_the_old_form() {
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
 //
 // An asked question edited since it was asked, its file awaiting approval:
-// check's finding names the move show, plan, ask and answer name for it.
+// check's finding names the move show, plan and answer name for it.
 #[test]
 fn every_command_names_the_move_for_an_asked_question_edited_since_asked() {
     let dir = widget_repo();
@@ -346,9 +339,6 @@ fn every_command_names_the_move_for_an_asked_question_edited_since_asked() {
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&rec).unwrap()).remove(0);
     let version = current_version(&dir, &id);
     let text = std::fs::read_to_string(&rec)
@@ -367,7 +357,6 @@ fn every_command_names_the_move_for_an_asked_question_edited_since_asked() {
         ("show", all_of(&dir, &["show"])),
         ("show <path>", all_of(&dir, &["show", REL])),
         ("plan", all_of(&dir, &["plan", rec.to_str().unwrap()])),
-        ("ask", all_of(&dir, &["ask", rec.to_str().unwrap()])),
     ] {
         assert!(
             out.contains(&mv),
@@ -633,9 +622,6 @@ fn every_planning_stage_prints_one_report_in_every_command() {
     // Asked, then one question struck from the plan before the owner
     // approves the change: the one finding, in every command.
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let text = std::fs::read_to_string(&path).unwrap();
     let at = text.find(&format!("### {}", h2)).unwrap();
     std::fs::write(&path, &text[..at]).unwrap();
@@ -707,9 +693,6 @@ fn every_judged_state_prints_one_report_in_every_command() {
     )
     .unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&path).unwrap()).remove(0);
     assert!(adr_answer(&dir, &id, "refuse").status.success());
     let text = std::fs::read_to_string(&path).unwrap();
@@ -739,9 +722,6 @@ fn every_judged_state_prints_one_report_in_every_command() {
         &format!("# Gate Two\n\n### Does the widget stay?\ndepends: widget\n\nProblem: the widget stays.\n\nStandard: plain words.\n\n{}", GATE_OPTIONS),
     );
     approve_record(&dir, "adrdom/decisions/gate-two.md");
-    assert!(adr(&dir, &["ask", gate.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&gate).unwrap()).remove(0);
     assert!(adr_answer(&dir, &id, "A").status.success());
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
@@ -793,7 +773,7 @@ fn every_judged_state_prints_one_report_in_every_command() {
 //
 // The terms file changed to hold a banned word: approve of the terms file
 // refuses on the word, so no command names the owner's approve of it;
-// show, plan, ask and check each name the word's line and its move.
+// show, plan, approve and check each name the word's line and its move.
 #[test]
 fn a_banned_word_in_a_changed_terms_file_withholds_its_approve_everywhere() {
     let dir = init_repo();
@@ -829,7 +809,10 @@ fn a_banned_word_in_a_changed_terms_file_withholds_its_approve_everywhere() {
             "plan",
             adr(&dir, &["plan", path.to_str().unwrap()], &[], ""),
         ),
-        ("ask", adr(&dir, &["ask", path.to_str().unwrap()], &[], "")),
+        (
+            "approve",
+            adr_owner(&dir, &["approve", path.to_str().unwrap()], ""),
+        ),
         ("check", adr(&dir, &["check"], &[], "")),
     ];
     for (name, out) in &outputs {

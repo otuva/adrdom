@@ -61,7 +61,7 @@ pub fn terms_shape_error(e: &str) -> Said {
 
 /// `adrdom/terms.md` exists and parses, but isn't approved at its current
 /// hash -- named from a dependent topic file's own path (`rel`), the way
-/// `ask`/`answer`/`approve` all report it.
+/// `approve`/`answer` all report it.
 pub fn terms_not_approved(rel: &str, status: FileStatus) -> Said {
     said(
         &crate::rule::TERMS_FILE_APPROVED,
@@ -206,10 +206,8 @@ pub fn term_retired_but_carried(name: &str, source: &str, user: RetiredUser) -> 
         RetiredUser::Asked(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent_then_runs(
-                Act::Rewrites("the question".into()),
-                command(&["adr", "ask", rel]),
-            ),
+            Next::agent(Act::Rewrites("the question".into()))
+                .and_owner_runs(command(&["adr", "approve", rel])),
         ),
         RetiredUser::PlanHeading(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,

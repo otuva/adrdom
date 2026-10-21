@@ -216,12 +216,7 @@ fn a_writing_command_in_a_satellite_refuses_and_writes_nothing() {
     let topic = primary.join("adrdom/decisions/example.md");
     let topic = topic.to_str().unwrap();
     let answer_id = format!("{}@x", id);
-    let agent_cmds: Vec<Vec<&str>> = vec![
-        vec!["plan", topic],
-        vec!["ask", topic],
-        vec!["ban"],
-        vec!["read"],
-    ];
+    let agent_cmds: Vec<Vec<&str>> = vec![vec!["plan", topic], vec!["ban"], vec!["read"]];
     for args in agent_cmds {
         let out = adr(&sat, &args, &[], "somewordtoban\n");
         assert!(!out.status.success(), "{:?}", args);
@@ -466,7 +461,6 @@ fn the_refusal_of_a_writing_command_prints_a_file_argument_as_the_primary_runs_i
     for (cmd, given) in [
         ("plan", inside.as_str()),
         ("plan", absolute.to_str().unwrap()),
-        ("ask", inside.as_str()),
     ] {
         let out = adr(&sat, &[cmd, given], &[], "");
         assert!(!out.status.success());
@@ -886,7 +880,7 @@ fn a_writing_command_in_a_far_linked_worktree_of_a_satellite_names_a_path_that_l
     let (primary, sat, _) = satellite_pair();
     let wt = far_worktree(&sat);
     let topic = "adrdom/decisions/x.md";
-    let out = adr(&wt, &["ask", topic], &[], "");
+    let out = adr(&wt, &["plan", topic], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
     let shown = path_after(&err, "the record is at ");
@@ -898,7 +892,7 @@ fn a_writing_command_in_a_far_linked_worktree_of_a_satellite_names_a_path_that_l
     );
     // In the main working tree the line is printed as adrdom/primary holds it.
     let held = std::fs::read_to_string(sat.join("adrdom/primary")).unwrap();
-    let main = adr(&sat, &["ask", topic], &[], "");
+    let main = adr(&sat, &["plan", topic], &[], "");
     assert!(!main.status.success());
     assert!(
         stderr(&main).contains(&format!("the record is at {}", held.trim_end())),

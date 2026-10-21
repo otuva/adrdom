@@ -33,9 +33,6 @@ fn repo() -> PathBuf {
     );
     let path = write_record(&dir, rel, &text);
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
         assert!(adr_answer(&dir, &id, "A").status.success());
     }

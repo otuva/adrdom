@@ -4,7 +4,7 @@ use super::*;
 
 // --- a topic file's own shape/tells/depends/tier refusals ------------------
 // Shared by `rules::record_refusals` (approve + check) and, for the
-// derive-error variant, by `ask` as well.
+// derive-error variant, by `approve` as well.
 
 pub fn shape_error(rel: &str, e: &str) -> Said {
     if e.starts_with("tier heading") {
@@ -300,7 +300,7 @@ pub fn depends_line_over_limit(rel: &str, heading: &str, names: &[String], cap: 
 /// `show` names a path approve does not take (per "Does show print what a file
 /// holds past its latest approval?": show takes every file approve
 /// takes).
-/// `ask` names a path that is no topic file: it asks the questions of topic
+/// `approve` names a path that is no topic file: it asks the questions of topic
 /// files alone.
 pub fn plan_not_a_topic_file(rel: &str) -> String {
     refuse(
@@ -400,7 +400,7 @@ pub fn stand_cap_exceeded(
 }
 
 // `derive_tiers`' three failure shapes (record::DeriveError), each with two
-// wordings: the plain one (`approve`/`check`'s `plan` category) and `ask`'s,
+// wordings: the plain one (`approve`/`check`'s `plan` category) and the one approve's asking uses,
 // which always points at re-approving afterward.
 
 use crate::record::DeriveError;

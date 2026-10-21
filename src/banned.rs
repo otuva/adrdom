@@ -5,7 +5,7 @@ use std::path::Path;
 /// Where the hashed ban list lives, relative to the repo root: the one
 /// constant for this path (defined in `repo.rs` alongside every other
 /// governed path), used by every site that reads or writes it (`ban`,
-/// `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
+/// `unban`, `check --banned`, `terms_refusals`, `install`).
 pub use crate::repo::BAN_LIST;
 
 /// Same tokenization for `ban` and `check --banned`: the whole trimmed,
@@ -68,7 +68,7 @@ pub fn parse_entries(content: &str) -> Vec<(String, Option<String>)> {
 /// read the staged files?"): a staged edit to the ban list is judged, not
 /// whatever is left on disk. Every caller that scans on `check`'s behalf
 /// (directly or through `terms_refusals`) reads the list this way; every
-/// other caller (`ban`, `unban`, `ask`, `approve`) keeps calling
+/// other caller (`ban`, `unban`, `approve`) keeps calling
 /// `read_entries`, which always wants the working tree.
 pub fn read_entries_via(
     root: &Path,
@@ -135,7 +135,7 @@ pub fn hits(
 }
 
 /// Like `hits`, but stops at the first hit instead of scanning the rest of
-/// `text`: for a caller (`ask`'s candidate-body scan) that only acts on
+/// `text`: for a caller (`approve`'s candidate-body scan) that only acts on
 /// whether a banned word is present at all, never on every place it
 /// appears, so it never pays to hash every remaining token once one hit is
 /// already enough to refuse.

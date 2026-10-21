@@ -1,30 +1,8 @@
-//! The messages of `ask` and the lines of its summary.
+//! The messages of `approve` and the lines of its summary.
 
 use super::*;
-use crate::status::FileStatus;
 
 // --- ask.rs -----------------------------------------------------------------
-
-/// A plan that differs from its latest approval, with the moves of its file
-/// (`moves::of_topic_file_in`): the same moves `show` names for the file, so
-/// the refusal never names the owner's approve while approve would refuse
-/// (per "Does a command compute a move of its own?", aac5c313 A).
-pub fn plan_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said(
-        &crate::rule::PLAN_APPROVED_BEFORE_ASK,
-        format!("{}: plan is {}", rel, status.name()),
-        report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))),
-    )
-}
-
-/// `plan_not_approved` for the prose above the first question.
-pub fn context_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said(
-        &crate::rule::PROSE_APPROVED_BEFORE_ASK,
-        format!("{}: prose is {}", rel, status.name()),
-        report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))),
-    )
-}
 
 pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> Said {
     said(

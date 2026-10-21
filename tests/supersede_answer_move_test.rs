@@ -68,16 +68,9 @@ fn approve_ok(dir: &Path, name: &str) {
     );
 }
 
-/// asks the file, answers `heading` A.
+/// answers `heading` A (approve has asked it).
 fn ask_answer(dir: &Path, name: &str, heading: &str) {
     let p = dir.join(rel(name));
-    let out = adr(dir, &["ask", p.to_str().unwrap()], &[], "");
-    assert!(
-        out.status.success(),
-        "ask {} failed: {}",
-        name,
-        stderr(&out)
-    );
     let id = id_of(&p, heading);
     let out = adr_answer(dir, &id, "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
@@ -137,14 +130,10 @@ fn old_dependent(dir: &Path, name: &str, heading: &str, target: &str, id: &str) 
 /// The case where approve passed (Q4 names Q1 only, Q1 had no dependents)
 /// and Q1 then gains a dependent: Q7 in c.md, an answered question standing
 /// on Q1 by identifier.
-fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf {
+fn q1_gains_a_dependent_after_approve(dir: &Path) -> PathBuf {
     let a = with_q1(dir);
     append(&a, &sec(Q4, "widget", Some(Q1), true));
     approve_ok(dir, "a");
-    if ask_q4_first {
-        let out = adr(dir, &["ask", a.to_str().unwrap()], &[], "");
-        assert!(out.status.success(), "ask a failed: {}", stderr(&out));
-    }
     old_dependent(
         dir,
         "c",
@@ -159,7 +148,7 @@ fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf
 #[test]
 fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
     let dir = setup();
-    let a = q1_gains_a_dependent_after_approve(&dir, true);
+    let a = q1_gains_a_dependent_after_approve(&dir);
     let id1 = id_of(&a, Q1);
     let id4 = id_of(&a, Q4);
     let out = adr_owner(&dir, &["answer", &id_at_version(&dir, &id4), "A"], "");
@@ -170,7 +159,7 @@ fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
             "c.md",
             "agent rewrites the supersedes line of",
             "to add adrdom/decisions/c.md",
-            "then runs: adr ask adrdom/decisions/a.md",
+            "owner runs: adr approve adrdom/decisions/a.md",
         ],
     );
 
@@ -183,13 +172,6 @@ fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
     std::fs::write(&a, edited).unwrap();
     let out = approve(&dir, "a");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    let out = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
-    assert!(
-        out.status.success(),
-        "ask failed: {}{}",
-        stdout(&out),
-        stderr(&out)
-    );
     let out = adr_owner(&dir, &["answer", &id_at_version(&dir, &id4), "A"], "");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
 }

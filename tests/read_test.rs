@@ -54,8 +54,6 @@ fn repo_with(markers: &[&str]) -> (PathBuf, Vec<Dec>) {
         }
         let path = write_record(&dir, &rel, &text);
         approve_record(&dir, &rel);
-        let a = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-        assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
         let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
         assert_eq!(ids.len(), headings.len());
         for (id, (h, m)) in ids.iter().zip(headings) {
@@ -493,8 +491,6 @@ fn a_superseded_decision_drops_out_of_the_reading() {
         ),
     );
     approve_record(&dir, rel);
-    let a = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-    assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
     let id = extract_ids(&std::fs::read_to_string(&path).unwrap())[0].clone();
     let r = adr_answer(&dir, &id, "A");
     assert!(r.status.success(), "{}{}", stdout(&r), stderr(&r));

@@ -128,11 +128,9 @@ pub fn of_topic_file(
         if bare {
             out.extend(of_planning(rf, planning));
         }
+        // Approving the file asks its unasked questions.
         if !to_ask.is_empty() {
-            out.push(Move::new(MoveKind::Ask {
-                rel: rf.rel.clone(),
-                headings: to_ask,
-            }));
+            push_approve(&mut out, rf);
         }
     } else if !refused {
         // Nothing is asked under a plan that waits for its approval; what
@@ -158,33 +156,22 @@ pub struct Judging<'a> {
     pub index: &'a crate::rules::RepoIndex,
 }
 
-/// `of_unasked_question` of the question `heading` of the topic file `rf`
-/// as loaded from disk, with the findings and planning records read the
+/// `of_unasked_question` of the topic file `rf` as loaded from disk, with the findings and planning records read the
 /// way `of_topic_file_in` reads them: the move `answer` names for a
 /// question it cannot take yet is the one `show` names for its file.
-pub fn of_unasked_question_in(
-    j: &Judging,
-    rf: &RecordFile,
-    heading: &str,
-    unwritten: bool,
-) -> Report {
+pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, unwritten: bool) -> Report {
     let plan_ok =
         state::plan_approved(j.led, rf, &rf.rel) && state::context_approved(j.led, rf, &rf.rel);
     let planning = crate::plan::load_with(rf, j.terms_list, j.led, &j.index.planning);
     let mut findings =
         crate::rules::judge_topic_file_in(j.root, rf, j.all, j.terms_list, j.led, j.index);
     findings.extend(j.index.records().iter().cloned());
-    let mut moves = of_unasked_question(rf, plan_ok, &findings, &planning, heading, unwritten);
+    let mut moves = of_unasked_question(rf, plan_ok, &findings, &planning, unwritten);
     // The terms file's gate, as `of_topic_file_with` reads it.
     let gate = crate::rules::terms_gate(j.root, j.led, &rf.rel);
     let mut stops = Vec::new();
     if !gate.is_empty() {
-        moves.retain(|m| {
-            !matches!(
-                m.kind,
-                MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }
-            )
-        });
+        moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Answer { .. }));
         findings.splice(0..0, gate.findings);
         stops = gate.stops;
     }
@@ -284,12 +271,7 @@ pub fn of_topic_file_judged(
     let gate = crate::rules::terms_gate(root, led, &rf.rel);
     let mut stops = Vec::new();
     if !gate.is_empty() {
-        moves.retain(|m| {
-            !matches!(
-                m.kind,
-                MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }
-            )
-        });
+        moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Answer { .. }));
         findings.splice(0..0, gate.findings);
         stops = gate.stops;
     }
@@ -345,7 +327,7 @@ pub fn of_untested(rf: &RecordFile, i: usize, id: &str, role: crate::session::Ro
 /// The moves for one question that is not asked or was edited since
 /// (`unwritten`: it has no body), for the refusal `answer` makes of a
 /// question waiting on it, by the rule `of_topic_file` applies: under an
-/// approved plan, the agent's `adr ask` (or, for a question with no body,
+/// approved plan, the owner's approve (or, for a question with no body,
 /// the planning move); under a plan that waits for its approval and has no
 /// finding, the planning move. The findings carry their own moves.
 pub fn of_unasked_question(
@@ -353,7 +335,6 @@ pub fn of_unasked_question(
     plan_ok: bool,
     findings: &[Finding],
     planning: &crate::plan::Planning,
-    heading: &str,
     unwritten: bool,
 ) -> Vec<Move> {
     let mut out: Vec<Move> = Vec::new();
@@ -361,15 +342,22 @@ pub fn of_unasked_question(
         if unwritten {
             out.extend(of_planning(rf, planning));
         } else {
-            out.push(Move::new(MoveKind::Ask {
-                rel: rf.rel.clone(),
-                headings: vec![heading.to_string()],
-            }));
+            push_approve(&mut out, rf);
         }
     } else if findings.is_empty() {
         out.extend(of_planning(rf, planning));
     }
     out
+}
+
+/// The owner's approve of `rf`, unless the list already holds it.
+fn push_approve(out: &mut Vec<Move>, rf: &RecordFile) {
+    let m = Move::new(MoveKind::Approve {
+        path: rf.rel.clone(),
+    });
+    if !out.contains(&m) {
+        out.push(m);
+    }
 }
 
 /// The next move of the planning steps for the questions of `rf` not yet

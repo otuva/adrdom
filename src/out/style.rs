@@ -377,9 +377,8 @@ mod tests {
             on,
         );
         assert_eq!(stop[0], "\u{1b}[31mshow: no\u{1b}[0m");
-        let agent = Line::Move(Move::new(MoveKind::Ask {
+        let agent = Line::Move(Move::new(MoveKind::Plan {
             rel: "x.md".to_string(),
-            headings: vec![],
         }));
         assert!(!render_lines(&[agent], on)[0].contains('\u{1b}'));
         let hostile = Line::Record {

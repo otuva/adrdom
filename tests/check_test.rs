@@ -20,12 +20,11 @@ Standard: clear yes or no.
 "#;
 
 /// Writes `ONE_QUESTION`, approves its plan/context via a hand-written
-/// ledger row (so `ask` succeeds even once that command starts refusing
-/// unapproved files, and so `check` doesn't flag its body as living under
-/// an unapproved heading), asks, then owner-answers answer A.
+/// ledger row (so `check` doesn't flag its body as living under an unapproved
+/// heading), approves it for real (which asks it), then owner-answers A.
 fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
     // A term named "pass" (matching the word already in ONE_QUESTION's
-    // heading) so a real `adr ask` writes a genuine, non-empty terms line
+    // heading) so a real `adr approve` writes a genuine, non-empty terms line
     // -- required now that an asked/answered section must carry one.
     let terms_content =
         "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something is accepted.\naliases: \n";
@@ -33,9 +32,6 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
     approve_terms_via_ledger(dir, terms_content);
     let record = write_record(dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_record(dir, "adrdom/decisions/example.md");
-    assert!(adr(dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     let arg = id_at_version(dir, &id);
@@ -124,9 +120,6 @@ fn check_answers_failure_hand_written_answer_line() {
     approve_minimal_terms(&dir, "pass");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str("\n**Answer:** A\n");
@@ -1754,12 +1747,12 @@ fn check_fails_outright_when_terms_is_unapproved_even_if_nothing_pairs_it() {
 //
 // "Does the tool stop while the terms file waits for approval?" (A): once
 // `adrdom/terms.md` is hand-edited on top of its latest approval, both
-// `check` and `ask` stop the same way regardless of whether anything
+// `check` and `approve` stop the same way regardless of whether anything
 // current reaches the edited term -- there is no separate "approved copy
 // is missing" case any more, since check no longer trusts anything but the
 // ledger's own hash.
 #[test]
-fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
+fn check_and_approve_fail_when_terms_is_edited_after_its_latest_approval() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (record, id) = answer_one_question(&dir);
@@ -1785,9 +1778,9 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
         stdout(&check_out)
     );
 
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!ask_out.status.success());
-    let err = stderr(&ask_out);
+    let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!approve_out.status.success());
+    let err = stderr(&approve_out);
     assert!(err.contains("adrdom/terms.md is changed"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
 }
@@ -1826,7 +1819,7 @@ fn check_fails_an_asked_section_whose_terms_line_is_malformed() {
         text
     );
     assert!(
-        text.contains("malformed terms line; agent runs: adr ask adrdom/decisions/example.md"),
+        text.contains("malformed terms line; owner runs: adr approve adrdom/decisions/example.md"),
         "{}",
         text
     );
@@ -1860,7 +1853,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: 1.1 Some question?: term decision not found; agent runs: adr ask adrdom/decisions/example.md"
+            "adrdom/decisions/example.md: 1.1 Some question?: term decision not found; owner runs: adr approve adrdom/decisions/example.md"
         ),
         "{}",
         text
@@ -1909,7 +1902,7 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
     );
     assert!(
         text.contains(
-            "uses the retired term decision; agent runs: adr ask adrdom/decisions/example.md"
+            "uses the retired term decision; owner runs: adr approve adrdom/decisions/example.md"
         ),
         "an asked-only question bound to a retired term is still re-asked: {}",
         text
@@ -1942,7 +1935,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
         text
     );
     assert!(
-        text.contains("no terms line; agent runs: adr ask adrdom/decisions/example.md"),
+        text.contains("no terms line; owner runs: adr approve adrdom/decisions/example.md"),
         "an asked-only question with no terms line is still re-asked: {}",
         text
     );
@@ -2435,9 +2428,6 @@ fn check_reports_a_test_tied_to_a_decision_that_was_later_superseded() {
     let second = "\n### 1.2 What is the second unit of authority called?\ndepends: authority\n\nProblem: naming the second unit.\n\nStandard: plain words.\n\n- A) The second thing is a widget.\n  Why: reasons.\n  Costs: costs.\n- B) The second thing is a gadget.\n  Why: other reasons.\n  Costs: other costs.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", first);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
@@ -2462,9 +2452,6 @@ fn check_reports_a_test_tied_to_a_decision_that_was_later_superseded() {
     content.push_str(&second_with_supersedes);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let new_id = extract_ids(&content)
         .into_iter()
@@ -2501,9 +2488,6 @@ fn check_reports_a_test_tied_to_a_refused_decision() {
     let content = "# Example\n\n### 1.1 What color is the widget?\ndepends: widget\n\nProblem: the widget's color is undecided.\n\nStandard: plain words.\n\n- A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n- B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let asked = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&asked)[0].clone();
     assert!(adr_answer(&dir, &id, "refuse").status.success());
@@ -2639,8 +2623,6 @@ fn ask_two_in_one_tier(dir: &std::path::Path) -> (String, String) {
     approve_terms_via_ledger(dir, terms_content);
     let record = write_record(dir, "adrdom/decisions/example.md", TWO_QUESTIONS);
     approve_record(dir, "adrdom/decisions/example.md");
-    let out = adr(dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     (ids[0].clone(), ids[1].clone())
 }

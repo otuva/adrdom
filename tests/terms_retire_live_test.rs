@@ -117,10 +117,7 @@ fn assert_retire_refused(dir: &Path, terms: &Path, rows_before: usize, heading: 
 #[test]
 fn retire_refused_while_an_asked_question_names_the_term() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
+    let (dir, _, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
@@ -141,9 +138,6 @@ fn retire_succeeds_once_the_asked_question_is_struck_from_the_plan() {
         sec(H_DECISION, "decision", true),
         sec(H_VERDICT, "verdict", true)
     ));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let rows = terms_rows(&dir);
     // Refused first, while the asked question stands in the plan.
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
@@ -183,9 +177,6 @@ fn retire_succeeds_when_only_a_refused_question_names_the_term() {
         sec(H_DECISION, "decision", true),
         sec(H_VERDICT, "verdict", true)
     ));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let out = adr_answer(&dir, &id_of(&record, H_DECISION), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
     let rows = terms_rows(&dir);
@@ -202,9 +193,6 @@ fn retire_succeeds_when_only_a_refused_question_names_the_term() {
 fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let text = std::fs::read_to_string(&record).unwrap();
     let line = text
         .lines()
@@ -303,9 +291,6 @@ fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or
 fn unreadable_terms_line_blocks_only_an_approve_that_retires_or_removes() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let text = std::fs::read_to_string(&record).unwrap();
     let line = text
         .lines()
@@ -339,10 +324,7 @@ fn unreadable_terms_line_blocks_only_an_approve_that_retires_or_removes() {
 #[test]
 fn retire_refused_while_only_an_asked_questions_depends_line_names_the_term() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
+    let (dir, _, terms) = setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_CHOICE);
 }

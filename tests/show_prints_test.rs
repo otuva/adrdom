@@ -52,8 +52,6 @@ fn asked() -> (PathBuf, PathBuf) {
     approve_minimal_terms(&dir, "widget");
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", q(ONE), q(TWO)));
     approve_record(&dir, REL);
-    let asked = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-    assert!(asked.status.success(), "{}", stderr(&asked));
     let one = id_of(&path, ONE);
     assert!(adr_answer(&dir, &one, "A").status.success());
     commit_all(&dir, "the gate, asked");
@@ -82,9 +80,6 @@ fn show_with_no_file_prints_all_moves_after_all_decisions() {
     let three = "Is the widget door open?";
     let path2 = write_record(&dir, rel2, &format!("# Door\n\n{}", q(three)));
     approve_record(&dir, rel2);
-    assert!(adr(&dir, &["ask", path2.to_str().unwrap()], &[], "")
-        .status
-        .success());
     assert!(adr_answer(&dir, &id_of(&path2, three), "A")
         .status
         .success());
@@ -267,9 +262,6 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
 
     // Approved and asked, then changed: ONE's body edited, TWO struck.
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     commit_all(&dir, "the gate, asked");
     let text = std::fs::read_to_string(&path).unwrap();
     let at = text.find(&format!("### {}\n", TWO)).unwrap();
@@ -365,7 +357,7 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let three = "Is the widget gate lock once it closes?";
-    let path = write_record(
+    write_record(
         &dir,
         REL,
         &format!(
@@ -378,9 +370,6 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let plain = show(&dir, &[REL]);
     for word in ["neighbour", "dependents:", "replaced by"] {
@@ -525,9 +514,6 @@ fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag()
     );
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(c)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
     let c_id = id_of(&path, c);
     let mut text = std::fs::read_to_string(&path).unwrap();
@@ -537,9 +523,6 @@ fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag()
     ));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     // Committed before the answer: the approved text git holds has no
     // answer line under the replacement, the ledger has its answer.
     commit_all(&dir, "the gate, replaced");
@@ -580,9 +563,9 @@ fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag()
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
-// Approved and not yet committed, then a question struck: no committed text
-// holds the approved plan, and the struck question still shows, by its
-// identifier.
+// Approved (by rows alone, so nothing was asked) and not yet committed, then
+// a question struck: no committed text holds the approved plan, and the
+// struck question still shows, by its identifier.
 #[test]
 fn a_question_struck_from_an_uncommitted_approval_still_shows() {
     let dir = init_repo();
@@ -590,6 +573,15 @@ fn a_question_struck_from_an_uncommitted_approval_still_shows() {
     approve_minimal_terms(&dir, "widget");
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", q(ONE), q(TWO)));
     approve_record(&dir, REL);
+    // The state of a file approved before approve asked: no `asked` row.
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let ledger = std::fs::read_to_string(&ledger_path).unwrap();
+    let kept: String = ledger
+        .lines()
+        .filter(|l| !l.contains("\tasked\t"))
+        .map(|l| format!("{}\n", l))
+        .collect();
+    std::fs::write(&ledger_path, kept).unwrap();
     let two = id_of(&path, TWO);
     let text = std::fs::read_to_string(&path).unwrap();
     let at = text.find(&format!("### {}\n", TWO)).unwrap();
@@ -686,7 +678,9 @@ fn a_question_new_since_approval_marks_its_heading_at_every_stage() {
         shown
     );
     assert!(
-        shown.contains(&format!("\n[not asked] {}\n", ONE)),
+        shown
+            .lines()
+            .any(|l| l.starts_with("[asked @") && l.ends_with(&format!("] {}", ONE))),
         "the approved question is not marked: {}",
         shown
     );
@@ -736,9 +730,6 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     );
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}{}", q(a), q(b), q(c)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     assert!(adr_answer(&dir, &id_of(&path, a), "A").status.success());
     assert!(adr_answer(&dir, &id_of(&path, b), "refuse")
         .status
@@ -753,9 +744,6 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     text.push_str(&q(e));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     // The approved plan is committed before the answer strikes the section of
     // the superseded question: its reference lines come from git.
     commit_all(&dir, "the replacement, asked");
@@ -833,9 +821,6 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
     );
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(c)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
     let c_id = id_of(&path, c);
     let mut text = std::fs::read_to_string(&path).unwrap();
@@ -845,9 +830,6 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
     ));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     // The approved plan is committed before the answer strikes the section of
     // the superseded question: its reference lines come from git.
     commit_all(&dir, "the replacement, asked");
@@ -924,9 +906,6 @@ fn unrelated_prints_the_unrelated_line_of_an_answered_question() {
     let with_unrelated = format!("### {}\ndepends: widget\nunrelated: {}\n{}\n", a, b, BODY);
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", with_unrelated, q(b)));
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     assert!(adr_answer(&dir, &id_of(&path, a), "A").status.success());
 
     let plain = show(&dir, &[REL]);

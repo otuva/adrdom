@@ -1,8 +1,8 @@
 //! Every rule on the records, judged once (per "Does a command refuse what
 //! check passes?", fe14991d A): each rule is a function here returning
 //! `Finding`s, and every command that acts on a rule reads the same
-//! findings. `approve` refuses the findings about the file it approves,
-//! `ask` the findings about the questions it asks, `check` prints them all
+//! findings. `approve` refuses the findings about the file it approves and
+//! the questions it asks, `check` prints them all
 //! (a finding in a draft as a note, per "What does check do with a fault on
 //! a file awaiting approval?"), and `show` and `plan` name their moves. A
 //! rule on the input of one command (the words `ban` takes, the letter and
@@ -58,7 +58,7 @@ pub enum Subject {
 }
 
 /// The class a finding is filed under inside the tool: what `check` sorts
-/// failures from notes by, and what `approve` and `ask` pick the findings
+/// failures from notes by, and what `approve` picks the findings
 /// they refuse on by. Never printed: a finding prints its found text and
 /// its move, with no tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -89,7 +89,6 @@ pub enum Class {
 pub enum Command {
     Check,
     Show,
-    Ask,
     Approve,
     Answer,
     Ban,
@@ -106,7 +105,6 @@ impl Command {
         match self {
             Command::Check => "check",
             Command::Show => "show",
-            Command::Ask => "ask",
             Command::Approve => "approve",
             Command::Answer => "answer",
             Command::Ban => "ban",

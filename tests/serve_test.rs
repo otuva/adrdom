@@ -222,16 +222,14 @@ fn assert_on_page(lines: &[String], body: &str) {
     }
 }
 
-/// Sets up a repo with `adr install`, the fixture record approved, one
-/// `ask` run (so 1.1 is Open), and returns the repo dir.
+/// Sets up a repo with `adr install`, the fixture record approved (which
+/// asks it, so 1.1 is Open), and returns the repo dir.
 fn setup_repo_with_open_question() -> std::path::PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
-    let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
     dir
 }
 
@@ -396,8 +394,6 @@ fn post_answer_with_a_stale_version_is_refused_and_writes_nothing() {
     );
     std::fs::write(&record_path, edited).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    let reask = adr(&dir, &["ask", record_path.to_str().unwrap()], &[], "");
-    assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
     assert_ne!(
         current_version(&dir, &question_id),
         stale_version,
@@ -617,9 +613,6 @@ fn terms_page_shows_what_show_prints_of_the_terms_file() {
         .status
         .success());
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
@@ -945,8 +938,6 @@ fn page_answer_and_cli_answer_write_the_same_shaped_file_line_and_ledger_row_and
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_QUESTION_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -1352,10 +1343,8 @@ fn page_shows_question_options_and_the_decisions_list() {
         "# Second\n\n### 2.1 Is the decision revisited?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) Yes: the decision is revisited.\n  Why: reasons.\n  Costs: costs.\n- B) No: the decision stands.\n  Why: other reasons.\n  Costs: other costs.\n",
         question_id
     );
-    let second = write_record(&dir, "adrdom/decisions/second.md", &superseding);
+    write_record(&dir, "adrdom/decisions/second.md", &superseding);
     approve_record(&dir, "adrdom/decisions/second.md");
-    let ask_out = adr(&dir, &["ask", second.to_str().unwrap()], &[], "");
-    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
 
     let next = get(port, "/next", Some(&cookie));
     assert_eq!(next.status, 200, "body: {}", next.body);
@@ -1380,7 +1369,7 @@ fn page_shows_question_options_and_the_decisions_list() {
 // back into a name -- both on the page, not just on `show` -------------
 
 /// Tier 1, no depends line at all (mirrors `ask_tiers_test.rs`'s Q1,
-/// proven to pair the "widget" term through a real `ask`).
+/// proven to pair the "widget" term through a real `approve`).
 const TIER_Q1_RECORD: &str = r#"# Example
 
 ### 1.1 What color is the widget?
@@ -1414,9 +1403,6 @@ fn page_follows_the_topic_as_it_advances() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", TIER_Q1_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
     let (port, token) = read_open_line(&mut child);
@@ -1442,9 +1428,6 @@ fn page_follows_the_topic_as_it_advances() {
     content2.push_str(TIER_Q2_APPENDIX);
     std::fs::write(&record, &content2).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     // Same routes, no restart: Q2 is offered, Q1 is a decision.
     let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
@@ -1495,9 +1478,6 @@ fn page_offers_only_the_questions_answer_takes() {
         &format!("{}{}", TIER_Q1_RECORD, q2),
     );
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     let (q1_id, q2_id) = (ids[0].clone(), ids[1].clone());
 
@@ -1575,9 +1555,6 @@ fn page_shows_a_waiting_question_without_a_form_and_offers_it_once_unlocked() {
         ),
     );
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     let (q2_id, q1_id) = (ids[0].clone(), ids[1].clone());
 
@@ -1644,9 +1621,6 @@ fn page_shows_no_form_for_an_edited_question() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", TIER_Q1_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
 
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
@@ -1663,7 +1637,6 @@ fn page_shows_no_form_for_an_edited_question() {
         text.replacen("is undecided.", "is undecided, reworded.", 1),
     )
     .unwrap();
-    approve_record(&dir, "adrdom/decisions/example.md");
 
     let shown = get(port, "/next", Some(&cookie));
     assert!(!shown.body.contains(&form), "body: {}", shown.body);
@@ -1674,11 +1647,25 @@ fn page_shows_no_form_for_an_edited_question() {
         lines
     );
     let file = cli_lines(&dir, &["show", "adrdom/decisions/example.md"]);
-    let ask_move = file
-        .iter()
-        .find(|l| l.starts_with("agent runs: adr ask "))
-        .expect("the ask move");
-    assert!(lines.contains(ask_move), "{:#?}", lines);
+    // The move is the file's own, the owner's approve, which asks the edited
+    // question again: `show` prints it for the file, and the overview page
+    // shows it with the finding and a button; the answer page offers no move under the
+    // question.
+    let approve_move = "owner runs: adr approve adrdom/decisions/example.md".to_string();
+    assert!(file.contains(&approve_move), "{:#?}", file);
+    let overview = get(port, "/", Some(&cookie));
+    assert!(
+        page_lines(&overview.body)
+            .iter()
+            .any(|l| l.contains("edited after asking") && l.ends_with(&approve_move)),
+        "{:#?}",
+        page_lines(&overview.body)
+    );
+    assert!(
+        overview.body.contains("action=\"/approve\""),
+        "{}",
+        overview.body
+    );
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1701,9 +1688,6 @@ fn page_shows_a_heading_depends_entry_by_name_not_id() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", TIER_Q1_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
@@ -1713,9 +1697,6 @@ fn page_shows_a_heading_depends_entry_by_name_not_id() {
     content2.push_str(TIER_Q2_APPENDIX);
     std::fs::write(&record, &content2).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     // On disk, Q2's depends line now carries Q1's raw uuid, not its name.
     let approved = std::fs::read_to_string(&record).unwrap();
@@ -1963,10 +1944,8 @@ fn two_asked() -> std::path::PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
-    let record = write_record(&dir, "adrdom/decisions/example.md", TWO_QUESTIONS);
+    write_record(&dir, "adrdom/decisions/example.md", TWO_QUESTIONS);
     approve_record(&dir, "adrdom/decisions/example.md");
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
     dir
 }
 
@@ -2251,8 +2230,6 @@ fn three_asked() -> (std::path::PathBuf, Vec<String>) {
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", THREE_FLAT);
     approve_record(&dir, "adrdom/decisions/example.md");
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     (dir, ids)
 }

@@ -52,22 +52,6 @@ fn approve_ok(dir: &Path, name: &str) {
     );
 }
 
-fn ask_ok(dir: &Path, name: &str) {
-    let out = adr(
-        dir,
-        &["ask", dir.join(rel(name)).to_str().unwrap()],
-        &[],
-        "",
-    );
-    assert!(
-        out.status.success(),
-        "ask {} failed: {}{}",
-        name,
-        stdout(&out),
-        stderr(&out)
-    );
-}
-
 fn answer_ok(dir: &Path, name: &str, heading: &str, letter: &str) -> std::process::Output {
     let id = id_of(&dir.join(rel(name)), heading);
     let out = adr_answer(dir, &id, letter);
@@ -84,7 +68,6 @@ fn put(dir: &Path, name: &str, heading: &str, sup: Option<&str>) -> PathBuf {
         &format!("# {}\n{}", name.to_uppercase(), sec(heading, sup)),
     );
     approve_ok(dir, name);
-    ask_ok(dir, name);
     p
 }
 
@@ -165,16 +148,11 @@ fn an_answer_strikes_the_target_and_an_older_superseded_section_from_other_files
         );
     }
     no_superseded_failure(&dir);
-    // ask works on a struck file
-    let out = adr(
-        &dir,
-        &["ask", dir.join(rel("a")).to_str().unwrap()],
-        &[],
-        "",
-    );
+    // approve works on a struck file
+    let out = adr_owner(&dir, &["approve", dir.join(rel("a")).to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask on struck file: {}{}",
+        "approve on struck file: {}{}",
         stdout(&out),
         stderr(&out)
     );
@@ -255,8 +233,6 @@ fn two_questions_naming_one_old_decision_both_answer_and_print_the_heading() {
     write_record(&dir, &rel("c"), &format!("# C\n{}", sec(Q5, Some(Q1))));
     approve_ok(&dir, "b");
     approve_ok(&dir, "c");
-    ask_ok(&dir, "b");
-    ask_ok(&dir, "c");
     answer_ok(&dir, "b", Q4, "A");
     assert!(!read(&dir, "a").contains(Q1));
     let out = answer_ok(&dir, "c", Q5, "A");
@@ -345,7 +321,7 @@ fn replacement_heading(i: usize) -> String {
 }
 
 /// The file `name` holding `count` questions in chains of four, each after
-/// the first depending on the one before, approved and asked.
+/// the first depending on the one before, approved (which asks it).
 fn put_many(dir: &Path, name: &str, count: usize) {
     let mut text = format!("# {}\n", name.to_uppercase());
     for i in 0..count {
@@ -363,11 +339,10 @@ fn put_many(dir: &Path, name: &str, count: usize) {
     }
     write_record(dir, &rel(name), &text);
     approve_ok(dir, name);
-    ask_ok(dir, name);
 }
 
 /// The file `name` holding one question that supersedes the four questions
-/// of chain `k` of the file "m", approved and asked.
+/// of chain `k` of the file "m", approved (which asks it).
 fn put_replacement(dir: &Path, name: &str, k: usize) {
     let sup: Vec<String> = (4 * k..4 * k + 4).map(many_heading).collect();
     write_record(
@@ -380,7 +355,6 @@ fn put_replacement(dir: &Path, name: &str, k: usize) {
         ),
     );
     approve_ok(dir, name);
-    ask_ok(dir, name);
 }
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
@@ -471,7 +445,6 @@ fn a_question_standing_on_a_struck_sibling_behaves_as_before_the_strike() {
         ),
     );
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     answer_ok(&dir, "a", Q1, "A");
     put(&dir, "b", Q4, Some(Q1));
     answer_ok(&dir, "b", Q4, "A");
@@ -509,7 +482,6 @@ fn a_question_standing_on_a_struck_sibling_behaves_as_before_the_strike() {
         &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, wide, tall, BODY),
     );
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     let early = adr_answer(&dir, &id_of(&a, wide), "A");
     assert!(!early.status.success());
     assert!(
@@ -553,12 +525,13 @@ fn struck_q1(before: Option<&str>) -> (PathBuf, String, PathBuf) {
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
 #[test]
-fn approved_unasked_question_on_a_struck_one_is_asked_and_answered() {
+fn approved_question_on_a_struck_one_is_asked_and_answered() {
     let (dir, _q1, a) = struck_q1(Some(Q3));
-    // ask reads the file by its absolute path, as a shell may give it
-    let o = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
+    // approve reads the file by its absolute path, as a shell may give it,
+    // and the question Q3 added before the strike was asked by the approve
+    // that took it in
+    let o = adr_owner(&dir, &["approve", a.to_str().unwrap()], "");
     assert!(o.status.success(), "{}{}", stdout(&o), stderr(&o));
-    assert!(stdout(&o).contains("asked:"), "{}", stdout(&o));
     let o = adr_answer(&dir, &id_of(&a, Q3), "A");
     assert!(o.status.success(), "{}", stderr(&o));
 }
@@ -594,7 +567,6 @@ fn new_question_on_a_struck_one_without_a_set_is_approved_asked_answered() {
         &format!("{}\n### {}\ndepends: widget, {}\n{}", c, Q3, q1, BODY),
     );
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     answer_ok(&dir, "a", Q3, "A");
     let _ = a;
 }
@@ -609,7 +581,6 @@ fn a_struck_question_counts_toward_the_two_question_cap() {
         &format!("# A\n{}{}{}", sec(Q1, None), sec(Q2, None), sec(Q3, None)),
     );
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     let q1 = id_of(&a, Q1);
     let q2 = id_of(&a, Q2);
     let q3 = id_of(&a, Q3);

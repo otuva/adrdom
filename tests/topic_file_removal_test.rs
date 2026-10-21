@@ -31,10 +31,17 @@ fn setup(content: &str, ask: bool) -> (PathBuf, PathBuf) {
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, REL, content);
     approve_record(&dir, REL);
-    if ask {
-        assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-            .status
-            .success());
+    if !ask {
+        // Approve asks every question of the file; the state "approved and
+        // never asked" is the ledger without its `asked` rows.
+        let ledger_path = dir.join("adrdom/state/ledger.tsv");
+        let kept: String = std::fs::read_to_string(&ledger_path)
+            .unwrap()
+            .lines()
+            .filter(|l| !l.contains("\tasked\t"))
+            .map(|l| format!("{}\n", l))
+            .collect();
+        std::fs::write(&ledger_path, kept).unwrap();
     }
     (dir, record)
 }
@@ -139,9 +146,6 @@ fn a_removed_file_holding_only_superseded_sections_is_approved_away() {
     );
     let rb = write_record(&dir, "adrdom/decisions/b.md", &b);
     approve_record(&dir, "adrdom/decisions/b.md");
-    assert!(adr(&dir, &["ask", rb.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let new_id = extract_ids(&std::fs::read_to_string(&rb).unwrap())[0].clone();
     assert!(adr_answer(&dir, &new_id, "A").status.success());
     write_test_comment(&dir, &new_id);
@@ -332,9 +336,6 @@ fn a_question_added_asked_and_uncommitted_holds_the_removal() {
     let both = format!("{}{}", std::fs::read_to_string(&record).unwrap(), SECOND);
     write_record(&dir, REL, &both);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     let second = ids.iter().find(|i| **i != first).unwrap().clone();
     std::fs::remove_file(&record).unwrap();
@@ -372,9 +373,6 @@ fn approving_an_unrelated_file_leaves_the_ids_of_a_removed_file_alone() {
         .replace("1.2 Second", "4.2 Live second");
     let live = write_record(&dir, "adrdom/decisions/live.md", &live_text);
     approve_record(&dir, "adrdom/decisions/live.md");
-    assert!(adr(&dir, &["ask", live.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let live_now = std::fs::read_to_string(&live).unwrap();
     let struck = extract_ids(&live_now)[1].clone();
     std::fs::write(&live, &live_now[..live_now.find("### 4.2").unwrap()]).unwrap();
@@ -470,9 +468,6 @@ fn a_heading_approved_never_asked_and_struck_does_not_hold_the_removal() {
 
     // After Q1 is refused, the removal passes.
     std::fs::write(&record, &cut).unwrap();
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     assert!(adr_answer(&dir, &ids[0], "refuse").status.success());
     commit(&dir);
     std::fs::remove_file(&record).unwrap();

@@ -2,7 +2,7 @@
 // resolution (term/decision/dangling/cycle), and the stand cap; the tiers
 // are no line of check's (bd83aa22). Fixtures are hand-written and approved via
 // hand-written ledger rows (`approve_via_ledger`, `approve_minimal_terms`),
-// never through a real `adr ask`/`adr approve`.
+// never through a real `adr approve`.
 
 mod common;
 
@@ -462,8 +462,8 @@ fn check_fails_a_self_dep() {
 
 #[test]
 fn check_fails_a_depends_set_naming_an_option_the_target_does_not_have() {
-    // 8.7 A: `ask` also refuses this
-    // (ask_tiers_test.rs's `ask_refuses_a_set_naming_an_option_the_target_does_not_have`),
+    // 8.7 A: `approve` also refuses this
+    // (approve_depends_test.rs),
     // but `check`'s `plan` check must catch it unconditionally, the moment
     // the target already has options, without waiting for that tier.
     let dir = init_repo();

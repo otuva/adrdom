@@ -64,9 +64,6 @@ fn pool_repo() -> std::path::PathBuf {
     approve_terms_with(&dir, &refs);
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     for id in &ids[..2] {
         let out = adr_answer(&dir, id, "A");
@@ -228,8 +225,13 @@ fn every_command_but_planning_runs_without_the_model() {
     std::fs::remove_dir_all(dir.join("adrdom/cache")).unwrap();
     // `adr_owner` has no env of its own beyond the bypass, so every call below
     // is run with the model absent by hand.
-    let ask = adr(&dir, &["ask", record.to_str().unwrap()], &no_model, "");
-    assert!(ask.status.success(), "{}", stderr(&ask));
+    let approve = adr(
+        &dir,
+        &["approve", record.to_str().unwrap()],
+        &[("ADR_OWNER_BYPASS", "1"), ("ADR_NO_MODEL", "1")],
+        "",
+    );
+    assert!(approve.status.success(), "{}", stderr(&approve));
     let show = adr(&dir, &["show"], &no_model, "");
     assert!(show.status.success(), "{}", stderr(&show));
     let check = adr(&dir, &["check"], &no_model, "");

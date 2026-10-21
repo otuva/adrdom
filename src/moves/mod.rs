@@ -59,8 +59,6 @@ pub enum MoveKind {
     /// The owner approves one entry of the terms file that waits, by its
     /// name (da0dc8b1).
     ApproveEntry { name: String },
-    /// The agent asks these questions of `rel`.
-    Ask { rel: String, headings: Vec<String> },
     /// The owner answers this asked question.
     Answer {
         id: String,
@@ -160,7 +158,6 @@ impl Move {
             | MoveKind::Plan { .. }
             | MoveKind::WriteLines { .. }
             | MoveKind::WriteBodies { .. }
-            | MoveKind::Ask { .. }
             | MoveKind::Refused { .. }
             | MoveKind::Build { .. }
             | MoveKind::Retie { .. }
@@ -192,7 +189,6 @@ impl Move {
             MoveKind::ApproveEntry { name } => {
                 Next::owner_runs(crate::msg::approve_entry_cmd(name))
             }
-            MoveKind::Ask { rel, .. } => Next::agent_runs(command(&["adr", "ask", rel])),
             MoveKind::Answer { id, version, .. } => Next::owner_runs(
                 command(&["adr", "answer", &format!("{}@{}", id, version)]).then("<letter>"),
             ),
@@ -256,9 +252,6 @@ impl Move {
         match &self.kind {
             MoveKind::Answer { heading, .. } => {
                 format!("{}  # \"{}\"", self.clause_text(), heading)
-            }
-            MoveKind::Ask { headings, .. } => {
-                format!("{}  # {}", self.clause_text(), quoted(headings))
             }
             _ => self.clause_text(),
         }
@@ -422,11 +415,6 @@ mod tests {
             m.text(),
             "owner runs: adr answer id-1@abcd <letter>  # \"Does it?\""
         );
-        let m = Move::new(MoveKind::Ask {
-            rel: "x.md".into(),
-            headings: vec!["A?".into(), "B?".into()],
-        });
-        assert_eq!(m.text(), "agent runs: adr ask x.md  # \"A?\", \"B?\"");
         let m = Move::new(MoveKind::BuildWaits {
             heading: "A?".into(),
             beside: "B?".into(),
@@ -451,10 +439,7 @@ mod tests {
             stops: Vec::new(),
             findings: Vec::new(),
             moves: vec![
-                Move::new(MoveKind::Ask {
-                    rel: "x.md".into(),
-                    headings: vec!["A?".into(), "B?".into()],
-                }),
+                Move::new(MoveKind::Plan { rel: "x.md".into() }),
                 Move::new(MoveKind::Approve {
                     path: "x.md".into(),
                 }),
@@ -463,7 +448,7 @@ mod tests {
         let tail = report.moves_tail(Next::agent(Act::Restores("x.md".to_string())));
         assert_eq!(
             tail.render(),
-            "agent runs: adr ask x.md, owner runs: adr approve x.md"
+            "agent runs: adr plan x.md, owner runs: adr approve x.md"
         );
         assert!(!tail.render().contains('#'), "{}", tail);
     }

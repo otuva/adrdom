@@ -1,6 +1,6 @@
 // What `adr check` prints: every line a finding with its move, nothing on a
 // pass, by hand or in a hook (bd83aa22 "Does check print a line with no move on
-// it?"); and every rule `approve` or `ask` refuses on is one judgement
+// it?"); and every rule `approve` refuses on is one judgement
 // check reads, so what they refuse, check reports with the same move
 // (fe14991d "Does a command refuse what check passes?").
 mod common;
@@ -84,9 +84,6 @@ fn every_line_check_prints_names_a_move() {
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&rec).unwrap()).remove(0);
     assert!(adr_answer(&dir, &id, "A").status.success());
     write_record(
@@ -140,9 +137,6 @@ fn an_untested_decision_carries_the_move_that_builds_it() {
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&rec).unwrap()).remove(0);
     assert!(adr_answer(&dir, &id, "A").status.success());
     let (ok, out, _) = check(&dir);
@@ -262,9 +256,6 @@ fn what_approve_refuses_of_a_removed_file_check_reports_with_the_same_move() {
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     std::fs::remove_file(&rec).unwrap();
     let out = approve(&dir, &rec);
     assert_check_reports(
@@ -336,18 +327,16 @@ fn what_approve_refuses_of_an_edited_asked_question_check_reports_with_the_same_
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let text = std::fs::read_to_string(&rec)
         .unwrap()
         .replace("the widget breaks.", "the widget currently breaks.");
     std::fs::write(&rec, text).unwrap();
-    // The edit puts the plan back to the owner: ask waits for the approval,
-    // and approve refuses the loaded word, which check reports.
-    let asked = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
-    assert!(!asked.status.success(), "ask waits for the approval");
+    // The edit puts the plan back to the owner: approve refuses the loaded
+    // word and asks nothing, and check reports the refusal.
+    let asked_before = asked_row_count(&dir);
     let out = approve(&dir, &rec);
+    assert!(!out.status.success());
+    assert_eq!(asked_row_count(&dir), asked_before);
     assert!(stderr(&out).contains("\"currently\""), "{}", stderr(&out));
     assert_check_reports(
         &dir,
@@ -434,9 +423,6 @@ fn a_commit_prints_each_finding_once_and_the_message_hook_reads_the_message_alon
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&rec).unwrap()).remove(0);
     assert!(adr_answer(&dir, &id, "A").status.success());
     run_git(&dir, &["add", "-A"]);

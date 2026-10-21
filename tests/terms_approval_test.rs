@@ -27,7 +27,7 @@ Standard: clear yes or no.
 "#;
 
 /// A second, first-tier question (also depending directly on "pass"), so a
-/// single `adr ask` picks up both ids at once -- lets a test answer one and
+/// single `adr approve` asks both ids at once -- lets a test answer one and
 /// refuse the other.
 const SECOND_QUESTION: &str = r#"
 ### 1.2 Is this also pass?
@@ -97,21 +97,23 @@ fn check_fails_naming_the_owners_move_while_terms_is_unapproved() {
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// `ask` refuses outright while adrdom/terms.md is unapproved, even for a
-// candidate that pairs a term nobody touched.
+// `approve` refuses outright while adrdom/terms.md is unapproved, even for a
+// candidate that pairs a term nobody touched, and asks nothing.
 #[test]
-fn ask_refuses_while_terms_is_unapproved() {
+fn approve_refuses_while_terms_is_unapproved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/terms.md", TERMS_PASS_V1);
     approve_record(&dir, "adrdom/terms.md");
     let record = write_record(&dir, "adrdom/decisions/example.md", PASS_RECORD);
-    approve_record(&dir, "adrdom/decisions/example.md");
+    plan_record(&dir, "adrdom/decisions/example.md");
 
     let terms_path = dir.join("adrdom/terms.md");
     std::fs::write(&terms_path, TERMS_PASS_V1_PLUS_DRAFT_TERM).unwrap();
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let ledger_before = std::fs::read_to_string(&ledger_path).unwrap();
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(
@@ -120,6 +122,11 @@ fn ask_refuses_while_terms_is_unapproved() {
         "{}",
         stderr(&out)
     );
+    assert_eq!(
+        std::fs::read_to_string(&ledger_path).unwrap(),
+        ledger_before
+    );
+    assert_eq!(asked_row_count(&dir), 0);
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -139,9 +146,6 @@ fn answer_and_refuse_stop_while_terms_is_unapproved() {
     content.push_str(SECOND_QUESTION);
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let asked = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&asked);
     let (id1, id2) = (ids[0].clone(), ids[1].clone());
@@ -186,9 +190,6 @@ fn approving_the_terms_file_clears_check_answer_refuse_and_ask() {
     content.push_str(SECOND_QUESTION);
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let asked = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&asked);
     let (id1, id2) = (ids[0].clone(), ids[1].clone());
@@ -219,7 +220,4 @@ fn approving_the_terms_file_clears_check_answer_refuse_and_ask() {
     );
     std::fs::write(&record, &with_third).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 }
