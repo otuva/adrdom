@@ -376,3 +376,17 @@ Standard: a linter run on a change reports what the change touches, not every ol
   Costs: a file holding such a question stops every plan until a supersede, and each decision standing on it falls too.
 
 **Answer:** A
+
+### Does approve ask the questions of the file?
+depends: approve, ask, What does ask put to the owner at one run?
+unrelated: Does ask run on a file with unapproved prose?, Does approve hash each question on its own?, Does the tool stop while the terms file waits for approval?, Does approve write the terms brief?, Does check fail a topic file awaiting approval?, Does show print what a file holds past its latest approval?, Does approve withdraw an asked question struck from the plan?, Does the owner approve a blame file?, Does approve stop a terms edit that moves a word an answered question pairs?, What does approve take for a terms file holding several entries that wait?, Does the ui perform every owner act?, Does ask stop a question outside the plan?, Does a refused question stay in its topic file?, Does check at a commit read the staged files?, Does ask refuse a question with no term?
+
+Problem: approve and ask are two runs with nothing of the owner's between them: the owner reads the whole file at approve, then waits on an ask run and a commit before the same questions reach them.
+Standard: a review tool puts a change up for decision at the step it accepts the change.
+
+- A) Yes.
+  Why: one owner step, one commit and one reading put the file's questions to the owner; no ask command remains.
+  Costs: approve also refuses a missing body, a question with no term or a long option, and asks conflicts again.
+- B) No.
+  Why: approve accepts a plan and ask puts it to the owner; a file may be approved before the bodies exist.
+  Costs: every approval is followed by an ask run and a commit that carry nothing of the owner's.
