@@ -43,9 +43,6 @@ fn repo() -> PathBuf {
         &format!("# Base\n{}", section(BASE_Q, &body("base widget"))),
     );
     approve_record(&dir, BASE);
-    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&base).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     let text = format!(
@@ -239,8 +236,6 @@ fn reader_prints_every_word_with_its_reason_and_an_answered_question_none_plain(
     assert!(plain.len() < all.len());
 
     // Answered: nothing in the plain listing, everything under --reader.
-    let asked = adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "");
-    assert!(asked.status.success(), "{}", stderr(&asked));
     let id = extract_ids(&std::fs::read_to_string(dir.join(REL)).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     let plain = show(&dir, &[]);

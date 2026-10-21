@@ -34,7 +34,7 @@ aliases: \n";
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// A terms file that cannot be read stops approve, ask and answer; show of a
+// A terms file that cannot be read stops approve and answer; show of a
 // topic file prints that stop as the stop line it is and offers none of the
 // moves those commands would refuse.
 #[test]
@@ -59,7 +59,6 @@ fn show_of_a_topic_file_prints_an_unreadable_terms_file_and_offers_no_approve() 
         "{}",
         text
     );
-    assert!(!text.contains("adr ask"), "{}", text);
 }
 
 // adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
@@ -302,14 +301,14 @@ fn identical_finding_lines_print_once_on_standard_error_and_on_the_page() {
             .replace("depends: pass\n", "")
     );
     let dir = draft_repo(&twice);
-    let ask = adr(&dir, &["ask", REL], &[], "");
-    let err: Vec<String> = stderr(&ask).lines().map(str::to_string).collect();
+    let approve = adr_owner(&dir, &["approve", REL], "");
+    let err: Vec<String> = stderr(&approve).lines().map(str::to_string).collect();
     assert!(
         err.iter().any(|l| l.contains("has no depends line")),
         "{:?}",
         err
     );
-    assert_no_repeats(&err, "ask");
+    assert_no_repeats(&err, "approve");
     let page = Page::start(&dir).lines();
     assert!(
         page.iter().any(|l| l.contains("has no depends line")),
@@ -334,44 +333,38 @@ fn generic_moves_name_an_act_on_a_thing() {
         findings: vec![Finding::new(
             &adr::rule::TERMS_FILE_EXISTS,
             "x".to_string(),
-            adr::msg::Next::agent(adr::msg::Act::Writes("y".into())),
+            adr::msg::Next::agent(adr::msg::Act::Writes(adr::msg::Part::Line)),
         )],
         moves: Vec::new(),
     };
     let said = [
         msg::not_asked_yet("H?", "adrdom/decisions/a b.md", &held),
         msg::not_written("H?", &held),
-        msg::plan_not_approved("x.md", adr::status::FileStatus::New, &held).text(),
-        msg::context_not_approved("x.md", adr::status::FileStatus::New, &held).text(),
         msg::terms_missing().text(),
         msg::update_failed(
             "adrdom/ledger.tsv",
             "boom",
-            msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr ask x.md")),
+            msg::after_fix_agent_runs(adr::moves::Cmd::adr("plan x.md")),
         ),
         msg::read_failed(
             "x.md",
             "boom",
-            msg::after_fix_owner_runs(adr::moves::Cmd::fixed("adr approve x.md")),
+            msg::after_fix_owner_runs(adr::moves::Cmd::adr("approve x.md")),
         ),
-        msg::stdin_read_failed(msg::after_fix_owner_runs(adr::moves::Cmd::fixed(
-            "adr unban",
-        ))),
+        msg::stdin_read_failed(msg::after_fix_owner_runs(adr::moves::Cmd::adr("unban"))),
         msg::hooks_path_failed(
             "set",
-            msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr install")),
+            msg::after_fix_agent_runs(adr::moves::Cmd::adr("install")),
         ),
     ];
     let wants = [
-        "agent runs: adr ask 'adrdom/decisions/a b.md'",
+        "owner runs: adr approve 'adrdom/decisions/a b.md'",
         "agent writes the body of \"H?\"",
-        "owner runs: adr approve x.md",
-        "owner runs: adr approve x.md",
         "agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md",
-        "agent rewrites adrdom/ledger.tsv, then runs: adr ask x.md",
+        "agent rewrites adrdom/ledger.tsv, then runs: adr plan x.md",
         "agent rewrites x.md, owner runs: adr approve x.md",
-        "agent rewrites what is piped to adr, owner runs: adr unban",
-        "agent rewrites the git configuration of core.hooksPath, then runs: adr install",
+        "agent rewrites the input, owner runs: adr unban",
+        "agent rewrites core.hooksPath, then runs: adr install",
     ];
     for (got, want) in said.iter().zip(wants) {
         assert!(got.ends_with(want), "{} should end with {}", got, want);
@@ -403,7 +396,7 @@ fn generic_moves_name_an_act_on_a_thing() {
             .0
             .next
             .render()
-            .contains("agent writes the body of \"A?\", agent rewrites \"B?\""),
+            .contains("agent writes the body of \"A?\", agent rewrites the question"),
         "{}",
         waits.0.next
     );
@@ -416,7 +409,7 @@ fn generic_moves_name_an_act_on_a_thing() {
 
 // adr: 50b31713-4fea-4aa3-842a-79c2750660ba
 //
-// The same findings print in the same order under check, show, plan, ask,
+// The same findings print in the same order under check, show, plan,
 // approve and on the page.
 #[test]
 fn the_same_findings_print_in_the_same_order_in_every_command_and_on_the_page() {
@@ -436,7 +429,7 @@ fn the_same_findings_print_in_the_same_order_in_every_command_and_on_the_page() 
         "{:?}",
         reference
     );
-    for args in [vec!["show", REL], vec!["plan", REL], vec!["ask", REL]] {
+    for args in [vec!["show", REL], vec!["plan", REL]] {
         let got = shared(&all_lines(&adr(&dir, &args, &[], "")));
         assert_eq!(got, reference, "{:?}", args);
     }

@@ -376,3 +376,21 @@ Standard: a linter run on a change reports what the change touches, not every ol
   Costs: a file holding such a question stops every plan until a supersede, and each decision standing on it falls too.
 
 **Answer:** A
+
+### Does approve ask the questions of the file?
+depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 1d7c758d-1fd5-4e0c-8559-517315b15aaa
+unrelated: 1cdec741-98e1-4715-a7a5-94f7a73cd425, 61e73795-63de-4669-b09f-48be96919325, aa475aa3-05b2-429a-b33a-46b1dcb52049, fcab4bf9-c02d-4094-b3cb-688c4ec312dc, 912f4f3b-1213-435a-af0d-7617017fcff4, 91f9652a-f053-4b32-9534-c9c39e7639a4, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, e879fe72-ec07-48cd-9902-2b158aaae726, 7cf81ded-be48-4777-b83e-f8a2998c1ab5, da0dc8b1-58cd-4a16-8e64-234e4bfd5320, 644b43ce-be10-4e9a-a7d5-71b27c51e365, da59b448-1afb-4469-b40e-69eda8f253c2, 6b3d8e59-e145-49e1-860d-a79d753d745c, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 711a7636-9f4d-402d-ae62-265208adf0ac
+id: 3762e14b-6dfe-45ee-b407-d2718e817348
+terms: approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, option=43778946-d44c-4acf-a766-0a4915fce199, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, term=f590059d-b681-40ec-8a1c-c8916d71f6bb
+
+Problem: approve and ask are two runs with nothing of the owner's between them: the owner reads the whole file at approve, then waits on an ask run and a commit before the same questions reach them.
+Standard: a review tool puts a change up for decision at the step it accepts the change.
+
+- A) Yes.
+  Why: one owner step, one commit and one reading put the file's questions to the owner; no ask command remains.
+  Costs: approve also refuses a missing body, a question with no term or a long option, and asks conflicts again.
+- B) No.
+  Why: approve accepts a plan and ask puts it to the owner; a file may be approved before the bodies exist.
+  Costs: every approval is followed by an ask run and a commit that carry nothing of the owner's.
+
+**Answer:** A

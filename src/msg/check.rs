@@ -10,20 +10,20 @@ pub fn check_parse_error(rel: &str, heading: &str, e: &str) -> Said {
         said(
             &rule::ID_ASSIGNED_BY_TOOL,
             found,
-            Next::agent(Act::Removes("the id line".into()))
-                .and_owner_runs(command(&["adr", "approve", rel])),
+            Next::agent(Act::Removes(Part::LineOf(LineKind::Id)))
+                .and_owner_runs(command(&["approve", rel])),
         )
     } else if e.starts_with("answer names missing option") {
         said(
             &rule::ANSWER_NAMES_AN_OPTION,
             found,
-            Next::agent(Act::Restores("the answer line".into())),
+            Next::agent(Act::Restores(Part::LineOf(LineKind::Answer))),
         )
     } else {
         said(
             &rule::OPTION_IS_ONE_SENTENCE,
             found,
-            Next::agent(Act::Rewrites("the option".into())),
+            Next::agent(Act::Rewrites(Part::Option)),
         )
     }
 }
@@ -32,9 +32,8 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::ID_NAMES_ONE_QUESTION,
         format!("duplicate id {} in {} and {}:{}", id, prev, rel, heading),
-        Next::agent(Act::Rewrites("the copied section".into()))
-            .then(Act::Removes("the id line copied with it".into()))
-            .and_owner_runs(command(&["adr", "approve", rel])),
+        Next::agent(Act::Removes(Part::OneOf(Many::IdLines)))
+            .and_owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -48,7 +47,7 @@ pub fn removed_from_plan(id: &str, heading: &str, event: &str, rel: &str) -> Sai
             "{} (\"{}\", {}) was removed from the plan",
             id, heading, event
         ),
-        Next::owner_runs(command(&["adr", "approve", rel])),
+        Next::owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -74,7 +73,7 @@ pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> Said {
             "ledger id {} not found in any topic file",
             named(id, heading)
         ),
-        Next::agent(Act::Restores("the question's section".into())),
+        Next::agent(Act::Restores(Part::Section)),
     )
 }
 
@@ -86,7 +85,7 @@ pub fn withdrawn_id_present(id: &str, heading: &str, rel: &str) -> Said {
             named(id, Some(heading)),
             rel
         ),
-        Next::agent(Act::Removes(format!("the section from {}", rel))),
+        Next::agent(Act::Removes(Part::Section)),
     )
 }
 
@@ -94,7 +93,7 @@ pub fn refusal_without_row(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::REFUSAL_LINE_HAS_ROW,
         format!("{}: {}: refusal line without ledger row", rel, heading),
-        Next::agent(Act::Removes("the answer line".into())),
+        Next::agent(Act::Removes(Part::LineOf(LineKind::Answer))),
     )
 }
 
@@ -107,7 +106,7 @@ pub fn answer_without_row(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::ANSWER_LINE_HAS_ROW,
         format!("{}: {}: answer line without ledger row", rel, heading),
-        Next::agent(Act::Removes("the answer line".into())),
+        Next::agent(Act::Removes(Part::LineOf(LineKind::Answer))),
     )
 }
 
@@ -125,7 +124,7 @@ pub fn answered_text_changed(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::ANSWERED_TEXT_FROZEN,
         format!("{}: {}: text changed since being answered", rel, heading),
-        Next::agent(Act::Restores(rel.to_string())),
+        Next::agent(Act::Restores(Part::File(rel.to_string()))),
     )
 }
 
@@ -137,7 +136,7 @@ pub fn refused_text_changed(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::REFUSED_TEXT_FROZEN,
         format!("{}: {}: text changed since being refused", rel, heading),
-        Next::agent(Act::Restores(rel.to_string())),
+        Next::agent(Act::Restores(Part::File(rel.to_string()))),
     )
 }
 
@@ -145,7 +144,7 @@ pub fn answered_row_without_line(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::ANSWER_LINE_KEPT,
         format!("{}: {}: answered row without answer line", rel, heading),
-        Next::agent(Act::Restores(rel.to_string())),
+        Next::agent(Act::Restores(Part::File(rel.to_string()))),
     )
 }
 
@@ -153,7 +152,7 @@ pub fn refused_row_without_line(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::REFUSAL_LINE_KEPT,
         format!("{}: {}: refused row without answer line", rel, heading),
-        Next::agent(Act::Restores(rel.to_string())),
+        Next::agent(Act::Restores(Part::File(rel.to_string()))),
     )
 }
 
@@ -164,8 +163,8 @@ pub fn refused_row_without_line(rel: &str, heading: &str) -> Said {
 pub fn edited_after_asking(rel: &str, heading: &str, report: &crate::moves::Report) -> Said {
     said(
         &crate::rule::ASKED_TEXT_FROZEN,
-        format!("{}: {}: edited after asking", rel, heading),
-        report.moves_tail(Next::agent(Act::Restores(rel.to_string()))),
+        format!("{}: {}: changed since asked", rel, heading),
+        report.moves_tail(Next::agent(Act::Restores(Part::File(rel.to_string())))),
     )
 }
 
@@ -176,7 +175,7 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> Said {
             "{}: {} answer set on {} changed after ask",
             rel, dep_heading, heading
         ),
-        Next::agent(Act::Restores("the answer set".into())),
+        Next::agent(Act::Restores(Part::AnswerSet)),
     )
 }
 
@@ -186,18 +185,16 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> Said {
 /// answered (or one answered and one refused) the same question, and a
 /// merge kept both rows. The topic file's own `**Answer:**` line only shows
 /// one side, so this is caught from the ledger directly, never from the
-/// file text. The move is always the same: the agent re-asks the question,
-/// and the owner answers it again.
-pub fn answer_conflict(rel: &str, heading: &str, id: &str, a: &str, b: &str) -> Said {
+/// file text. The move is always the same: the owner approves the file, which
+/// asks the question again; `adr show` then prints the answer to give.
+pub fn answer_conflict(rel: &str, heading: &str, a: &str, b: &str) -> Said {
     said(
         &crate::rule::ONE_STANDING_ANSWER,
         format!(
             "{}: {}: two standing answers, {} and {}",
             rel, heading, a, b
         ),
-        Next::agent_runs(command(&["adr", "ask", rel])).and_owner_runs(
-            command(&["adr", "answer", &format!("{}@", id)]).then("<version> <letter>"),
-        ),
+        Next::owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -216,7 +213,7 @@ pub fn banned_word_at(location: &str, suffix: &str) -> Said {
     said(
         &crate::rule::BANNED_WORD_ABSENT_FROM_FILES,
         format!("{}: banned word{}", location, suffix),
-        Next::agent(Act::Rewrites("the line".into())),
+        Next::agent(Act::Rewrites(Part::Line)),
     )
 }
 
@@ -224,7 +221,7 @@ pub fn banned_missing_from_file(hash_prefix: &str) -> Said {
     said(
         &crate::rule::BAN_LIST_MATCHES_LEDGER,
         format!("{} in ledger, missing from the ban list", hash_prefix),
-        Next::agent_runs(Cmd::fixed("adr ban --rebuild")),
+        Next::agent_runs(Cmd::adr("ban --rebuild")),
     )
 }
 
@@ -232,7 +229,7 @@ pub fn banned_missing_from_ledger(hash_prefix: &str) -> Said {
     said(
         &crate::rule::BAN_LIST_MATCHES_LEDGER,
         format!("{} in the ban list, no ledger row", hash_prefix),
-        Next::agent_runs(Cmd::fixed("adr ban --rebuild")),
+        Next::agent_runs(Cmd::adr("ban --rebuild")),
     )
 }
 
@@ -246,21 +243,21 @@ pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> Said {
     said(
         &crate::rule::BAN_LIST_MATCHES_LEDGER,
         format!("{} in the ban list, ledger says unbanned", hash_prefix),
-        Next::agent_runs(Cmd::fixed("adr ban --rebuild")),
+        Next::agent_runs(Cmd::adr("ban --rebuild")),
     )
 }
 
-/// An asked/answered section that carries no `terms:` line at all. `ask`
+/// An asked/answered section that carries no `terms:` line at all. `approve`
 /// always writes one, so an answered section can only lose it through an
 /// edit made after the answer -- and an answered question can never be
 /// re-asked (per "Does a decision change after it is answered?"), so
 /// `answered` picks the legal move: re-asking while the question is still
-/// only asked (`ask` will write the line the next time it runs), or
+/// only asked (`approve` will write the line the next time it runs), or
 /// restoring the edit from git / superseding once it's answered (per "Does
 /// check fail an answered question whose text changed?").
 pub fn section_no_terms_line(rel: &str, heading: &str, answered: bool) -> Said {
     let next = if answered {
-        Next::agent(Act::Restores("the terms line".into()))
+        Next::agent(Act::Restores(Part::LineOf(LineKind::Terms)))
     } else {
         ask_again(rel)
     };
@@ -277,7 +274,7 @@ pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::RETIRE_READS_ASKED_TERMS_LINES,
         format!("{}: {}: terms line cannot be read", rel, heading),
-        Next::agent(Act::Restores(rel.to_string())),
+        Next::agent(Act::Restores(Part::File(rel.to_string()))),
     )
 }
 
@@ -286,7 +283,7 @@ pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> Said {
 /// `section_no_terms_line`.
 pub fn section_terms_line_malformed(rel: &str, heading: &str, answered: bool) -> Said {
     let next = if answered {
-        Next::agent(Act::Restores("the terms line".into()))
+        Next::agent(Act::Restores(Part::LineOf(LineKind::Terms)))
     } else {
         ask_again(rel)
     };
@@ -304,7 +301,7 @@ pub fn section_terms_line_malformed(rel: &str, heading: &str, answered: bool) ->
 /// or superseding the decision.
 pub fn section_term_not_found(rel: &str, heading: &str, word: &str, answered: bool) -> Said {
     let next = if answered {
-        Next::agent(Act::Restores("the term in adrdom/terms.md".into()))
+        Next::agent(Act::Restores(Part::Term))
     } else {
         ask_again(rel)
     };
@@ -320,7 +317,7 @@ pub fn section_term_not_found(rel: &str, heading: &str, word: &str, answered: bo
 /// mirrors `term_retired_but_carried`'s decision-dependent branch.
 pub fn section_term_retired(rel: &str, heading: &str, name: &str, answered: bool) -> Said {
     let next = if answered {
-        Next::agent(Act::Rewrites("the term in adrdom/terms.md".into()))
+        Next::agent(Act::Rewrites(Part::Term))
     } else {
         ask_again(rel)
     };
@@ -337,7 +334,7 @@ pub fn term_definition_term_not_found(name: &str, word: &str) -> Said {
     said(
         &crate::rule::DEFINITION_TERM_EXISTS,
         format!("adrdom/terms.md: {}: term {} not found", name, word),
-        Next::agent(Act::Rewrites("the definition".into())),
+        Next::agent(Act::Rewrites(Part::Definition)),
     )
 }
 
@@ -348,7 +345,7 @@ pub fn term_definition_term_retired(name: &str, retired_name: &str) -> Said {
             "adrdom/terms.md: {}: uses the retired term {}",
             name, retired_name
         ),
-        Next::agent(Act::Rewrites("the definition".into())),
+        Next::agent(Act::Rewrites(Part::Definition)),
     )
 }
 
@@ -360,7 +357,7 @@ pub fn term_definition_terms_line_malformed(name: &str) -> Said {
     said(
         &crate::rule::DEFINITION_TERMS_LINE_PARSES,
         format!("adrdom/terms.md: {}: malformed terms line", name),
-        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::owner_runs(Cmd::adr("approve adrdom/terms.md")),
     )
 }
 
@@ -370,7 +367,7 @@ pub fn install_file_not_staged(path: &str) -> Said {
     said(
         &crate::rule::STAGED_FILES_ARE_JUDGED_FILES,
         format!("{} not staged", path),
-        Next::agent_runs(command(&["git", "add", path])),
+        Next::agent(Act::RunsAgain),
     )
 }
 
@@ -378,7 +375,7 @@ pub fn agents_md_stale() -> Said {
     said(
         &crate::rule::AGENTS_BRIEF_MATCHES_INSTALL,
         "AGENTS.md brief differs from this binary's",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -386,7 +383,7 @@ pub fn agents_md_missing_brief() -> Said {
     said(
         &crate::rule::AGENTS_BRIEF_MATCHES_INSTALL,
         "AGENTS.md lacks the adrdom brief",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -394,7 +391,7 @@ pub fn brief_file_differs() -> Said {
     said(
         &crate::rule::AGENTS_BRIEF_MATCHES_INSTALL,
         "adrdom/state/brief.md differs from this binary's brief",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -402,7 +399,7 @@ pub fn brief_file_missing() -> Said {
     said(
         &crate::rule::AGENTS_BRIEF_MATCHES_INSTALL,
         "adrdom/state/brief.md is missing",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -410,7 +407,7 @@ pub fn claude_md_missing_import() -> Said {
     said(
         &crate::rule::AGENT_FILE_IMPORTS_AGENTS_MD,
         "CLAUDE.md does not import AGENTS.md",
-        Next::agent_runs(Cmd::fixed("adr install --claude")),
+        Next::agent_runs(Cmd::adr("install --claude")),
     )
 }
 
@@ -418,7 +415,18 @@ pub fn missing_deny_entry(entry: &str) -> Said {
     said(
         &crate::rule::AGENT_SETTINGS_DENY_OWNER_COMMANDS,
         format!("{} lacks deny entry {}", ".claude/settings.json", entry),
-        Next::agent_runs(Cmd::fixed("adr install --claude")),
+        Next::agent_runs(Cmd::adr("install --claude")),
+    )
+}
+
+pub fn extra_deny_entry(entry: &str) -> Said {
+    said(
+        &crate::rule::AGENT_SETTINGS_DENY_OWNER_COMMANDS,
+        format!(
+            "{} holds deny entry {}, which install does not write",
+            ".claude/settings.json", entry
+        ),
+        Next::agent_runs(Cmd::adr("install --claude")),
     )
 }
 
@@ -427,8 +435,8 @@ pub fn settings_unparseable(path: &str) -> Said {
         &crate::rule::AGENT_SETTINGS_FILE_PARSES,
         format!("{} cannot be parsed", path),
         Next::agent_then_runs(
-            Act::Rewrites("the file".into()),
-            Cmd::fixed("adr install --claude"),
+            Act::Rewrites(Part::File(path.to_string())),
+            Cmd::adr("install --claude"),
         ),
     )
 }
@@ -440,7 +448,7 @@ pub fn hook_differs(path: &str) -> Said {
     said(
         &crate::rule::HOOK_MATCHES_INSTALL,
         format!("{} differs from what install writes", path),
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -451,7 +459,7 @@ pub fn hook_not_executable(path: &str) -> Said {
     said(
         &crate::rule::HOOK_IS_EXECUTABLE,
         format!("{} is not executable", path),
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -460,7 +468,7 @@ pub fn hook_missing(path: &str) -> Said {
     said(
         &crate::rule::HOOK_MATCHES_INSTALL,
         format!("{} is missing", path),
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -470,7 +478,7 @@ pub fn hooks_path_unset() -> Said {
     said(
         &crate::rule::HOOKS_PATH_IS_GITHOOKS,
         "core.hooksPath is not set",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -479,7 +487,7 @@ pub fn hooks_path_not_ours(value: &str) -> Said {
     said(
         &crate::rule::HOOKS_PATH_IS_GITHOOKS,
         format!("core.hooksPath is {}, not .githooks", value),
-        hooks_path_foreign_next(Cmd::fixed("adr install")),
+        hooks_path_foreign_next(Cmd::adr("install")),
     )
 }
 
@@ -487,7 +495,7 @@ pub fn codex_rules_stale() -> Said {
     said(
         &crate::rule::CODEX_RULES_MATCH_INSTALL,
         ".codex/rules/adrdom.rules differs from this binary's",
-        Next::agent_runs(Cmd::fixed("adr install --codex")),
+        Next::agent_runs(Cmd::adr("install --codex")),
     )
 }
 
@@ -495,7 +503,7 @@ pub fn codex_rules_missing() -> Said {
     said(
         &crate::rule::CODEX_RULES_MATCH_INSTALL,
         ".codex/rules/adrdom.rules missing",
-        Next::agent_runs(Cmd::fixed("adr install --codex")),
+        Next::agent_runs(Cmd::adr("install --codex")),
     )
 }
 
@@ -505,7 +513,7 @@ pub fn gitattributes_differs() -> Said {
     said(
         &crate::rule::GITATTRIBUTES_MATCH_INSTALL,
         "adrdom/.gitattributes differs from what install writes",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -515,7 +523,7 @@ pub fn gitattributes_missing() -> Said {
     said(
         &crate::rule::GITATTRIBUTES_MATCH_INSTALL,
         "adrdom/.gitattributes is missing",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -523,7 +531,7 @@ pub fn malformed_ledger_row(lineno: usize, raw: &str) -> Said {
     said(
         &crate::rule::LEDGER_ROW_FIELDS,
         format!("line {}: malformed row: {}", lineno, raw),
-        Next::owner(Act::Removes(format!("the row at line {}", lineno))),
+        Next::owner(Act::Removes(Part::RowAt(lineno))),
     )
 }
 
@@ -535,7 +543,7 @@ pub fn ledger_not_append_only() -> Said {
     said(
         &crate::rule::LEDGER_ROWS_KEPT,
         "a row from HEAD's ledger is missing or changed",
-        Next::owner(Act::Restores("the missing or changed row".into())),
+        Next::owner(Act::Restores(Part::Row)),
     )
 }
 
@@ -548,7 +556,7 @@ pub fn ledger_merge_drops_rows() -> Said {
     said(
         &crate::rule::MERGE_KEEPS_LEDGER_ROWS,
         "merge drops a ledger row of a merged branch",
-        Next::owner(Act::Restores("the missing rows of the ledger".into())),
+        Next::owner(Act::Restores(Part::MissingRows)),
     )
 }
 
@@ -562,8 +570,8 @@ pub fn ledger_merge_drops_rows() -> Said {
 /// looked passing anyway.
 pub fn ledger_merge_parents_unreadable() -> String {
     refuse(
-        "this merge commit's parents cannot be read; the clone is too shallow".to_string(),
-        Next::agent_runs(Cmd::fixed("git fetch --deepen=1")),
+        "this merge commit's parents are not in the repository".to_string(),
+        Next::agent(Act::RunsAgain),
     )
 }
 
@@ -574,7 +582,7 @@ pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> Said {
             "answered row for {} matches no asked row",
             named(id, heading)
         ),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -583,7 +591,7 @@ pub fn ledger_dropped_malformed(id: &str, detail: &str) -> Said {
     said(
         &crate::rule::LEDGER_DROPPED_ROW_NAMES_ITS_CAUSE,
         format!("dropped row for {} has the detail \"{}\", not an identifier with a letter or an identifier", id, detail),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -592,7 +600,7 @@ pub fn ledger_dropped_without_cause(id: &str, cause: &str) -> Said {
     said(
         &crate::rule::DROPPED_ROW_HAS_CAUSE,
         format!("dropped row for {} has no cause: {}", id, cause),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -604,7 +612,7 @@ pub fn ledger_dropped_not_approved(id: &str) -> Said {
             "dropped row for {} matches no approved row of that question",
             id
         ),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -613,7 +621,7 @@ pub fn ledger_dropped_closed(id: &str, event: &str) -> Said {
     said(
         &crate::rule::LEDGER_DROPPED_NOT_AFTER_CLOSE,
         format!("dropped row for {} follows its {} row", id, event),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -622,7 +630,7 @@ pub fn ledger_dropped_still_in_file(id: &str, rel: &str) -> Said {
     said(
         &crate::rule::DROPPED_QUESTION_LEAVES_FILES,
         format!("{} has a dropped row but is still in {}", id, rel),
-        Next::agent(Act::Removes("the question from the file".into())),
+        Next::agent(Act::Removes(Part::Question)),
     )
 }
 
@@ -634,7 +642,7 @@ pub fn ledger_superseded_still_in_file(heading: &str, rel: &str) -> Said {
             "\"{}\" is superseded but its section is still in {}",
             heading, rel
         ),
-        Next::agent(Act::Removes("the question from the file".into())),
+        Next::agent(Act::Removes(Part::Question)),
     )
 }
 
@@ -646,7 +654,7 @@ pub fn ledger_dropped_text_differs(id: &str) -> Said {
             "dropped row for {} holds a hash that is not the hash of the text HEAD holds",
             id
         ),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -658,7 +666,7 @@ pub fn ledger_dropped_set_holds_letter(id: &str, letter: &str) -> Said {
             "dropped row for {} names answer {}, which the set at HEAD holds",
             id, letter
         ),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -670,7 +678,7 @@ pub fn ledger_dropped_not_standing_on(id: &str, on: &str) -> Said {
             "dropped row for {} says it stood on {}, which the question at HEAD does not",
             id, on
         ),
-        Next::owner(Act::Restores("the ledger".into())),
+        Next::owner(Act::Restores(Part::Ledger)),
     )
 }
 
@@ -688,7 +696,7 @@ pub fn ledger_push_drops_rows(local_ref: &str, remote_ref: &str) -> Said {
             "push of {} would drop ledger rows the remote's {} holds",
             local_ref, remote_ref
         ),
-        Next::owner(Act::Restores("the missing rows of the ledger".into())),
+        Next::owner(Act::Restores(Part::MissingRows)),
     )
 }
 
@@ -700,7 +708,7 @@ pub fn ledger_push_drops_rows(local_ref: &str, remote_ref: &str) -> Said {
 pub fn ledger_push_remote_unreadable(remote_ref: &str) -> String {
     refuse(
         format!("{}'s remote commit cannot be read here", remote_ref),
-        Next::agent_runs(Cmd::fixed("git fetch")),
+        Next::agent(Act::RunsAgain),
     )
 }
 
@@ -712,7 +720,7 @@ pub fn ledger_since_drops_rows(commit: &str) -> Said {
     said(
         &crate::rule::SINCE_KEEPS_LEDGER_ROWS,
         format!("ledger drops a row {} already holds", commit),
-        Next::owner(Act::Restores("the missing rows of the ledger".into())),
+        Next::owner(Act::Restores(Part::MissingRows)),
     )
 }
 
@@ -721,7 +729,7 @@ pub fn ledger_since_drops_rows(commit: &str) -> Said {
 pub fn ledger_since_unreadable(commit: &str) -> String {
     refuse(
         format!("{} cannot be read here", commit),
-        Next::agent_runs(Cmd::fixed("git fetch")),
+        Next::agent(Act::RunsAgain),
     )
 }
 
@@ -836,7 +844,7 @@ pub fn duplicate_heading_in_file(heading: &str, rel: &str) -> Said {
     said(
         &rule::HEADING_ONCE_IN_FILE,
         format!("{}: the heading \"{}\" appears twice", rel, heading),
-        Next::agent(Act::Rewrites("one of the headings".into())),
+        Next::agent(Act::Rewrites(Part::OneOf(Many::Headings))),
     )
 }
 
@@ -844,7 +852,7 @@ pub fn duplicate_heading_across_files(heading: &str, rel1: &str, rel2: &str) -> 
     said(
         &crate::rule::HEADING_IN_ONE_FILE,
         format!("duplicate heading \"{}\" in {} and {}", heading, rel1, rel2),
-        Next::agent(Act::Rewrites("one of the two sections".into())),
+        Next::agent(Act::Rewrites(Part::OneOf(Many::Sections))),
     )
 }
 
@@ -864,11 +872,8 @@ pub fn bad_topic_file_name(rel: &str, new_path: &str) -> Said {
             "{}: file name is not lowercase words joined by single hyphens",
             rel
         ),
-        Next::agent(Act::Rewrites(format!(
-            "the name of {} to {}",
-            rel, new_path
-        )))
-        .and_owner_runs(command(&["adr", "approve", new_path])),
+        Next::agent(Act::Rewrites(Part::File(rel.to_string())))
+            .and_owner_runs(command(&["approve", new_path])),
     )
 }
 
@@ -884,8 +889,8 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str) -> Said {
             "{}: file name does not match its topic \"{}\" in lowercase words joined by hyphens",
             rel, topic
         ),
-        Next::agent(Act::Rewrites("the topic line".into()))
-            .and_owner_runs(command(&["adr", "approve", rel])),
+        Next::agent(Act::Rewrites(Part::LineOf(LineKind::Topic)))
+            .and_owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -903,8 +908,8 @@ pub fn topic_unnameable(rel: &str, topic: &str) -> Said {
             "{}: topic \"{}\" has no file name: a name holds lowercase words only",
             rel, topic
         ),
-        Next::agent(Act::Rewrites("the topic line".into()))
-            .and_owner_runs(command(&["adr", "approve", rel])),
+        Next::agent(Act::Rewrites(Part::LineOf(LineKind::Topic)))
+            .and_owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -925,10 +930,6 @@ mod tests {
     fn section_term_not_found_answered_never_suggests_restoring_as_retired() {
         let out = section_term_not_found("x.md", "heading", "word", true).text();
         assert!(!out.contains("retired"), "{}", out);
-        assert!(
-            out.contains("agent restores the term in adrdom/terms.md"),
-            "{}",
-            out
-        );
+        assert!(out.contains("agent restores the term"), "{}", out);
     }
 }

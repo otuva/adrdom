@@ -114,10 +114,9 @@ Standard: s.
   Costs: other costs.
 "#;
 
-// ask stops a phrase-list hit
-// in a question body (clause: "ask stops a hit in question bodies").
+// approve stops a phrase-list hit in a question body.
 #[test]
-fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
+fn approve_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
     // adr: 149c9a73-16eb-46aa-9806-2950423ee1a2
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -125,7 +124,7 @@ fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
     let record = write_record(&dir, "adrdom/decisions/example.md", BODY_TELL_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
     // Approve cannot take the loaded word, so it is put back after it and
-    // the approval rows are written by hand: ask is the second stop.
+    // the approval rows are written by hand: approve is the second stop.
     let loaded = std::fs::read_to_string(&record).unwrap().replace(
         "the team built the store",
         "the team already built the store",
@@ -151,8 +150,12 @@ fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
         later,
     );
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should refuse: {}", stdout(&out));
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     let text = stderr(&out);
     assert!(text.contains("\"already\""), "{}", text);
     assert!(text.contains("states what the code does"), "{}", text);

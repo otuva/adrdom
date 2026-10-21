@@ -583,7 +583,7 @@ fn install_stops_while_another_program_holds_hooks_path() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         stderr(&out).trim(),
-        "install: core.hooksPath is .husky, not .githooks; owner removes the hook manager that set core.hooksPath, then runs: adr install"
+        "install: core.hooksPath is .husky, not .githooks; owner removes core.hooksPath, then runs: adr install"
     );
     assert_eq!(top_level(&dir), before);
     assert_eq!(hooks_path(&dir), ".husky");
@@ -642,7 +642,7 @@ fn check_reports_a_hooks_path_that_is_not_set_or_is_foreign() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("core.hooksPath is .husky, not .githooks; owner removes the hook manager that set core.hooksPath, then runs: adr install"),
+        stdout(&out).contains("core.hooksPath is .husky, not .githooks; owner removes core.hooksPath, then runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -671,7 +671,7 @@ fn check_reports_a_foreign_hooks_path_in_a_satellite() {
     let out = adr(&sat, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("core.hooksPath is .husky, not .githooks; owner removes the hook manager that set core.hooksPath, then runs: adr install"),
+        stdout(&out).contains("core.hooksPath is .husky, not .githooks; owner removes core.hooksPath, then runs: adr install"),
         "{}",
         stdout(&out)
     );

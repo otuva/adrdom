@@ -32,7 +32,7 @@ pub fn run() -> i32 {
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
         out::eprint(&[stopped(msg::stdin_read_failed(msg::after_fix_agent_runs(
-            crate::moves::Cmd::fixed("git push"),
+            crate::moves::Cmd::adr("check --push"),
         )))]);
         return 1;
     }

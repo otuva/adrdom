@@ -38,7 +38,7 @@ fn cases(tid: &str) -> Vec<(&'static str, String, &'static str)> {
     let long = "- A) Yes.\n  Why: one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
     let does2 = "- A) Yes indeed.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
     vec![
-        ("long why", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", long)), "the Why line has 21 words, the most is 20; agent rewrites the Why line"),
+        ("long why", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", long)), "the Why line has 21 words, the most is 20; agent rewrites the line"),
         ("does option two words", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", does2)), "Does"),
         ("loaded phrase in body", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget currently breaks.", OPTS)), "\"currently\""),
         ("loaded heading", format!("# Gate\n\n{}", q("Which widget holds?", "widget", "the widget breaks.", OPTS)), "\"which\""),
@@ -69,16 +69,14 @@ fn shape_want(name: &str) -> &'static str {
         "second terms line" => "terms second line, line 8; agent rewrites the terms line",
         "duplicate depends entry" => "depends: duplicate entry, line 4; agent removes the entry",
         "duplicate id line" => "duplicate id line; agent removes the id line",
-        "second answer line" => "second answer line, line 19; agent removes the second answer line",
-        "answer line not last" => {
-            "answer line not last, line 17; agent removes the lines after the answer line"
-        }
+        "second answer line" => "second answer line, line 19; agent removes the answer line",
+        "answer line not last" => "answer line not last, line 17; agent removes the line",
         "answer names a missing option" => {
-            "answer names missing option C; agent restores the answer line from git"
+            "answer names missing option C; agent restores the answer line"
         }
-        "missing h1" => "missing h1; agent rewrites the file",
-        "second h1" => "duplicate h1, line 17; agent rewrites the file",
-        "text before h1" => "text before h1, line 1; agent rewrites the file",
+        "missing h1" => "missing h1; agent rewrites adrdom/decisions/gate.md",
+        "second h1" => "duplicate h1, line 17; agent rewrites adrdom/decisions/gate.md",
+        "text before h1" => "text before h1, line 1; agent rewrites adrdom/decisions/gate.md",
         "tier heading" => "tier heading, line 3; agent removes the heading",
         "heading without a question mark" => {
             "line 17: a heading is not a question ending in ?; agent rewrites the line"

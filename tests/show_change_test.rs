@@ -34,7 +34,18 @@ fn id_of(path: &Path, heading: &str) -> String {
     extract_ids(&text[at..])[0].clone()
 }
 
-/// The gate with its two questions, approved and committed.
+/// The text with the `id:` line of the question under `heading` taken out:
+/// the question as an agent writes it anew once approve has withdrawn the
+/// asked one that was struck.
+fn without_id(text: &str, heading: &str) -> String {
+    let at = text.find(&format!("### {}\n", heading)).unwrap();
+    let rest = &text[at..];
+    let id_at = at + rest.find("id: ").unwrap();
+    let end = id_at + text[id_at..].find('\n').unwrap() + 1;
+    format!("{}{}", &text[..id_at], &text[end..])
+}
+
+/// The gate with its two questions, approved (which asks both) and committed.
 fn approved() -> (PathBuf, PathBuf) {
     let dir = widget_repo();
     let path = write_record(
@@ -119,7 +130,7 @@ fn a_question_put_back_after_a_plan_change_struck_it_reads_as_new() {
     std::fs::write(&path, kept).unwrap();
     approve_record(&dir, REL);
     commit_all(&dir);
-    std::fs::write(&path, &full).unwrap();
+    std::fs::write(&path, without_id(&full, TWO)).unwrap();
     let shown = show(&dir, &[REL]);
     assert!(
         shown.contains(&format!("+ [not asked] {}\n", TWO)),
@@ -145,9 +156,6 @@ fn a_question_struck_from_an_uncommitted_asked_plan_is_named_by_its_heading() {
         ),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let full = std::fs::read_to_string(&path).unwrap();
     let at = full.find(&format!("### {}\n", TWO)).unwrap();
     std::fs::write(&path, &full[..at]).unwrap();
@@ -295,9 +303,6 @@ fn an_identifier_in_prose_is_printed_as_the_file_holds_it() {
 #[test]
 fn a_removed_topic_file_lists_its_decisions_and_their_letters() {
     let (dir, path) = approved();
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     assert!(adr_answer(&dir, &id_of(&path, ONE), "A").status.success());
     commit_all(&dir);
     std::fs::remove_file(&path).unwrap();
@@ -525,7 +530,7 @@ fn a_question_put_back_after_an_uncommitted_strike_reads_as_new() {
         .collect();
     std::fs::write(&path, kept).unwrap();
     approve_record(&dir, REL);
-    std::fs::write(&path, &full).unwrap();
+    std::fs::write(&path, without_id(&full, TWO)).unwrap();
     let shown = show(&dir, &[REL]);
     assert!(
         shown.contains(&format!("+ [not asked] {}\n", TWO)),

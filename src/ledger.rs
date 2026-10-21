@@ -219,7 +219,7 @@ impl Ledger {
     /// shares one time, per "Does a command write a time later than the
     /// last ledger row?"); the id's own `asked` row and the target's
     /// `superseded` row are always written by two different command runs
-    /// (`ask` and `answer`), so in practice their times already differ and
+    /// (`approve` and `answer`), so in practice their times already differ and
     /// this position agrees with the time order -- but the position is what
     /// the comparison actually reads.
     pub fn latest_asked_pos(&self, id: &str) -> Option<usize> {

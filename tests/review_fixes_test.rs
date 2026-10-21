@@ -46,9 +46,6 @@ fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
         &format!("# A\n\n{}", question(WITH_COMMA, "widget", "")),
     );
     approve_record(&dir, A);
-    assert!(adr(&dir, &["ask", a.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let alpha = extract_ids(&std::fs::read_to_string(&a).unwrap())[0].clone();
     let out = adr_answer(&dir, &alpha, "A");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -72,8 +69,6 @@ fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
         "{}",
         approved
     );
-    let out = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
     let asked = std::fs::read_to_string(&b).unwrap();
     assert!(
         asked.contains(&format!("supersedes: {}\n", alpha)),

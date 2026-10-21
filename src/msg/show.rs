@@ -2,7 +2,7 @@
 
 // --- what is next in a topic file (`moves::of_topic_file`) ----------------
 // One line per move, each opening with who makes it, in the words a
-// refusal uses. `show` prints them under the file, `ask` when it has
+// refusal uses. `show` prints them under the file, `approve` when it has
 // nothing to ask.
 
 // --- show: the lines of its listing ----------------------------------------

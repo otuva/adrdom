@@ -45,9 +45,6 @@ fn show_lists_every_question_with_its_state_and_tier() {
     approve_minimal_terms(&dir, "reasons");
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
@@ -247,11 +244,10 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
 adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; agent writes the depends line of \"1.1 Root?\"
 adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; agent writes the depends line of \"1.2 Unasked root?\"
 adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes the depends line of \"1.3 Skeleton?\"
-adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\" is [refused] and its depends line was edited; agent restores the line from git
+adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\" is [refused] and its depends line names \"1.1 Root?\" by text; agent restores the line
 agent runs: adr plan adrdom/decisions/tiered-topic.md
-agent runs: adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
 owner runs: adr answer aaaaaaaa-0000-4000-8000-000000000002@{V} <letter>  # \"2.1 Depends on root?\"
-agent writes the plan change that drops or replaces \"2.2 Also depends?\"
+agent rewrites the plan
 not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
     let expected = expected.replace("{V}", &version);

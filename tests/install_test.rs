@@ -16,7 +16,6 @@ const ALL_DENY_ENTRIES: &[&str] = &[
     "Bash(adr uninstall*)",
     "Bash(* adr uninstall*)",
     "Edit(adrdom/state/**)",
-    "Write(adrdom/state/**)",
 ];
 
 // The one owner-commands list (`OWNER_COMMANDS` in src/commands/mod.rs)
@@ -765,13 +764,14 @@ fn a_commit_names_the_installed_files_it_lacks_as_not_staged() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(
-        text.contains("AGENTS.md not staged;") && text.contains("agent runs: git add AGENTS.md"),
+        text.contains("AGENTS.md not staged;")
+            && text.contains("agent runs the same adr command again"),
         "{}",
         text
     );
     assert!(
         text.contains(".githooks/pre-commit not staged;")
-            && text.contains("agent runs: git add .githooks/pre-commit"),
+            && text.contains("agent runs the same adr command again"),
         "{}",
         text
     );
@@ -1092,5 +1092,50 @@ fn install_writes_the_brief_without_its_tie_comments() {
     assert_eq!(
         adr::commands::install::strip_ties("```\nx <!-- from: y -->\n```\nz <!-- from: w -->\n"),
         "```\nx <!-- from: y -->\n```\nz\n"
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+#[test]
+fn install_rewrites_its_deny_block_and_check_reports_an_entry_it_does_not_write() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
+    let path = dir.join(".claude/settings.json");
+    let mut value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let deny = value["permissions"]["deny"].as_array_mut().unwrap();
+    deny.push("Write(adrdom/state/**)".into());
+    deny.push("Bash(adr frobnicate*)".into());
+    deny.push("Bash(rm -rf*)".into());
+    std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap()).unwrap();
+
+    let check = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&check), stderr(&check));
+    for e in ["Write(adrdom/state/**)", "Bash(adr frobnicate*)"] {
+        assert!(
+            text.contains(&format!(
+                ".claude/settings.json holds deny entry {}, which install does not write; agent runs: adr install --claude",
+                e
+            )),
+            "{}",
+            text
+        );
+    }
+    assert!(!text.contains("Bash(rm -rf*)"), "{}", text);
+
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
+    let after = std::fs::read_to_string(&path).unwrap();
+    assert!(!after.contains("Write(adrdom/state/**)"), "{}", after);
+    assert!(!after.contains("frobnicate"), "{}", after);
+    assert!(after.contains("Bash(rm -rf*)"), "{}", after);
+    let check = adr(&dir, &["check"], &[], "");
+    assert!(
+        !format!("{}{}", stdout(&check), stderr(&check)).contains("deny entry"),
+        "{}",
+        stdout(&check)
     );
 }

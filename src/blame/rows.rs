@@ -87,10 +87,9 @@ pub fn file_state(
     // An approved file keeps the identifier its approval gave: approve writes
     // one only for a file never approved (d2851ea1 A). A faulty id line is
     // an id line, and its own finding says what is wrong with it.
-    if let (FileStatus::Changed, None, Some(approved)) = (status, &bf.id, index.approved_id(rel)) {
+    if let (FileStatus::Changed, None, Some(_)) = (status, &bf.id, index.approved_id(rel)) {
         if !bf.shape_errors.iter().any(|e| e.kind == ShapeKind::Id) {
-            st.findings
-                .push(about(msg::blame_id_line_gone(rel, approved)));
+            st.findings.push(about(msg::blame_id_line_gone(rel)));
         }
     }
     // The tool wrote the id line and the ledger holds what it wrote: an id
@@ -101,7 +100,7 @@ pub fn file_state(
     if let Some(id) = bf.id.as_deref() {
         match index.approved_id(rel) {
             Some(written) if !written.eq_ignore_ascii_case(id) => {
-                st.findings.push(about(msg::blame_id_edited(rel, written)))
+                st.findings.push(about(msg::blame_id_edited(rel)))
             }
             Some(_) => {}
             None if !index.row_holds(id) => st.findings.push(about(msg::blame_id_not_written(rel))),

@@ -2,7 +2,7 @@
 // resolution (term/decision/dangling/cycle), and the stand cap; the tiers
 // are no line of check's (bd83aa22). Fixtures are hand-written and approved via
 // hand-written ledger rows (`approve_via_ledger`, `approve_minimal_terms`),
-// never through a real `adr ask`/`adr approve`.
+// never through a real `adr approve`.
 
 mod common;
 
@@ -22,7 +22,9 @@ fn check_fails_a_tier_heading_line() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("tier heading, line 3; agent removes the heading, then writes what each question stands on in its depends line"),
+        text.contains(
+            "tier heading, line 3; agent removes the heading, then writes the depends line"
+        ),
         "{}",
         text
     );
@@ -108,7 +110,7 @@ fn check_fails_a_depends_entry_that_resolves_no_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"widget\" which is no term; agent writes the term in adrdom/terms.md"
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"widget\" which is no term; agent writes the term"
         ),
         "{}",
         text
@@ -216,7 +218,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains(&"adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent rewrites the entry to name a term that is not retired".to_string()),
+        text.contains(&"adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent rewrites the entry".to_string()),
         "{}",
         text
     );
@@ -315,7 +317,7 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        text.contains("adrdom/decisions/notes.md: \"Is the tool keep tags?\" depends on the term \"tag\", which is retired; agent rewrites the entry to name a term that is not retired"),
+        text.contains("adrdom/decisions/notes.md: \"Is the tool keep tags?\" depends on the term \"tag\", which is retired; agent rewrites the entry"),
         "{}",
         text
     );
@@ -345,7 +347,7 @@ fn check_fails_a_depends_entry_on_a_decision_that_is_not_current() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which names no term and no question of this file; agent rewrites the entry to name a term or a question of this file",
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which names no term and no question of this file; agent rewrites the entry",
             other_id
         )),
         "{}",
@@ -431,11 +433,7 @@ fn check_fails_a_cycle() {
         "{}",
         text
     );
-    assert!(
-        text.contains("agent rewrites the depends lines of these questions"),
-        "{}",
-        text
-    );
+    assert!(text.contains("agent rewrites the depends line"), "{}", text);
 }
 
 #[test]
@@ -462,8 +460,8 @@ fn check_fails_a_self_dep() {
 
 #[test]
 fn check_fails_a_depends_set_naming_an_option_the_target_does_not_have() {
-    // 8.7 A: `ask` also refuses this
-    // (ask_tiers_test.rs's `ask_refuses_a_set_naming_an_option_the_target_does_not_have`),
+    // 8.7 A: `approve` also refuses this
+    // (approve_depends_test.rs),
     // but `check`'s `plan` check must catch it unconditionally, the moment
     // the target already has options, without waiting for that tier.
     let dir = init_repo();
@@ -527,11 +525,7 @@ fn check_fails_five_questions_on_terms_alone() {
         "{}",
         text
     );
-    assert!(
-        text.contains("agent writes the question these stand on"),
-        "{}",
-        text
-    );
+    assert!(text.contains("agent writes the question"), "{}", text);
     assert!(!text.contains("tiers:"), "{}", text);
 }
 

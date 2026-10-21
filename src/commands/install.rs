@@ -24,7 +24,7 @@ fn install_words(
     planning: bool,
     satellite: Option<&Path>,
 ) -> Vec<String> {
-    let mut w = vec!["adr".to_string(), "install".to_string()];
+    let mut w = vec!["install".to_string()];
     if claude {
         w.push("--claude".to_string());
     }
@@ -160,7 +160,7 @@ pub fn run(claude: bool, codex: bool, planning: bool, satellite: Option<PathBuf>
     let root = match satellite::locate() {
         Located::NotARepo => {
             let words = install_words(claude, codex, planning, satellite.as_deref());
-            let args: Vec<&str> = words[2..].iter().map(String::as_str).collect();
+            let args: Vec<&str> = words[1..].iter().map(String::as_str).collect();
             out::eprint_stop(
                 Command::Install,
                 &msg::not_a_repo("install", &args, Actor::Agent),
@@ -811,10 +811,11 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<Event>, String>
     Ok(written("CLAUDE.md"))
 }
 
-/// Merges `deny_entries()` into `.claude/settings.json`'s
-/// `permissions.deny` array, preserving every other key and array entry.
-/// Creates the directory/file if missing; writes the file only when an
-/// entry is missing from it. A failure is the whole refusal, its move once:
+/// Writes install's block of `.claude/settings.json`'s `permissions.deny`
+/// array: every entry in the tool's form (`is_tool_deny_entry`) that
+/// `deny_entries()` no longer holds is removed and every one it holds is
+/// there, every other key and entry kept. Creates the directory/file if
+/// missing; writes the file only when the block changes. A failure is the whole refusal, its move once:
 /// a file the agent fixes so it holds what install merges into, or the
 /// error to fix, then `cmd` again.
 fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
@@ -857,14 +858,21 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
     }
     let deny_arr = deny.as_array_mut().unwrap();
 
-    let mut added = false;
-    for entry in deny_entries() {
+    let entries = deny_entries();
+    let before = deny_arr.len();
+    deny_arr.retain(|v| {
+        v.as_str().is_none_or(|e| {
+            !crate::commands::is_tool_deny_entry(e) || entries.iter().any(|x| x == e)
+        })
+    });
+    let mut changed = deny_arr.len() != before;
+    for entry in entries {
         if !deny_arr.iter().any(|v| v.as_str() == Some(entry.as_str())) {
             deny_arr.push(serde_json::Value::String(entry.clone()));
-            added = true;
+            changed = true;
         }
     }
-    if !added && path.exists() {
+    if !changed && path.exists() {
         return Ok(None);
     }
 
@@ -1008,7 +1016,7 @@ fn run_satellite_of(root: &Path, given: &Path) -> i32 {
     let to_sat = satellite::relative_path(&repo::main_root(&primary), &repo::main_root(&sat));
     let shown_from = format!("{}/", satellite::relative_path(&primary, &sat));
     let mut events: Vec<Event> = Vec::new();
-    let again = command(&["adr", "install", "--satellite", &shown]);
+    let again = command(&["install", "--satellite", &shown]);
     let mut result = install_satellite_files(
         &sat,
         &primary,
@@ -1088,7 +1096,7 @@ fn run_in_satellite(
         &place.record,
         &primary,
         "",
-        Cmd::fixed("adr install"),
+        Cmd::adr("install"),
         &mut events,
     );
     out::print_events(&events);

@@ -16,9 +16,6 @@ fn repo_with_decision() -> (std::path::PathBuf, String) {
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     (dir, id)
@@ -112,9 +109,6 @@ fn a_superseded_decision_in_a_from_comment_is_a_note_with_the_successor_move() {
     content.push_str(&Q2.replace("OLD", &old_id));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let new_id = extract_ids(&std::fs::read_to_string(&record).unwrap())
         .into_iter()
         .find(|i| i != &old_id)
@@ -131,7 +125,7 @@ fn a_superseded_decision_in_a_from_comment_is_a_note_with_the_successor_move() {
         text
     );
     assert!(
-        text.contains("not a current decision; agent rewrites the from-comment to"),
+        text.contains("not a current decision; agent rewrites the from-comment"),
         "{}",
         text
     );

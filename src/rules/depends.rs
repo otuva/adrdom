@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 /// question of `rf` not yet asked and with a body (per "Does a depends entry
 /// on a question in its file carry an answer set?"): a set on an entry that
 /// names a term, an entry on a question of `rf` with no answer that carries
-/// no set, and a set on an answered question that `ask` did not freeze. The
+/// no set, and a set on an answered question that `approve` did not freeze. The
 /// one function `check`, `approve` and `plan` read, found before approval in
 /// text that can still change.
 pub fn depends_shape_refusals(
@@ -110,11 +110,11 @@ pub fn depends_shape_refusals(
 
 /// Every refusal the `supersedes:` lines of `rf` earn, the one place for the
 /// supersede rules, read by `record_refusals` (so `approve`, `check` and
-/// `show`), by `ask` for one candidate (`only`) and by `answer` for its own
+/// `show`), by `approve` for one candidate (`only`) and by `answer` for its own
 /// question. Category `plan`. Judged: each live section with a `supersedes:`
 /// line that is not frozen (an answered, refused or superseded section is
 /// history); an asked section whose text still stands is judged too, since
-/// `ask` froze its line and `answer` reads it. `only` narrows the judged
+/// `approve` froze its line and `answer` reads it. `only` narrows the judged
 /// sections to that index. The rules, in this order: every entry names a
 /// current decision (an asked section also accepts a target superseded after
 /// the section's latest `asked` row, a sibling replacer of the same decision
@@ -244,7 +244,7 @@ pub fn supersedes_refusals(
     out
 }
 
-/// True when the set on `d` is the one `ask` froze on `target` for `sec`:
+/// True when the set on `d` is the one `approve` froze on `target` for `sec`:
 /// an `assumes` row of the target for this dependent carries the hash of
 /// exactly this entry. A set written after the target was answered has no
 /// such row, so it is a shape error.

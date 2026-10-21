@@ -25,9 +25,6 @@ Sleep 12s
 Type "adr approve adrdom/decisions/http.md"
 Enter
 Sleep 3s
-Type "adr ask adrdom/decisions/http.md"
-Enter
-Sleep 2s
 
 Hide
 Type ". .q; tput cuu1; tput el"

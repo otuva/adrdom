@@ -61,12 +61,7 @@ pub(super) fn check_answers(
                                 led,
                                 index,
                             };
-                            crate::moves::of_unasked_question_in(
-                                &j,
-                                loaded,
-                                &sec.heading_text,
-                                false,
-                            )
+                            crate::moves::of_unasked_question_in(&j, loaded, false)
                         });
                         out.push(Failure::said(
                             Class::Answers,

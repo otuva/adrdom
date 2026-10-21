@@ -103,7 +103,7 @@ fn prints_one_line_per_row(dir: &Path, act: impl FnOnce() -> Output) -> Output {
 //
 // "What does a command that writes print?" A: the event it wrote, one line
 // each, or the finding that stopped it, and nothing else. Walks approve,
-// ask, answer (with a drop), ban and unban, and a stop of each kind.
+// answer (with a drop), ban and unban, and a stop of each kind.
 #[test]
 fn every_writing_command_prints_one_line_per_row_it_writes() {
     let dir = init_repo();
@@ -112,20 +112,13 @@ fn every_writing_command_prints_one_line_per_row_it_writes() {
     let record = write_record(&dir, REL, RECORD);
     let path = record.to_str().unwrap().to_string();
 
-    // approve: one row per question, the file row and the prose row.
+    // approve: an approved row per question, the file row and the prose row,
+    // an asked row per question and the assumes row.
     let out = prints_one_line_per_row(&dir, || adr_owner(&dir, &["approve", &path], ""));
-    assert_eq!(stdout(&out).lines().count(), 4, "{}", stdout(&out));
+    assert_eq!(stdout(&out).lines().count(), 7, "{}", stdout(&out));
 
-    // Approve again: no row, nothing printed.
+    // Approve again, with nothing left to ask: no row, nothing printed.
     let out = prints_one_line_per_row(&dir, || adr_owner(&dir, &["approve", &path], ""));
-    assert_eq!(stdout(&out), "");
-
-    // ask: an asked row per question and the assumes row.
-    let out = prints_one_line_per_row(&dir, || adr(&dir, &["ask", &path], &[], ""));
-    assert_eq!(stdout(&out).lines().count(), 3, "{}", stdout(&out));
-
-    // ask with nothing left to ask: no row, nothing printed.
-    let out = prints_one_line_per_row(&dir, || adr(&dir, &["ask", &path], &[], ""));
     assert_eq!(stdout(&out), "");
 
     // answer B: the answered row and the dropped row of 1.2, whose set lacks B.
@@ -163,13 +156,10 @@ fn a_writing_command_prints_no_tier_and_no_move() {
     let record = write_record(&dir, REL, RECORD);
     let path = record.to_str().unwrap().to_string();
     let approved = adr_owner(&dir, &["approve", &path], "");
-    let asked = adr(&dir, &["ask", &path], &[], "");
-    for out in [&approved, &asked] {
-        assert!(out.status.success(), "{}", stderr(out));
-        let text = stdout(out);
-        for word in ["tier", "next", "agent ", "owner runs", "not yet"] {
-            assert!(!text.contains(word), "{:?} in {}", word, text);
-        }
+    assert!(approved.status.success(), "{}", stderr(&approved));
+    let text = stdout(&approved);
+    for word in ["tier", "next", "agent ", "owner runs", "not yet"] {
+        assert!(!text.contains(word), "{:?} in {}", word, text);
     }
 }
 

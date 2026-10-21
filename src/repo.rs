@@ -9,7 +9,7 @@ pub const DECISIONS_DIR: &str = "adrdom/decisions";
 /// Where the tool's own state (ledger, ban list) lives, relative to the
 /// repo root.
 pub const STATE_DIR: &str = "adrdom/state";
-/// The append-only ledger of every act (`ask`, `answer`, `approve`, ...).
+/// The append-only ledger of every act (`approve`, `answer`, ...).
 pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
 /// The roles file: an untracked file holding one `<identifier>\t<word>` line
 /// for each session that took a role ("Does the ledger hold the planners?",
@@ -51,7 +51,7 @@ pub const PRIMARY_PATH: &str = "adrdom/primary";
 pub const SATELLITES_PATH: &str = "adrdom/state/satellites.tsv";
 /// Where the hashed ban list lives, relative to the repo root: the one
 /// literal for this path, used by every site that reads or writes it
-/// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
+/// (`ban`, `unban`, `check --banned`, `terms_refusals`, `install`).
 pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
 
 /// Where `adr install` writes the ledger's merge rule, relative to the
@@ -515,7 +515,7 @@ fn walk_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// `--message`, since the commit-msg hook's full report judges the same
 /// staged tree the pre-commit hook already saw, not just the message
 /// text). `WorkingTree` reads the filesystem: used outside a commit, and
-/// unconditionally by every other command (`ask`, `approve`, `show`,
+/// unconditionally by every other command (`approve`, `show`,
 /// `serve`, ...), which never take this type at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {

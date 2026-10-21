@@ -24,11 +24,11 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
 
     // `**P1. ...**` no longer starts a principle block: with no options
     // section of its own, it just sits as ordinary text inside 1.1's body,
-    // which `ask` refuses as a stray line.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    // which `approve` refuses as a stray line.
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         !out.status.success(),
-        "ask should have refused: {}",
+        "approve should have refused: {}",
         stdout(&out)
     );
     let err = stderr(&out);
@@ -43,7 +43,7 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(
         after, content,
-        "ask must not modify the file when it refuses"
+        "approve must not modify the file when it refuses"
     );
     assert!(
         extract_ids(&after).is_empty(),
@@ -93,7 +93,7 @@ fn a_question_needs_two_or_three_options() {
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         approve_record(&dir, "adrdom/decisions/example.md");
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             out.status.success(),
             "two options should be accepted: {}",
@@ -107,15 +107,9 @@ fn a_question_needs_two_or_three_options() {
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "options");
         let content = "# Example\n\n### 1.1 Three options?\ndepends: options\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n";
-        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+        write_record(&dir, "adrdom/decisions/example.md", content);
         approve_record(&dir, "adrdom/decisions/example.md");
-
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(
-            out.status.success(),
-            "three options should be accepted: {}",
-            stderr(&out)
-        );
+        assert_eq!(asked_row_count(&dir), 1, "approve should have asked it");
     }
 }
 
@@ -135,10 +129,10 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let content = "# Example\n\n### 1.1 What is a decision?\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -156,10 +150,10 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -175,15 +169,9 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
         let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
-        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+        write_record(&dir, "adrdom/decisions/example.md", content);
         approve_record(&dir, "adrdom/decisions/example.md");
-
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(
-            out.status.success(),
-            "ask should have accepted it: {}",
-            stderr(&out)
-        );
+        assert_eq!(asked_row_count(&dir), 1, "approve should have asked it");
     }
 }
 
@@ -201,10 +189,10 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -222,10 +210,10 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -241,15 +229,9 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
         let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
-        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+        write_record(&dir, "adrdom/decisions/example.md", content);
         approve_record(&dir, "adrdom/decisions/example.md");
-
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(
-            out.status.success(),
-            "ask should have accepted it: {}",
-            stderr(&out)
-        );
+        assert_eq!(asked_row_count(&dir), 1, "approve should have asked it");
     }
 }
 
@@ -279,10 +261,10 @@ fn a_problem_or_standard_value_stays_on_one_line() {
             .unwrap()
             + 1;
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -301,10 +283,10 @@ fn a_problem_or_standard_value_stays_on_one_line() {
         let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nProblem: p again.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -323,23 +305,17 @@ fn a_problem_or_standard_value_stays_on_one_line() {
 //
 // The decision "What stands under a question's heading?" (178a232e), its "each one sentence that responds to the heading" clause.
 // An option with no decision sentence at all, and an option whose decision
-// text holds a second sentence, are both parse errors, and `ask` now reads
+// text holds a second sentence, are both parse errors, and `approve` reads
 // them (point 1/point 2) the same way `check` does, through the shared
 // "parse" category in `rules::record_refusals` -- so neither an id nor a
 // ledger row is ever written for either mistake, and `check` finds the
 // identical text afterward.
 #[test]
-fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
+fn a_missing_or_multi_sentence_decision_is_caught_by_approve_and_check() {
     // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
-    // `approve` now reads the same shared "parse" category, so it refuses
-    // on either mistake too -- a file carrying one can never get an id
-    // minted in the first place. Each broken case is built by approving a
-    // clean, one-sentence version (so the plan is approved and the heading
-    // has an id) and then editing only the option's decision text: that
-    // edit moves neither the plan hash (heading/id/depends) nor any
-    // ledger-backed section hash (nothing has been asked or answered yet),
-    // so the file is still considered approved and `ask` reaches its own
-    // "parse" check on the edited text.
+    // `approve` reads the same shared "parse" category, so it refuses on
+    // either mistake -- a file carrying one gets no id and no `asked` row.
+    // `check` of the same file awaiting approval prints the identical text.
     let clean = |letter_a: &str| {
         format!(
             "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) {}\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
@@ -347,35 +323,35 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         )
     };
 
-    // No sentence terminator anywhere in the option: `ask` refuses; `check`
+    // No sentence terminator anywhere in the option: `approve` refuses; `check`
     // reports the same text.
     {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let record = write_record(&dir, "adrdom/decisions/example.md", &clean("One."));
-        approve_record(&dir, "adrdom/decisions/example.md");
-        let approved = std::fs::read_to_string(&record).unwrap();
-        std::fs::write(
-            &record,
-            approved.replace("- A) One.\n", "- A) no terminator here\n"),
-        )
-        .unwrap();
+        let record = write_record(
+            &dir,
+            "adrdom/decisions/example.md",
+            &clean("no terminator here"),
+        );
+        let before = std::fs::read_to_string(&record).unwrap();
 
-        let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
-            !ask_out.status.success(),
-            "ask should have refused: {}",
-            stdout(&ask_out)
+            !approve_out.status.success(),
+            "approve should have refused: {}",
+            stdout(&approve_out)
         );
         assert!(
-            stderr(&ask_out).contains("option A has no decision sentence"),
+            stderr(&approve_out).contains("option A has no decision sentence"),
             "{}",
-            stderr(&ask_out)
+            stderr(&approve_out)
         );
+        assert_eq!(std::fs::read_to_string(&record).unwrap(), before);
+        assert_eq!(asked_row_count(&dir), 0, "no question was asked");
 
         let check_out = adr(&dir, &["check"], &[], "");
-        // The edited file awaits approval again: a note (912f4f3b-1213-435a-af0d-7617017fcff4).
+        // The file awaits approval: a note (912f4f3b-1213-435a-af0d-7617017fcff4).
         assert!(
             check_out.status.success(),
             "check prints it as a note: {}",
@@ -393,26 +369,26 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let record = write_record(&dir, "adrdom/decisions/example.md", &clean("One."));
-        approve_record(&dir, "adrdom/decisions/example.md");
-        let approved = std::fs::read_to_string(&record).unwrap();
-        std::fs::write(
-            &record,
-            approved.replace("- A) One.\n", "- A) One. And a second sentence.\n"),
-        )
-        .unwrap();
+        let record = write_record(
+            &dir,
+            "adrdom/decisions/example.md",
+            &clean("One. And a second sentence."),
+        );
+        let before = std::fs::read_to_string(&record).unwrap();
 
-        let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
-            !ask_out.status.success(),
-            "ask should have refused: {}",
-            stdout(&ask_out)
+            !approve_out.status.success(),
+            "approve should have refused: {}",
+            stdout(&approve_out)
         );
         assert!(
-            stderr(&ask_out).contains("option A decision text has 2 sentences, more than one"),
+            stderr(&approve_out).contains("option A decision text has 2 sentences, more than one"),
             "{}",
-            stderr(&ask_out)
+            stderr(&approve_out)
         );
+        assert_eq!(std::fs::read_to_string(&record).unwrap(), before);
+        assert_eq!(asked_row_count(&dir), 0, "no question was asked");
 
         let check_out = adr(&dir, &["check"], &[], "");
         assert!(
@@ -432,15 +408,8 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let record = write_record(&dir, "adrdom/decisions/example.md", &clean("One."));
+        write_record(&dir, "adrdom/decisions/example.md", &clean("One."));
         approve_record(&dir, "adrdom/decisions/example.md");
-
-        let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(
-            ask_out.status.success(),
-            "ask should have accepted it: {}",
-            stderr(&ask_out)
-        );
 
         let check_out = adr(&dir, &["check"], &[], "");
         assert!(
@@ -468,10 +437,10 @@ fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
         let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Why: w2.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -489,10 +458,10 @@ fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
         let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n  Costs: c2.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused: {}",
+            "approve should have refused: {}",
             stdout(&out)
         );
         assert!(
@@ -506,11 +475,11 @@ fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
 //
 // The decision "What stands under a question's heading?" (178a232e), its "the answer line comes last" clause (point 3). A body whose
 // `**Answer:**` line comes first -- the exact opposite of "comes last" --
-// is refused by both `ask` and `check`, naming the position. `approve` now
+// is refused by both `approve` and `check`, naming the position. `approve` now
 // reads the same shared "parse" category too, so the file is approved
 // clean first and then edited to insert the misplaced line: that edit
 // touches neither the plan hash nor any ledger-backed section hash, so the
-// file stays approved and `ask` reaches its own "parse" check on it.
+// file stays approved and `approve` reaches its own "parse" check on it.
 #[test]
 fn an_answer_line_before_the_rest_of_the_body_is_rejected_for_its_position() {
     let dir = init_repo();
@@ -528,10 +497,10 @@ fn an_answer_line_before_the_rest_of_the_body_is_rejected_for_its_position() {
     );
     std::fs::write(&record, &broken).unwrap();
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         !out.status.success(),
-        "ask should have refused: {}",
+        "approve should have refused: {}",
         stdout(&out)
     );
     assert!(
@@ -556,7 +525,7 @@ fn an_answer_line_before_the_rest_of_the_body_is_rejected_for_its_position() {
 // adr: 0a742360-83c2-479d-b858-4bea646c9b36
 //
 // "the topic file ... hold[s] none": a `Lean: ` line under a heading is
-// not a recognized field, so both `ask` and `check` refuse it as a stray
+// not a recognized field, so both `approve` and `check` refuse it as a stray
 // line, exactly the fixed-shape refusal every other unrecognized line
 // gets. The other half of this decision -- the page's question view
 // renders no lean -- is tied in serve_test.rs's
@@ -574,16 +543,16 @@ fn a_lean_line_in_the_topic_file_is_stray() {
 
     let stray_line_no = content.lines().position(|l| l == "Lean: A.").unwrap() + 1;
 
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
-        !ask_out.status.success(),
-        "ask should have refused: {}",
-        stdout(&ask_out)
+        !approve_out.status.success(),
+        "approve should have refused: {}",
+        stdout(&approve_out)
     );
     assert!(
-        stderr(&ask_out).contains(&format!("stray line {}", stray_line_no)),
+        stderr(&approve_out).contains(&format!("stray line {}", stray_line_no)),
         "{}",
-        stderr(&ask_out)
+        stderr(&approve_out)
     );
 
     // The file was never approved: a draft's finding is a note in check
@@ -601,7 +570,7 @@ fn a_lean_line_in_the_topic_file_is_stray() {
 //
 // "the lean lives in the conversation where the question is presented;
 // the topic file, the ledger and the page hold none": the ledger side.
-// The row `ask` writes for a question and the row `answer` writes for it
+// The row `approve` writes for a question and the row `answer` writes for it
 // both keep the ledger's fixed six-field shape (time, event, id, hash,
 // detail, tool version, per ledger.md's "What does a ledger row hold?")
 // -- the `asked` row's detail is the plain heading text and the
@@ -616,9 +585,6 @@ fn ledger_rows_for_ask_and_answer_carry_no_lean() {
     let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let after_ask = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&after_ask)[0].clone();

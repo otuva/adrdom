@@ -147,7 +147,7 @@ fn unwritable(e: std::io::Error) -> ! {
     let owner = args
         .first()
         .is_some_and(|a| crate::commands::OWNER_COMMANDS.contains(&a.as_str()));
-    let mut words = vec!["adr"];
+    let mut words = Vec::<&str>::new();
     words.extend(args.iter().map(String::as_str));
     let actor = if owner {
         crate::msg::Actor::Owner

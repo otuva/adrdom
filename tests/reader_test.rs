@@ -98,7 +98,12 @@ fn check_fails_an_edited_row_at_head_and_passes_a_row_gone_whole() {
 
     std::fs::write(reader_path(&dir), original.replacen("same", "depends", 1)).unwrap();
     let f = reader_failures(&dir, &[]);
-    assert!(f.iter().any(|l| l.contains("edited by hand")), "{:?}", f);
+    assert!(
+        f.iter()
+            .any(|l| l.contains("reader file is not in the file")),
+        "{:?}",
+        f
+    );
 
     let first_only: String = original
         .lines()
@@ -163,7 +168,7 @@ fn check_since_fails_a_row_the_commit_holds_edited_and_passes_one_gone_whole() {
     let f = reader_failures(&dir, &["--since", &sha]);
     assert!(
         f.iter()
-            .any(|l| l.contains(&format!("edits a row {} already holds", sha))),
+            .any(|l| l.contains(&format!("changes a row {} already holds", sha))),
         "{:?}",
         f
     );
@@ -212,7 +217,7 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
     let f = reader_failures(&dir, &[]);
     assert!(
         f.iter()
-            .any(|l| l.contains("merge edits a reader row of a merged branch")),
+            .any(|l| l.contains("merge changes a reader row of a merged branch")),
         "{:?}",
         f
     );
@@ -232,13 +237,15 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
     git_ok(&dir, &["add", "-A"]);
     let f = reader_failures(&dir, &[]);
     assert_eq!(
-        f.iter().filter(|l| l.contains("edited by hand")).count(),
+        f.iter()
+            .filter(|l| l.contains("reader file is not in the file"))
+            .count(),
         1,
         "{:?}",
         f
     );
     assert!(
-        !f.iter().any(|l| l.contains("merge edits a reader row")),
+        !f.iter().any(|l| l.contains("merge changes a reader row")),
         "{:?}",
         f
     );
@@ -313,14 +320,9 @@ fn the_permission_file_forbids_edits_of_the_reader_file() {
         .iter()
         .filter_map(|d| d.as_str())
         .collect();
-    // The glob covers adrdom/state/reader.tsv.
-    for tool in ["Edit", "Write"] {
-        assert!(
-            deny.contains(&format!("{}(adrdom/state/**)", tool).as_str()),
-            "{:?}",
-            deny
-        );
-    }
+    // The glob covers adrdom/state/reader.tsv; Claude Code's Edit rule
+    // covers Write too.
+    assert!(deny.contains(&"Edit(adrdom/state/**)"), "{:?}", deny);
 }
 
 fn pair(kind: Kind, new_text: &str, neighbour: &str) -> Pair {
@@ -560,7 +562,8 @@ fn check_judges_a_new_line_by_its_shape_alone() {
         std::fs::write(reader_path(&dir), original.replacen(from, to, 1)).unwrap();
         let f = reader_failures(&dir, &[]);
         assert!(
-            f.iter().any(|l| l.contains("edited by hand")),
+            f.iter()
+                .any(|l| l.contains("reader file is not in the file")),
             "{} {:?}",
             from,
             f

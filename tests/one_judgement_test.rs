@@ -27,9 +27,6 @@ fn asked_gate(dir: &Path) -> std::path::PathBuf {
         ),
     );
     approve_record(dir, REL);
-    assert!(adr(dir, &["ask", rec.to_str().unwrap()], &[], "")
-        .status
-        .success());
     rec
 }
 
@@ -205,7 +202,7 @@ fn two_standing_answers_name_the_conflict_and_no_build() {
 //
 // A term entry waiting for its approval: the topic file using its word is
 // judged with it (no "no term" finding), the terms file's approve comes
-// first in show, and no command names a topic-file move approve, ask or
+// first in show, and no command names a topic-file move approve or
 // answer would refuse on the terms file.
 #[test]
 fn a_term_awaiting_approval_holds_the_topic_files_and_is_named_first() {
@@ -310,10 +307,10 @@ fn a_banned_word_in_the_terms_file_holds_its_approve_and_names_its_line() {
 
 // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
-// A hand-written answer line under an approved question never asked: check
-// fails it, so ask refuses it with the same finding.
+// A hand-written answer line under an approved question with no answer row:
+// check fails it, so approve refuses it with the same finding.
 #[test]
-fn ask_refuses_a_hand_written_answer_line_check_fails() {
+fn approve_refuses_a_hand_written_answer_line_check_fails() {
     let dir = repo();
     let rec = write_record(
         &dir,
@@ -331,7 +328,7 @@ fn ask_refuses_a_hand_written_answer_line_check_fails() {
         .lines()
         .find(|l| l.contains("answer line without ledger row"))
         .unwrap_or_else(|| panic!("{}", checked));
-    let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let message = finding;
     assert!(stderr(&out).contains(message), "{}", stderr(&out));

@@ -1,6 +1,6 @@
 //! The command line a move names, quoted for a shell, and the move of a removed file.
 use super::RemovalHold;
-use crate::msg::{Act, Next};
+use crate::msg::{Act, Next, Part};
 use crate::status::QuestionStatus;
 
 /// A command line a move names, as the one who runs it pastes it into a
@@ -12,10 +12,11 @@ use crate::status::QuestionStatus;
 pub struct Cmd(String);
 
 impl Cmd {
-    /// A command none of whose words come from the records: written once,
-    /// in the code, as the shell reads it.
-    pub fn fixed(line: &'static str) -> Cmd {
-        Cmd(line.to_string())
+    /// An adr command none of whose words come from the records: `rest`
+    /// written once, in the code, as the shell reads it after `adr `. A
+    /// move names no other program's command.
+    pub fn adr(rest: &'static str) -> Cmd {
+        Cmd(["adr ", rest].concat())
     }
 
     /// The command with `placeholder` after it, a word the one who runs it
@@ -37,11 +38,10 @@ impl std::fmt::Display for Cmd {
     }
 }
 
-/// The command line of `words`, each quoted as `shell_word` quotes it.
-pub fn command(words: &[&str]) -> Cmd {
-    Cmd(words
-        .iter()
-        .map(|w| shell_word(w))
+/// The adr command line of `args`, each quoted as `shell_word` quotes it.
+pub fn command(args: &[&str]) -> Cmd {
+    Cmd(std::iter::once("adr".to_string())
+        .chain(args.iter().map(|w| shell_word(w)))
         .collect::<Vec<_>>()
         .join(" "))
 }
@@ -105,25 +105,25 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
     // Nothing holds the removal (check's ids rule names a removed file whose
     // questions are refused, say): the owner approves it away.
     if holds.is_empty() {
-        return Next::owner_runs(command(&["adr", "approve", rel]));
+        return Next::owner_runs(command(&["approve", rel]));
     }
     let steps: Vec<Act> = holds
         .iter()
         .map(|h| {
-            let q = crate::msg::named(&h.id, Some(&h.heading));
             if h.status == QuestionStatus::Answered {
-                Act::Writes(format!("a question that supersedes {}", q))
+                Act::Writes(Part::Question)
             } else {
-                Act::Writes(format!("the plan change that strikes {}", q))
+                Act::Rewrites(Part::Plan)
             }
         })
         .collect();
     steps
         .into_iter()
-        .fold(Next::agent(Act::Restores(rel.to_string())), |n, a| {
-            n.then(a)
-        })
-        .and_owner_runs(command(&["adr", "approve", rel]))
+        .fold(
+            Next::agent(Act::Restores(Part::File(rel.to_string()))),
+            |n, a| n.then(a),
+        )
+        .and_owner_runs(command(&["approve", rel]))
 }
 
 #[cfg(test)]
@@ -139,11 +139,11 @@ mod tests {
     #[test]
     fn a_command_quotes_every_word_a_shell_would_read_otherwise() {
         assert_eq!(
-            command(&["adr", "approve", "adrdom/decisions/x-y.md"]).to_string(),
+            command(&["approve", "adrdom/decisions/x-y.md"]).to_string(),
             "adr approve adrdom/decisions/x-y.md"
         );
         assert_eq!(
-            command(&["adr", "approve", "adrdom/blame/a$(touch PWNED).md"]).to_string(),
+            command(&["approve", "adrdom/blame/a$(touch PWNED).md"]).to_string(),
             "adr approve 'adrdom/blame/a$(touch PWNED).md'"
         );
         assert_eq!(shell_word("it's"), "'it'\\''s'");
@@ -205,7 +205,7 @@ mod tests {
         ];
         let text = removal_next("x.md", &holds).render();
         assert!(
-            text.contains("supersedes") && text.contains("strikes"),
+            text.contains("writes the question") && text.contains("rewrites the plan"),
             "{}",
             text
         );

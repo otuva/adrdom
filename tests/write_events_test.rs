@@ -47,10 +47,10 @@ fn approve_names_a_file_it_rewrote_with_no_row() {
 
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
-// An asked question's terms line deleted by hand: ask writes it back, a
+// An asked question's terms line deleted by hand: approve writes it back, a
 // file written with no row, and says so in one line; check then passes it.
 #[test]
-fn ask_writes_back_a_terms_line_and_names_the_file() {
+fn approve_writes_back_a_terms_line_and_names_the_file() {
     let dir = widget_repo();
     let path = write_record(
         &dir,
@@ -58,9 +58,6 @@ fn ask_writes_back_a_terms_line_and_names_the_file() {
         &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let text = std::fs::read_to_string(&path).unwrap();
     let without: String = text
         .lines()
@@ -68,9 +65,11 @@ fn ask_writes_back_a_terms_line_and_names_the_file() {
         .map(|l| format!("{}\n", l))
         .collect();
     std::fs::write(&path, without).unwrap();
-    let out = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
+    let rows = asked_row_count(&dir);
+    let out = approve_unplanned(&dir, &path);
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(stdout(&out), format!("written: {}\n", REL));
+    assert_eq!(asked_row_count(&dir), rows, "no new asked row");
     assert!(std::fs::read_to_string(&path)
         .unwrap()
         .contains("\nterms: "));
@@ -78,28 +77,35 @@ fn ask_writes_back_a_terms_line_and_names_the_file() {
 
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
-// A ledger that refuses the rows leaves the file as it was: ask writes no
-// terms line for rows no ledger holds, and running it again asks.
+// A ledger that refuses the rows leaves the file as it was: approve writes
+// no ids or terms line for rows no ledger holds, and running it again asks.
 #[cfg(unix)]
 #[test]
-fn ask_leaves_the_file_as_it_was_when_the_ledger_refuses() {
+fn approve_leaves_the_file_as_it_was_when_the_ledger_refuses() {
     let dir = widget_repo();
     let path = write_record(
         &dir,
         REL,
         &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
     );
-    approve_record(&dir, REL);
+    plan_record(&dir, REL);
     let before = std::fs::read_to_string(&path).unwrap();
     let ledger = dir.join("adrdom/state/ledger.tsv");
     set_mode(&ledger, 0o444);
-    let out = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     set_mode(&ledger, 0o644);
     assert!(!out.status.success());
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
-    let again = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
+    assert_eq!(asked_row_count(&dir), 0);
+    let again = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(again.status.success(), "{}", stderr(&again));
-    assert_eq!(stdout(&again), format!("asked: \"{}\"\n", ONE));
+    assert!(
+        stdout(&again)
+            .lines()
+            .any(|l| l == format!("asked: \"{}\"", ONE)),
+        "{}",
+        stdout(&again)
+    );
 }
 
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
@@ -142,9 +148,6 @@ fn a_supersedes_line_naming_one_decision_twice_is_found() {
         &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
     );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let text = std::fs::read_to_string(&path).unwrap();
     let id = extract_ids(&text)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());

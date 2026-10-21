@@ -88,7 +88,7 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
         out.extend(cross_file_heading_refusals(rel, rf, j.all, led));
     }
     // Per "Does a depends entry carry the answers it holds under?": a letter
-    // the target has no option for is found before `ask`.
+    // the target has no option for is found before `approve`.
     out.extend(about_topic_file(
         in_sections(Class::Plan, letter_found(rel, rf, led)),
         rel,
@@ -110,9 +110,9 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
 /// A banned word in the text of a question open to ask (per "What does the
 /// ban scan read?" and "Does ban refuse a word that appears in the
 /// repository?"): one finding per question, naming the question and never
-/// the word. What `ask` refuses a candidate on, read by `show`, `plan` and
-/// `approve` alike, so no command names `adr ask` or the owner's approve
-/// for a plan holding one. `check` reports the word by file and line in
+/// the word. What `approve` refuses a question on, read by `show` and
+/// `plan` too, so no command names the owner's approve for a plan holding
+/// one. `check` reports the word by file and line in
 /// its own scan of every tracked file and does not file these again.
 pub fn banned_in_questions(
     root: &Path,
@@ -404,7 +404,7 @@ pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
         .unwrap_or_default()
 }
 
-/// What keeps `approve`, `ask` and `answer` from taking the topic file
+/// What keeps `approve` and `answer` from taking the topic file
 /// `rel` while adrdom/terms.md is missing, unreadable, malformed or waits
 /// for its approval (per "Does the tool stop while the terms file waits for
 /// approval?"): the gate `actions::require_terms` stops them on, as
@@ -521,7 +521,7 @@ pub fn judge_removed_topic_file(
 
 /// What approve would refuse in the terms file `tf` (minted) as it stands
 /// in the working tree, banned words in its text included: the one terms
-/// judgement `show` prints and the gate of `ask`, `answer` and the approve
+/// judgement `show` prints and the gate of `approve`, `answer` and the approve
 /// of a topic file names, so no command offers the owner's approve of the
 /// terms file while approve would refuse it.
 pub fn terms_file_findings(

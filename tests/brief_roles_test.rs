@@ -13,7 +13,7 @@ fn flat() -> String {
 fn the_brief_has_another_agent_build_what_an_agent_asked() {
     let b = flat();
     assert!(
-        b.contains("it does not build the decisions it asked"),
+        b.contains("it does not build the decisions it planned"),
         "{}",
         b
     );
@@ -42,7 +42,7 @@ fn the_brief_has_a_review_name_a_decision_for_each_behaviour() {
 fn the_brief_tells_a_planner_what_the_tool_holds_it_from() {
     let b = flat();
     assert!(
-        b.contains("A session that runs `adr plan` or `adr ask` is a planner until it ends"),
+        b.contains("A session that runs `adr plan` is a planner until it ends"),
         "{}",
         b
     );

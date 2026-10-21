@@ -155,7 +155,7 @@ pub(super) fn check_terms(
             }
             // Whether this section is already answered (frozen, never
             // re-asked -- "Does a decision change after it is answered?")
-            // or only asked (still open, `ask` can rewrite it): the message
+            // or only asked (still open, `approve` can rewrite it): the message
             // functions below need this to pick a legal next move.
             let answered = st == Some("answered");
             let Some(tl) = sec.terms_line else {

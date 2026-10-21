@@ -71,25 +71,6 @@ fn approve_ok(dir: &Path, name: &str) {
     );
 }
 
-fn ask(dir: &Path, name: &str) -> std::process::Output {
-    adr(
-        dir,
-        &["ask", dir.join(rel(name)).to_str().unwrap()],
-        &[],
-        "",
-    )
-}
-
-fn ask_ok(dir: &Path, name: &str) {
-    let out = ask(dir, name);
-    assert!(
-        out.status.success(),
-        "ask {} failed: {}",
-        name,
-        stderr(&out)
-    );
-}
-
 fn setup() -> PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -157,7 +138,7 @@ fn approve_refuses_five_questions_standing_on_terms_alone() {
     let out = approve(&dir, "a");
     refused_with(&out, &["5 questions stand on terms alone, the most is 4"]);
     assert!(
-        said_cap(&out).contains("agent writes the question these stand on"),
+        said_cap(&out).contains("agent writes the question"),
         "{}",
         said_cap(&out)
     );
@@ -167,8 +148,8 @@ fn approve_refuses_five_questions_standing_on_terms_alone() {
 /// false), approved, asked and answered, plus a fifth open question that
 /// replaces the first. b.md holds an open question replacing the first of
 /// a.md, so a.md's count is four; when b.md's question is refused the first
-/// is back and a.md holds five, which `ask` stops.
-fn ask_side(on_p: bool) -> std::process::Output {
+/// is back and a.md holds five, which approve stops.
+fn approve_side(on_p: bool) -> std::process::Output {
     let dir = setup();
     let mut c = String::from("# A\n");
     if on_p {
@@ -180,7 +161,6 @@ fn ask_side(on_p: bool) -> std::process::Output {
     }
     let a = write_record(&dir, &rel("a"), &c);
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     if on_p {
         let out = adr_answer(&dir, &id_of(&a, P), "A");
         assert!(out.status.success(), "answer failed: {}", stderr(&out));
@@ -202,16 +182,15 @@ fn ask_side(on_p: bool) -> std::process::Output {
         append(&a, &kid(5));
     }
     approve_ok(&dir, "a");
-    ask_ok(&dir, "b");
     let out = adr_answer(&dir, &id_of(&b, &h(9)), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
-    ask(&dir, "a")
+    approve(&dir, "a")
 }
 
 // adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
 #[test]
-fn ask_stops_a_fifth_question_standing_on_terms_alone() {
-    let out = ask_side(false);
+fn approve_stops_a_fifth_question_standing_on_terms_alone() {
+    let out = approve_side(false);
     refused_with(
         &out,
         &["5 questions stand on terms alone, 4 answered, the most is 4"],
@@ -220,8 +199,8 @@ fn ask_stops_a_fifth_question_standing_on_terms_alone() {
 
 // adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
 #[test]
-fn ask_stops_a_fifth_question_standing_on_one_question() {
-    let out = ask_side(true);
+fn approve_stops_a_fifth_question_standing_on_one_question() {
+    let out = approve_side(true);
     refused_with(
         &out,
         &[&format!(
@@ -233,7 +212,7 @@ fn ask_stops_a_fifth_question_standing_on_one_question() {
 
 // adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
 #[test]
-fn five_questions_at_one_derived_tier_over_two_parents_pass_approve_and_ask() {
+fn five_questions_at_one_derived_tier_over_two_parents_pass_approve() {
     let dir = setup();
     let mut c = format!("# A\n{}{}", terms(P), terms(Q));
     for i in 1..=3 {
@@ -249,7 +228,6 @@ fn five_questions_at_one_derived_tier_over_two_parents_pass_approve_and_ask() {
         .map(|i| rf.tier_of(i).unwrap())
         .collect();
     assert_eq!(tiers, vec![1, 1, 2, 2, 2, 2, 2]);
-    ask_ok(&dir, "a");
 }
 
 // adr: b30c29aa-f2b4-4792-9c9f-acc645a29d4e
@@ -302,7 +280,6 @@ fn a_child_of_a_refused_question_counts_under_it() {
     let dir = setup();
     let a = write_record(&dir, &rel("a"), &under_p(4));
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     let out = adr_answer(&dir, &id_of(&a, P), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
     append(&a, &sec(&h(5), &id_of(&a, P), None));
@@ -319,7 +296,6 @@ fn an_open_replacement_frees_a_place_under_a_question() {
     let dir = setup();
     let a = write_record(&dir, &rel("a"), &under_p(4));
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     let out = adr_answer(&dir, &id_of(&a, P), "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     for i in 1..=4 {
@@ -328,20 +304,19 @@ fn an_open_replacement_frees_a_place_under_a_question() {
     }
     append(&a, &sec(&h(5), &id_of(&a, P), Some(&h(1))));
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
 }
 
 // adr: 4555583f-3499-4963-993b-34556fe519f7
 #[test]
-fn ask_passes_a_group_whose_questions_are_all_answered() {
+fn approve_passes_a_group_whose_questions_are_all_answered() {
     let dir = setup();
     let a = five_answered(&dir);
     approve_ok(&dir, "a");
     let first = id_of(&a, &h(1));
     append(&a, &sec("Is widget extra chosen?", &first, None));
     approve_ok(&dir, "a");
-    let out = ask(&dir, "a");
-    assert!(out.status.success(), "ask failed: {}", said_cap(&out));
+    let out = approve(&dir, "a");
+    assert!(out.status.success(), "approve failed: {}", said_cap(&out));
     assert!(
         !said_cap(&out).contains("the most is 4"),
         "{}",
@@ -432,7 +407,6 @@ fn a_refused_question_is_not_counted() {
     }
     let a = write_record(&dir, &rel("a"), &c);
     approve_ok(&dir, "a");
-    ask_ok(&dir, "a");
     let out = adr_answer(&dir, &id_of(&a, &h(1)), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
     append(&a, &terms(&h(5)));

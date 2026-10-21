@@ -201,18 +201,6 @@ pub const QUESTION_PAIRS_TO_TERM: Rule = Rule {
     decisions: &["711a7636-9f4d-402d-ae62-265208adf0ac"],
 };
 
-/// Decision: Does ask stop a question outside the plan?
-pub const PLAN_APPROVED_BEFORE_ASK: Rule = Rule {
-    name: "plan_approved_before_ask",
-    decisions: &["da59b448-1afb-4469-b40e-69eda8f253c2"],
-};
-
-/// Decision: Does ask run on a file with unapproved prose?
-pub const PROSE_APPROVED_BEFORE_ASK: Rule = Rule {
-    name: "prose_approved_before_ask",
-    decisions: &["1cdec741-98e1-4715-a7a5-94f7a73cd425"],
-};
-
 /// Decision: Does a question keep its identifier when its heading is reworded?
 pub const ID_NAMES_ONE_QUESTION: Rule = Rule {
     name: "id_names_one_question",
@@ -1039,8 +1027,6 @@ pub const ALL: &[&Rule] = &[
     &BLAME_LINE_NAMES_ROW_RANGES,
     &BANNED_WORD_ABSENT_FROM_RECORDS,
     &QUESTION_PAIRS_TO_TERM,
-    &PLAN_APPROVED_BEFORE_ASK,
-    &PROSE_APPROVED_BEFORE_ASK,
     &ID_NAMES_ONE_QUESTION,
     &ASKED_QUESTION_LEAVES_BY_APPROVAL,
     &FILE_LEAVES_WITH_NO_LIVE_QUESTION,

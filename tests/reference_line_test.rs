@@ -1,5 +1,5 @@
 // A reference line (`depends:`, `supersedes:`) holds its list on one line:
-// a list continued on a second line is refused by approve and by ask, and
+// a list continued on a second line is refused by approve and
 // reported by check.
 mod common;
 
@@ -33,15 +33,6 @@ fn approved_then_edited(edit: impl Fn(&str) -> String) -> (std::path::PathBuf, s
 }
 
 fn refused_everywhere(dir: &std::path::Path, record: &std::path::Path, needle: &str) {
-    let ask = adr(dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!ask.status.success(), "ask should refuse: {}", stdout(&ask));
-    assert!(
-        stderr(&ask).contains(needle),
-        "ask output missing {:?}: {}",
-        needle,
-        stderr(&ask)
-    );
-
     let apr = adr_owner(dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         !apr.status.success(),

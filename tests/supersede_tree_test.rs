@@ -1,7 +1,7 @@
 // The supersedes line names every current decision standing on its target
 // (in every topic file, and through the decisions standing on those), and no
 // heading of a plan stands on what the same plan supersedes. The guard runs
-// at approve, ask and answer.
+// at approve and answer.
 mod common;
 
 use common::*;
@@ -65,16 +65,9 @@ fn approve_ok(dir: &Path, name: &str) {
     );
 }
 
-/// asks the file, answers `heading` A.
+/// answers `heading` A (approve has asked it).
 fn ask_answer(dir: &Path, name: &str, heading: &str) {
     let p = dir.join(rel(name));
-    let out = adr(dir, &["ask", p.to_str().unwrap()], &[], "");
-    assert!(
-        out.status.success(),
-        "ask {} failed: {}",
-        name,
-        stderr(&out)
-    );
     let id = id_of(&p, heading);
     let out = adr_answer(dir, &id, "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
@@ -227,13 +220,22 @@ fn old_dependent(dir: &Path, name: &str, heading: &str, target: &str, id: &str) 
 /// The case where approve passed (Q4 names Q1 only, Q1 had no dependents)
 /// and Q1 then gains a dependent: Q7 in c.md, an answered question standing
 /// on Q1 by identifier.
+/// Approve asks Q4; with `ask_q4_first` false its `asked` row is taken out
+/// of the ledger again, the state of a replacement approved and never asked.
 fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf {
     let a = with_q1(dir);
     append(&a, &sec(Q4, "widget", Some(Q1), true));
     approve_ok(dir, "a");
-    if ask_q4_first {
-        let out = adr(dir, &["ask", a.to_str().unwrap()], &[], "");
-        assert!(out.status.success(), "ask a failed: {}", stderr(&out));
+    if !ask_q4_first {
+        let id4 = id_of(&a, Q4);
+        let ledger_path = dir.join("adrdom/state/ledger.tsv");
+        let kept: String = std::fs::read_to_string(&ledger_path)
+            .unwrap()
+            .lines()
+            .filter(|l| !(l.contains("\tasked\t") && l.contains(&id4)))
+            .map(|l| format!("{}\n", l))
+            .collect();
+        std::fs::write(&ledger_path, kept).unwrap();
     }
     old_dependent(
         dir,
@@ -247,11 +249,11 @@ fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf
 
 // adr: 796a2544-43e5-43db-b5d3-8a4e737ec9c6
 #[test]
-fn ask_refuses_a_replacement_whose_target_gained_a_dependent_after_approve() {
+fn approve_refuses_a_replacement_whose_target_gained_a_dependent_after_approve() {
     let dir = setup();
-    let a = q1_gains_a_dependent_after_approve(&dir, false);
+    q1_gains_a_dependent_after_approve(&dir, false);
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let out = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
+    let out = approve(&dir, "a");
     assert_refused_naming(&out, &[Q7]);
     assert_eq!(
         std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap(),
@@ -290,7 +292,7 @@ fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_
         Q7,
         "c.md",
         "agent rewrites the supersedes line of",
-        "to add adrdom/decisions/c.md",
+        "leaves out adrdom/decisions/c.md",
     ] {
         assert!(all.contains(n), "check output should name {:?}: {}", n, all);
     }
@@ -322,8 +324,6 @@ fn a_decision_superseded_by_two_names_both_under_superseded() {
         ),
     );
     approve_ok(&dir, "b");
-    let out = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask b failed: {}", stderr(&out));
     for h in [Q4, Q5] {
         let out = adr_answer(&dir, &id_of(&b, h), "A");
         assert!(

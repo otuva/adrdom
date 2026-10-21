@@ -1,4 +1,4 @@
-//! `plan` and `ask` on a topic file make the session a planner; nothing
+//! `plan` on a topic file makes the session a planner; nothing
 //! else marks, and nothing stops when there is no session identifier.
 mod common;
 use common::*;
@@ -46,16 +46,22 @@ fn plan_marks_the_session_once_and_prints_nothing_of_it() {
 }
 
 #[test]
-fn ask_marks_even_when_it_refuses_and_other_commands_never_mark() {
+fn plan_marks_even_when_it_refuses_and_other_commands_never_mark() {
     // adr: 6c406624-b874-4697-9a44-91941019b7d1
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let t = topic(&dir);
-    // The terms file is not approved: ask refuses, after the mark.
-    let ask = adr_as(&dir, &["ask", &t], &[], Some("s1"), "");
-    assert!(!ask.status.success());
+    // A topic file with no title line: plan refuses, after the mark.
+    let t = write_record(
+        &dir,
+        "adrdom/decisions/bad.md",
+        "### Does a gadget use a widget?\n",
+    )
+    .display()
+    .to_string();
+    let plan = adr_as(&dir, &["plan", &t], &[], Some("s1"), "");
+    assert!(!plan.status.success());
     assert_eq!(roles(&dir).as_deref(), Some("s1\tplanner\n"));
-    assert_no_planner_line(&ask);
+    assert_no_planner_line(&plan);
 
     let other = widget_repo();
     let t = topic(&other);
@@ -64,7 +70,7 @@ fn ask_marks_even_when_it_refuses_and_other_commands_never_mark() {
     for args in [
         vec!["plan", terms.as_str()],
         vec!["plan", blame.as_str()],
-        vec!["ask", terms.as_str()],
+        vec!["approve", terms.as_str()],
         vec!["show"],
         vec!["show", t.as_str()],
         vec!["check"],
@@ -83,17 +89,16 @@ fn a_missing_file_or_a_directory_marks_nothing() {
     std::fs::create_dir_all(dir.join("adrdom/decisions/dir.md")).unwrap();
     for rel in ["adrdom/decisions/missing.md", "adrdom/decisions/dir.md"] {
         let path = dir.join(rel).display().to_string();
-        for cmd in ["plan", "ask"] {
-            let out = adr_as(&dir, &[cmd, &path], &[], Some("s1"), "");
-            assert!(!out.status.success(), "{} {}", cmd, rel);
-            assert!(roles(&dir).is_none(), "{} {} marked the session", cmd, rel);
-            assert!(
-                !dir.join(ROLES).exists(),
-                "{} {} created the roles file",
-                cmd,
-                rel
-            );
-        }
+        let cmd = "plan";
+        let out = adr_as(&dir, &[cmd, &path], &[], Some("s1"), "");
+        assert!(!out.status.success(), "{} {}", cmd, rel);
+        assert!(roles(&dir).is_none(), "{} {} marked the session", cmd, rel);
+        assert!(
+            !dir.join(ROLES).exists(),
+            "{} {} created the roles file",
+            cmd,
+            rel
+        );
     }
 }
 

@@ -138,9 +138,9 @@ fn do_approve_removal(
         stop(
             Command::Approve,
             msg::update_failed(
-                "ledger",
+                crate::repo::LEDGER_PATH,
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
             ),
         )
     })?;
@@ -190,7 +190,7 @@ fn do_approve_blame(
             msg::read_failed(
                 rel,
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
             ),
         )
     })?;
@@ -246,7 +246,7 @@ fn do_approve_blame(
                 msg::write_failed(
                     &file.display().to_string(),
                     "no second line to insert the id line after",
-                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                    msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
                 ),
             )
         })?);
@@ -272,9 +272,9 @@ fn do_approve_blame(
             stop(
                 Command::Approve,
                 msg::update_failed(
-                    "ledger",
+                    crate::repo::LEDGER_PATH,
                     e,
-                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                    msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
                 ),
             )
         })?;
@@ -287,7 +287,7 @@ fn do_approve_blame(
                 msg::write_failed(
                     &file.display().to_string(),
                     e,
-                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                    msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
                 ),
             )
         })?;
@@ -299,7 +299,7 @@ fn do_approve_blame(
 /// Inserts a freshly minted id directly after each skeleton section's
 /// `depends:` line (or its `supersedes:`, `unrelated:` or `blame:` line,
 /// directly under it) (per "What does a reference in a topic file carry?"; no blank padding, the
-/// same bare single-line insert `ask` uses for `terms:` after `id:`). Every section here has
+/// same bare single-line insert `approve` uses for `terms:` after `id:`). Every section here has
 /// already passed `record_refusals`'s "has no depends line" check, so the search below should never
 /// fail -- but that invariant lives in a different function now, so a future reorder of the two
 /// reports an error instead of panicking.

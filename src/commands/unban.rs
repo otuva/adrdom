@@ -27,9 +27,7 @@ pub fn run() -> i32 {
     if std::io::stdin().read_to_string(&mut input).is_err() {
         out::eprint_stop(
             Command::Unban,
-            &msg::stdin_read_failed(msg::after_fix_owner_runs(crate::moves::Cmd::fixed(
-                "adr unban",
-            ))),
+            &msg::stdin_read_failed(msg::after_fix_owner_runs(crate::moves::Cmd::adr("unban"))),
         );
         return 1;
     }

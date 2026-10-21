@@ -45,9 +45,6 @@ fn repo() -> PathBuf {
         &format!("# Base\n{}", section(BASE_Q, &body("base widget"))),
     );
     approve_record(&dir, BASE);
-    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&base).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     dir
@@ -223,7 +220,7 @@ fn the_steps_in_order_from_headings_to_approval() {
     for h in [H1, H2] {
         assert!(
             out.lines()
-                .any(|l| l.ends_with(&format!("; agent writes the missing line under \"{}\"", h))),
+                .any(|l| l.ends_with(&format!("; agent writes the lines of \"{}\"", h))),
             "{}",
             out
         );
@@ -243,7 +240,7 @@ fn the_steps_in_order_from_headings_to_approval() {
     let err = refused(&approve(&dir));
     assert!(
         err.contains(&format!(
-            "is on no line; agent writes the missing line under \"{}\"",
+            "is on no line; agent writes the lines of \"{}\"",
             H1
         )),
         "{}",
@@ -604,7 +601,7 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     assert!(lines_wanted(&out).iter().any(|(h, _)| h == h3), "{}", out);
     assert!(
         out.lines()
-            .any(|l| l.ends_with(&format!("; agent writes the missing line under \"{}\"", h3))),
+            .any(|l| l.ends_with(&format!("; agent writes the lines of \"{}\"", h3))),
         "{}",
         out
     );
@@ -750,7 +747,14 @@ fn approve_refuses_a_neighbour_on_no_line_and_turns_the_names_into_identifiers()
     assert_eq!(wanted.len(), 2);
     write(&dir, &add_unrelated(&read(&dir), &wanted[1..]));
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("\"{}\" is a neighbour of \"{}\" and is on no line; agent writes the missing line under \"{}\"", wanted[0].1, wanted[0].0, wanted[0].0)), "{}", err);
+    assert!(
+        err.contains(&format!(
+            "\"{}\" is a neighbour of \"{}\" and is on no line; agent writes the lines of \"{}\"",
+            wanted[0].1, wanted[0].0, wanted[0].0
+        )),
+        "{}",
+        err
+    );
     assert!(!err.contains("no reader rows"), "{}", err);
     // The refusal changed nothing.
     let held = read(&dir);
@@ -932,7 +936,7 @@ fn planning_stops_without_the_reader() {
         "{}",
         err
     );
-    assert!(err.contains("agent installs an agent's files"), "{}", err);
+    assert!(err.contains("agent runs: adr install --claude"), "{}", err);
     assert_eq!(rows(&dir).len(), before, "nothing was read");
     assert_eq!(reader_text(&dir), held, "nothing was written");
     // The other commands run without it.
