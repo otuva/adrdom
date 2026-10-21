@@ -392,3 +392,5 @@ Standard: a review tool puts a change up for decision at the step it accepts the
 - B) No.
   Why: approve accepts a plan and ask puts it to the owner; a file may be approved before the bodies exist.
   Costs: every approval is followed by an ask run and a commit that carry nothing of the owner's.
+
+**Answer:** A
