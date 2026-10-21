@@ -60,7 +60,9 @@ pub const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "un
 
 /// The deny entries `adr install` installs into `.claude/settings.json` and
 /// `adr check`'s `install` check verifies are present: two `Bash` patterns
-/// per `OWNER_COMMANDS` entry, then the two `adrdom/state/**` entries.
+/// per `OWNER_COMMANDS` entry, then the `Edit(adrdom/state/**)` entry
+/// (Claude Code's `Edit` rule covers `Write` too; a `Write` rule never
+/// matches and Claude Code warns about it).
 /// `check` (`commands/check/install.rs`) compares this list against
 /// `.claude/settings.json` by membership only, not by order, so an install
 /// with the entries in a different order (or interleaved with owner-added
@@ -72,6 +74,5 @@ pub fn deny_entries() -> Vec<String> {
         out.push(format!("Bash(* adr {}*)", cmd));
     }
     out.push("Edit(adrdom/state/**)".to_string());
-    out.push("Write(adrdom/state/**)".to_string());
     out
 }
