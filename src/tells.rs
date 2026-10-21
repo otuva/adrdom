@@ -2,15 +2,14 @@
 //! something, what the code does right now, when something was said, or
 //! that opens a heading already presupposing an answer (per "Does the tool
 //! stop loaded phrases in a question?"). `approve`
-//! and `ask` refuse on a hit; `check` reports the same hits, but only in
+//! refuses on a hit; `check` reports the same hits, but only in
 //! text not yet frozen (a section whose latest ledger state is not
 //! `answered`, `refused`, or `superseded`) plus the context prose, which is
 //! never frozen.
 //!
 //! Used by `actions::do_approve_record` (a heading with any tell, or a
-//! context prose line with a provenance/code-state/date tell, refuses
-//! before any write), `commands::ask::run` (a candidate section's body with
-//! a provenance/code-state/date tell refuses), and
+//! context prose line or a question's body with a provenance/code-state/date
+//! tell, refuses before any write), and
 //! `commands::check::tells` (the same scan, reported rather than refused,
 //! for unfrozen text).
 
@@ -177,7 +176,7 @@ fn line_tells(i: usize, text: &str) -> Vec<(usize, String, TellKind)> {
 
 /// Every provenance, code-state, or date tell in `lines[start..end]`, tool
 /// lines skipped: (absolute 0-based line index, the matched phrase or date,
-/// what it does). Used for a section's body (`ask`, and through
+/// what it does). Used for a section's body (`approve`, and through
 /// `rules::body_tell_refusals` `check`, `approve` and `plan`) and for the
 /// context prose (`approve`, `check`).
 pub fn prose_tells_in(
@@ -217,7 +216,7 @@ fn opens_with_does(heading_text: &str) -> bool {
 /// `heading_text`: under a heading that opens with "Does" an option holds
 /// one word, and any other option, every Why line and every Costs line holds
 /// at most `WORD_LIMIT` words. Returns (absolute 0-based line, the word
-/// count, the line's kind). Only `ask` reads this, and only on a question
+/// count, the line's kind). Only `approve` reads this, and only on a question
 /// not yet answered, so answered text is never judged (per "Does the word
 /// limit read answered text?").
 pub fn length_tells(

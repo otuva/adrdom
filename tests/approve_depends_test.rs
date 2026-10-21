@@ -156,7 +156,11 @@ fn approve_refuses_an_entry_naming_a_current_decision_of_another_file() {
         let err = stderr(&out);
         assert!(err.contains("\"Third?\" depends on "), "{}", err);
         assert!(err.contains(OTHER_FILE_REFUSAL), "{}", err);
-        assert!(err.contains(&"agent rewrites the depends line of \"Third?\" to name terms and questions of this file".to_string()), "{}", err);
+        assert!(
+            err.contains(&"agent rewrites the depends line of \"Third?\"".to_string()),
+            "{}",
+            err
+        );
         assert!(
             err.contains("Some earlier heading?") || err.contains(&decided_id),
             "{}",
@@ -189,10 +193,10 @@ fn approve_refuses_an_entry_naming_a_current_decision_of_another_file() {
 
 // adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 //
-// ask refuses the same entry in a plan the owner approved and the agent then
-// edited; the entry is named.
+// approve refuses the same entry in a plan the owner approved and the agent
+// then edited; the entry is named.
 #[test]
-fn ask_refuses_an_entry_naming_a_current_decision_of_another_file() {
+fn approve_refuses_an_edited_entry_naming_a_current_decision_of_another_file() {
     let dir = init_repo();
     setup(&dir);
     let decided_id = earlier_decision(&dir);
@@ -217,10 +221,10 @@ fn ask_refuses_an_entry_naming_a_current_decision_of_another_file() {
             approved.replacen(&line, &format!("depends: {}", entry), 1),
         )
         .unwrap();
-        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(
             !out.status.success(),
-            "ask should have refused {}: {}",
+            "approve should have refused {}: {}",
             entry,
             stdout(&out)
         );
@@ -362,9 +366,9 @@ fn approve_refuses_a_depends_line_naming_three_questions_and_counts_no_term() {
 
 // adr: 010901e0-c02d-49eb-98bc-d584756d7f51
 //
-// ask refuses a plan whose depends line was edited over the cap after approval.
+// approve refuses a plan whose depends line was edited over the cap after approval.
 #[test]
-fn ask_refuses_a_depends_line_naming_three_questions() {
+fn approve_refuses_an_edited_depends_line_naming_three_questions() {
     let dir = init_repo();
     setup(&dir);
     let q = |h: &str, d: &str| {
@@ -392,7 +396,7 @@ fn ask_refuses_a_depends_line_naming_three_questions() {
         .to_string();
     let edited = approved.replacen(&line, &format!("{}, Root c?=A", line), 1);
     std::fs::write(&record, edited).unwrap();
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
         stderr(&out).contains("\"Over?\" depends on 3 questions, the most is 2"),
@@ -419,7 +423,9 @@ fn approve_refuses_a_term_entry_that_resolves_to_nothing() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"nosuchterm\" which is no term; agent writes the term in adrdom/terms.md"),
+        err.contains(
+            "\"1.1 Q?\" depends on \"nosuchterm\" which is no term; agent writes the term"
+        ),
         "{}",
         err
     );
@@ -480,7 +486,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
     let err = stderr(&out);
     assert!(
         err.contains(&format!(
-            "\"1.1 Q?\" depends on {} which names no term and no question of this file; agent rewrites the entry to name a term or a question of this file",
+            "\"1.1 Q?\" depends on {} which names no term and no question of this file; agent rewrites the entry",
             uuid
         )),
         "{}",
@@ -538,11 +544,7 @@ fn approve_refuses_a_cycle_between_two_headings() {
     );
     assert!(err.contains("\"A?\""), "{}", err);
     assert!(err.contains("\"B?\""), "{}", err);
-    assert!(
-        err.contains("agent rewrites the depends lines of these questions"),
-        "{}",
-        err
-    );
+    assert!(err.contains("agent rewrites the depends line"), "{}", err);
 }
 
 #[test]
@@ -791,12 +793,8 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
     // The answer set is part of the depends line, which the question hash
     // covers: the file awaits approval again, and approve writes a new file
     // row and a new row for 1.2 only.
-    let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(
-        stderr(&asked).contains("plan is changed"),
-        "{}",
-        stderr(&asked)
-    );
+    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    assert!(shown.contains("[changed since asked] 1.2 "), "{}", shown);
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
     assert!(
@@ -904,7 +902,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     assert!(show2.status.success(), "{}", stderr(&show2));
     let shown2 = stdout(&show2);
     assert!(
-        shown2.contains("[not asked] 1.1 Is the gadget red?"),
+        shown2.contains("[asked @") && shown2.contains("] 1.1 Is the gadget red?"),
         "{}",
         shown2
     );
@@ -918,14 +916,13 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
 
 // adr: da59b448-1afb-4469-b40e-69eda8f253c2
 //
-// "ask stops any question whose heading is not in the plan the owner
-// approved": plan approval is a hash over the file exactly as the owner
-// approved it. B's `depends:` line, hand-reverted back to the heading
-// words `approve` rewrote to A's id, still resolves to that same question
-// -- but it is no longer the bytes the owner approved, so `ask` refuses and
-// `check` takes the file as awaiting approval.
+// Plan approval is a hash over the file exactly as the owner approved it.
+// B's `depends:` line, hand-reverted back to the heading words `approve`
+// rewrote to A's id, still resolves to that same question -- but it is no
+// longer the bytes the owner approved, so B stands as changed since asked
+// until the owner approves again, and `check` names it.
 #[test]
-fn ask_and_check_refuse_a_depends_line_reverted_by_hand_after_approve() {
+fn a_depends_line_reverted_by_hand_after_approve_awaits_the_next_approve() {
     let dir = init_repo();
     setup(&dir);
 
@@ -957,23 +954,33 @@ fn ask_and_check_refuse_a_depends_line_reverted_by_hand_after_approve() {
     );
     std::fs::write(&record, &reverted).unwrap();
 
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    // Nothing is asked anew until the owner approves: B stands as changed
+    // since asked, and show names the owner's approve.
+    let rows = asked_row_count(&dir);
+    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
     assert!(
-        !ask_out.status.success(),
-        "ask must refuse a plan reverted back to its pre-approval wording: {}",
-        stdout(&ask_out)
-    );
-    assert!(
-        stderr(&ask_out).contains("adrdom/decisions/topic.md: plan is changed"),
+        shown.contains("[changed since asked] 1.1 Is B stand on A?"),
         "{}",
-        stderr(&ask_out)
+        shown
     );
+    assert!(
+        shown.contains("owner runs: adr approve adrdom/decisions/topic.md"),
+        "{}",
+        shown
+    );
+    assert_eq!(asked_row_count(&dir), rows);
 
     let check_out = adr(&dir, &["check"], &[], "");
-    // An unapproved file is never a failure of its own, and its status is no
-    // line of check's (bd83aa22).
+    // The file's status is no line of check's (bd83aa22); the question asked
+    // and then edited is, with the owner's approve as its move.
     let checked = stdout(&check_out);
-    assert!(check_out.status.success(), "{}", checked);
+    assert!(
+        checked.contains(
+            "1.1 Is B stand on A?: changed since asked; owner runs: adr approve adrdom/decisions/topic.md"
+        ),
+        "{}",
+        checked
+    );
     assert!(!checked.contains("awaiting approval"), "{}", checked);
     assert!(
         !checked.contains("body under unapproved heading"),
@@ -1090,7 +1097,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
         stdout(&out)
     );
     assert!(
-        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent restores the line from git"),
+        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line"),
         "{}",
         stderr(&out)
     );
@@ -1104,7 +1111,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
 
     let check = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent restores the line from git"),
+        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line"),
         "check must report the same frozen-edit refusal: {}",
         stdout(&check)
     );

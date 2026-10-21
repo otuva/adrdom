@@ -36,8 +36,6 @@ fn answered() -> (PathBuf, String) {
         &format!("# Gate\n\n### {}\ndepends: widget\n{}\n", ONE, BODY),
     );
     approve_record(&dir, REL);
-    let asked = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-    assert!(asked.status.success(), "{}", stderr(&asked));
     let id = extract_ids(&std::fs::read_to_string(&path).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     (dir, id)

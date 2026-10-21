@@ -1,6 +1,6 @@
-// The length rules of a question's options: what `ask` refuses on a
+// The length rules of a question's options: what `approve` refuses on a
 // question not yet answered. Each fixture goes through a real approve, then
-// ask.
+// the long text is put back and approve runs again.
 mod common;
 
 use common::*;
@@ -47,7 +47,7 @@ fn shortened(content: &str) -> String {
 }
 
 /// Approve takes the short version (approve refuses the long one), then the
-/// body lines are put back, so ask meets them.
+/// body lines are put back, so the second approve meets them.
 fn setup(content: &str) -> (PathBuf, PathBuf) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -67,7 +67,7 @@ fn setup(content: &str) -> (PathBuf, PathBuf) {
         })
         .collect();
     // Approve cannot take these lines, so the approval rows are written by
-    // hand: ask is the second stop for text that reaches it.
+    // hand: approve is the second stop for text that reaches it.
     std::fs::write(&rec, back.join("\n") + "\n").unwrap();
     let rf = adr::record::load(&rec).unwrap();
     let rel = "adrdom/decisions/example.md";
@@ -103,18 +103,23 @@ fn both(o: &std::process::Output) -> String {
     format!("{}{}", stdout(o), stderr(o))
 }
 
-fn ask(dir: &std::path::Path, rec: &std::path::Path) -> std::process::Output {
-    adr(dir, &["ask", rec.to_str().unwrap()], &[], "")
+fn approve(dir: &std::path::Path, rec: &std::path::Path) -> std::process::Output {
+    adr_owner(dir, &["approve", rec.to_str().unwrap()], "")
 }
 
 fn refused_for(content: &str, kind: &str) -> bool {
     let (dir, rec) = setup(content);
-    let out = ask(&dir, &rec);
+    let asked = asked_row_count(&dir);
+    let out = approve(&dir, &rec);
     let err = stderr(&out);
     let refused = !out.status.success() && err.contains(&format!("the {} has", kind));
     if refused {
         assert!(err.contains("agent rewrites the "), "{}", err);
-        assert_eq!(asked_row_count(&dir), 0, "a refusal writes no asked row");
+        assert_eq!(
+            asked_row_count(&dir),
+            asked,
+            "a refusal writes no asked row"
+        );
     }
     refused
 }
@@ -128,7 +133,7 @@ fn an_option_under_a_does_heading_holds_one_word() {
         "w.",
         "c.",
     ));
-    let out = ask(&dir, &rec);
+    let out = approve(&dir, &rec);
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains("the option has 2 words, the most is 1; agent rewrites the option"),
@@ -137,9 +142,10 @@ fn an_option_under_a_does_heading_holds_one_word() {
     );
 
     let (dir, rec) = setup(&question("Does the decision hold?", "Yes.", "w.", "c."));
-    let out = ask(&dir, &rec);
+    let asked = asked_row_count(&dir);
+    let out = approve(&dir, &rec);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert_eq!(asked_row_count(&dir), 1);
+    assert_eq!(asked_row_count(&dir), asked + 1, "asked again as edited");
 
     // A heading that does not open with Does takes a sentence.
     let (dir, rec) = setup(&question(
@@ -148,13 +154,13 @@ fn an_option_under_a_does_heading_holds_one_word() {
         "w.",
         "c.",
     ));
-    assert!(ask(&dir, &rec).status.success());
+    assert!(approve(&dir, &rec).status.success());
     let _ = dir;
 }
 
 // adr: d808917b-0717-45ad-ab83-9fa274b9a9d4
 #[test]
-fn ask_refuses_an_option_over_the_word_limit() {
+fn approve_refuses_an_option_over_the_word_limit() {
     assert!(refused_for(
         &question("What does the decision hold?", &words(25), "w.", "c."),
         "option"
@@ -205,8 +211,8 @@ fn the_word_limit_holds_for_the_costs_line() {
 fn the_word_limit_does_not_read_an_answered_question() {
     // adr: 55a8abb2-0f6d-430b-99f9-a378f3f154e5
     // The first question was answered with an option over the limit (hand-
-    // written ledger rows: ask would have refused it). Asking the second
-    // question still passes and never names the first.
+    // written ledger rows: approve would have refused it). Approving again
+    // still passes and never names the first.
     let first = question("What does the decision hold?", &words(30), "w.", "c.");
     let second = "\n### What else does the decision hold?\ndepends: What does the decision hold?=A\n\nProblem: a decision is unclear.\n\nStandard: plain words.\n\n- A) Short.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
     let (dir, rec) = setup(&format!("{}{}", first, second));
@@ -216,9 +222,10 @@ fn the_word_limit_does_not_read_an_answered_question() {
     let section = text[start..end].trim_end().to_string();
     let id = extract_ids(&section)[0].clone();
     let hash = mirror_section_hash(&section);
-    // The answer comes after the ask, as answer writes it.
-    append_ledger_row_at(&dir, "asked", &id, &hash, "-", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", &id, &hash, "A", "2024-01-01T00:00:01Z");
+    // The answer comes after the ask, as answer writes it, and both after
+    // the rows the first approve wrote.
+    append_ledger_row_at(&dir, "asked", &id, &hash, "-", "2099-01-02T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", &id, &hash, "A", "2099-01-02T00:00:01Z");
     let with_answer = format!(
         "{}\n\n**Answer:** A\n{}",
         text[..end].trim_end(),
@@ -226,7 +233,7 @@ fn the_word_limit_does_not_read_an_answered_question() {
     );
     std::fs::write(&rec, with_answer).unwrap();
 
-    let out = ask(&dir, &rec);
+    let out = approve(&dir, &rec);
     assert!(!stderr(&out).contains("the option has"), "{}", stderr(&out));
     assert!(out.status.success(), "{}", stderr(&out));
     // check never reads the answered question either.

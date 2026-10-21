@@ -10,9 +10,9 @@ use super::*;
 /// satellite?"), so the command is run again there. `actor` is who runs
 /// `cmd`: the owner for the owner's commands, the agent for the others.
 pub fn record_elsewhere(cmd: &str, args: &[&str], actor: Actor, primary: &str) -> String {
-    let mut words = vec!["adr", cmd];
+    let mut words = vec![cmd];
     words.extend_from_slice(args);
-    let into = Act::ChangesInto(primary.to_string());
+    let into = Act::ChangesInto(Part::File(primary.to_string()));
     let again = Act::Runs(command(&words));
     let next = match actor {
         Actor::Agent | Actor::Builder => Next::agent(into).then(again),
@@ -26,10 +26,7 @@ pub fn record_elsewhere(cmd: &str, args: &[&str], actor: Actor, primary: &str) -
 pub fn record_missing(cmd: &str, primary: &str) -> String {
     refuse(
         format!("{}: record not found at {}", cmd, primary),
-        Next::agent(Act::Restores(format!(
-            "the primary's checkout at {}",
-            primary
-        ))),
+        Next::agent(Act::Restores(Part::File(primary.to_string()))),
     )
 }
 
@@ -41,13 +38,13 @@ pub fn satellite_missing(path: &str, url: &str) -> Said {
         said(
             &crate::rule::SATELLITE_FOUND_AT_PATH,
             format!("satellite {} not found, no url", path),
-            Next::agent(Act::Restores(path.to_string())),
+            Next::agent(Act::Restores(Part::File(path.to_string()))),
         )
     } else {
         said(
             &crate::rule::SATELLITE_FOUND_AT_PATH,
             format!("satellite {} not found, url {}", path, url),
-            Next::agent_runs(command(&["git", "clone", url, path])),
+            Next::agent(Act::Restores(Part::File(path.to_string()))),
         )
     }
 }
@@ -57,7 +54,7 @@ pub fn satellite_brief_differs() -> Said {
     said(
         &crate::rule::SATELLITE_BRIEF_MATCHES_PRIMARY,
         "adrdom/state/brief.md differs from the primary's",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -66,7 +63,7 @@ pub fn satellite_brief_missing() -> Said {
     said(
         &crate::rule::SATELLITE_BRIEF_MATCHES_PRIMARY,
         "adrdom/state/brief.md is missing",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -80,7 +77,7 @@ pub fn satellite_terms_brief_differs() -> Said {
             crate::repo::TERMS_BRIEF_PATH,
             crate::repo::TERMS_PATH
         ),
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -89,7 +86,7 @@ pub fn satellite_terms_brief_missing() -> Said {
     said(
         &crate::rule::TERMS_BRIEF_MATCHES_TERMS,
         format!("{} missing", crate::repo::TERMS_BRIEF_PATH),
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -97,7 +94,7 @@ pub fn satellite_terms_brief_missing() -> Said {
 pub fn satellite_not_a_repo(given: &str) -> String {
     refuse(
         format!("install: {} is not a git repository", given),
-        Next::agent(Act::Rewrites("the path after --satellite".to_string())),
+        Next::agent(Act::Rewrites(Part::Path)),
     )
 }
 
@@ -106,7 +103,7 @@ pub fn satellite_not_a_repo(given: &str) -> String {
 pub fn satellite_holds_record(given: &str) -> String {
     refuse(
         format!("install: {} holds a record of its own", given),
-        Next::agent(Act::Rewrites("the path after --satellite".to_string())),
+        Next::agent(Act::Rewrites(Part::Path)),
     )
 }
 
@@ -114,8 +111,7 @@ pub fn satellite_holds_record(given: &str) -> String {
 pub fn satellite_without_record(given: &str) -> String {
     refuse(
         "install: this repository holds no record".to_string(),
-        Next::agent_runs(Cmd::fixed("adr install")).then(Act::Runs(command(&[
-            "adr",
+        Next::agent_runs(Cmd::adr("install")).then(Act::Runs(command(&[
             "install",
             "--satellite",
             given,
@@ -132,10 +128,10 @@ pub fn satellite_of_another(given: &str, satellite: &str, other: &str) -> String
         format!("install: {} is held by the primary at {}", given, other),
         Next::all(vec![
             Next::owner_then_runs(
-                Act::ChangesInto(satellite.to_string()),
-                Cmd::fixed("adr uninstall"),
+                Act::ChangesInto(Part::File(satellite.to_string())),
+                Cmd::adr("uninstall"),
             ),
-            Next::agent_runs(command(&["adr", "install", "--satellite", given])),
+            Next::agent_runs(command(&["install", "--satellite", given])),
         ]),
     )
 }
@@ -146,7 +142,7 @@ pub fn satellite_of_another(given: &str, satellite: &str, other: &str) -> String
 pub fn satellite_not_listed(given: &str) -> String {
     refuse(
         format!("uninstall: no satellite is listed at {}", given),
-        Next::owner(Act::Rewrites("the path after --satellite".to_string())),
+        Next::owner(Act::Rewrites(Part::Path)),
     )
 }
 
@@ -156,8 +152,8 @@ pub fn satellite_still_there(given: &str) -> String {
     refuse(
         format!("uninstall: a checkout is at {}", given),
         Next::owner_then_runs(
-            Act::ChangesInto(given.to_string()),
-            Cmd::fixed("adr uninstall"),
+            Act::ChangesInto(Part::File(given.to_string())),
+            Cmd::adr("uninstall"),
         ),
     )
 }
@@ -166,7 +162,7 @@ pub fn satellite_still_there(given: &str) -> String {
 pub fn satellite_takes_no_flag(flag: &str) -> String {
     refuse(
         format!("install: a satellite takes no {}", flag),
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 

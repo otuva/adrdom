@@ -1,6 +1,5 @@
 pub mod answer;
 pub mod approve;
-pub mod ask;
 pub mod ban;
 pub mod check;
 pub mod install;
@@ -28,7 +27,7 @@ pub(crate) fn refused_in_satellite(
     // printed from the primary's root when it lies inside it (the other
     // arguments, the entry of approve, as given).
     let mut shown: Vec<String> = args.iter().map(|a| a.to_string()).collect();
-    if matches!(cmd, Command::Plan | Command::Ask | Command::Approve) {
+    if matches!(cmd, Command::Plan | Command::Approve) {
         if let (Some(file), Ok(record)) = (
             shown.first_mut(),
             std::fs::canonicalize(crate::repo::main_root(root).join(&primary)),
@@ -60,11 +59,13 @@ pub const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "un
 
 /// The deny entries `adr install` installs into `.claude/settings.json` and
 /// `adr check`'s `install` check verifies are present: two `Bash` patterns
-/// per `OWNER_COMMANDS` entry, then the two `adrdom/state/**` entries.
-/// `check` (`commands/check/install.rs`) compares this list against
-/// `.claude/settings.json` by membership only, not by order, so an install
-/// with the entries in a different order (or interleaved with owner-added
-/// ones) still passes.
+/// per `OWNER_COMMANDS` entry, then the `Edit(adrdom/state/**)` entry
+/// (Claude Code's `Edit` rule covers `Write` too; a `Write` rule never
+/// matches and Claude Code warns about it).
+/// `check` (`commands/check/install.rs`) compares this list against the
+/// entries of `.claude/settings.json` in the tool's form (`is_tool_deny_entry`)
+/// by membership only, not by order, so an install with the entries in a
+/// different order (or interleaved with owner-added ones) still passes.
 pub fn deny_entries() -> Vec<String> {
     let mut out = Vec::new();
     for cmd in OWNER_COMMANDS {
@@ -72,6 +73,15 @@ pub fn deny_entries() -> Vec<String> {
         out.push(format!("Bash(* adr {}*)", cmd));
     }
     out.push("Edit(adrdom/state/**)".to_string());
-    out.push("Write(adrdom/state/**)".to_string());
     out
+}
+
+/// Whether a deny entry is in the form install writes, and so of the block
+/// install owns (per "Does check hold the files install writes?", 6ef9eca6
+/// A): a rule on an adr command or on adrdom/state. Every other entry is
+/// the repository's own, which install and check leave alone.
+pub fn is_tool_deny_entry(entry: &str) -> bool {
+    entry.starts_with("Bash(adr ")
+        || entry.starts_with("Bash(* adr ")
+        || entry.ends_with("(adrdom/state/**)")
 }

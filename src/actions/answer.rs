@@ -88,7 +88,7 @@ fn locate_asked(
 
     // Refuse when terms.md is missing, unreadable, or not approved (per
     // "Does the tool stop while the terms file waits for approval?",
-    // aa475aa3 A) -- the same gate `ask` applies. The returned terms file is
+    // aa475aa3 A) -- the same gate `approve` applies. The returned terms file is
     // kept for the terms-line validity check `do_answer` makes afterward.
     let tf = require_terms(root, &led, &rel, Command::Answer)?;
 
@@ -142,7 +142,7 @@ fn locate_asked(
         }
         // The text stands as it was asked (the version the owner would read
         // is the current one) or it does not (never asked, or edited since:
-        // the agent's `ask` is the move and the owner has nothing to run).
+        // the owner's `approve` is the move).
         let stands = crate::state::asked_text_stands(&led, id, &cur_hash);
         if !stands {
             // The move is the one `show` names for the question's file.
@@ -156,7 +156,7 @@ fn locate_asked(
                     led: &led,
                     index: &index,
                 };
-                crate::moves::of_unasked_question_in(&j, &rf, &sec.heading_text, sec.is_skeleton)
+                crate::moves::of_unasked_question_in(&j, &rf, sec.is_skeleton)
             };
             let report = moves();
             let mut lines = stop(
@@ -210,7 +210,7 @@ fn locate_asked(
 /// it?"): `state::answer_waits` is the one test, the `next` lines and the page read it too. Shared
 /// by a letter and a refusal. An unanswered target names the owner's `adr answer` of the first
 /// question in its chain that `answer` takes, once that question is asked and stands as asked, else
-/// the agent's `adr ask` (or the writing of a body first); a chain that ends on a refused question
+/// the owner's `adr approve` (or the writing of a body first); a chain that ends on a refused question
 /// names the plan change and the approval.
 fn answer_gate(
     root: &Path,
@@ -227,12 +227,12 @@ fn answer_gate(
     use crate::moves::{Move, MoveKind, Waits};
     let mut waits = Vec::new();
     // What the plan waits for, read off the file as loaded, the way `show`
-    // reads it: the move to ask a leaf is the agent's `adr ask` only when
-    // ask would take it (`moves::of_unasked_question`, the pieces
+    // reads it: the move to ask a leaf is the owner's `adr approve` only when
+    // approve would take it (`moves::of_unasked_question`, the pieces
     // `moves::of_topic_file` uses).
     let all = std::cell::OnceCell::new();
     let index = std::cell::OnceCell::new();
-    let moves_for = |leaf: usize, unwritten: bool| {
+    let moves_for = |unwritten: bool| {
         let all = all.get_or_init(|| record::load_all(root));
         let index = index.get_or_init(|| crate::rules::RepoIndex::new(root, all, &tf.terms, led));
         let j = crate::moves::Judging {
@@ -242,7 +242,7 @@ fn answer_gate(
             led,
             index,
         };
-        crate::moves::of_unasked_question_in(&j, rf, &rf.sections[leaf].heading_text, unwritten)
+        crate::moves::of_unasked_question_in(&j, rf, unwritten)
     };
     for &t in &w.unanswered {
         let heading = rf.sections[t].heading_text.clone();
@@ -256,7 +256,7 @@ fn answer_gate(
                 match &sec.id {
                     _ if sec.is_skeleton => Waits::Unwritten {
                         heading,
-                        report: moves_for(leaf, true),
+                        report: moves_for(true),
                     },
                     Some(id) if crate::view::asked_text_stands(led, rf, sec) => {
                         let answer = Move::new(MoveKind::Answer {
@@ -268,7 +268,7 @@ fn answer_gate(
                     }
                     _ => Waits::Asking {
                         heading,
-                        report: moves_for(leaf, false),
+                        report: moves_for(false),
                     },
                 }
             }
@@ -344,7 +344,6 @@ fn finish_answer(
     let path = rf.path.clone();
     let again = || {
         msg::after_fix_owner_runs(crate::moves::command(&[
-            "adr",
             "answer",
             &format!("{}@{}", id, version),
             given,
@@ -414,18 +413,14 @@ fn finish_answer(
             return Err(stop(
                 Command::Answer,
                 msg::update_failed(
-                    "ledger",
+                    crate::repo::LEDGER_PATH,
                     format!(
                         "{}; {} holds the answer line and could not be put back: {}",
                         e, rf.rel, back
                     ),
-                    Next::agent(msg::Act::Rewrites("the ledger".to_string()))
-                        .then(msg::Act::Removes(format!(
-                            "the answer line from {}",
-                            rf.rel
-                        )))
+                    Next::agent(msg::Act::Rewrites(msg::Part::Ledger))
+                        .then(msg::Act::Removes(msg::Part::LineOf(msg::LineKind::Answer)))
                         .and_owner_runs(crate::moves::command(&[
-                            "adr",
                             "answer",
                             &format!("{}@{}", id, version),
                             given,
@@ -435,7 +430,7 @@ fn finish_answer(
         }
         return Err(stop(
             Command::Answer,
-            msg::update_failed("ledger", e, again()),
+            msg::update_failed(crate::repo::LEDGER_PATH, e, again()),
         ));
     }
 

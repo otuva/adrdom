@@ -37,11 +37,8 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let terms = "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A clear yes.\naliases: passes\n";
     std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
     approve_terms_via_ledger(&dir, terms);
-    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     // Commit everything install wrote too, not just adrdom/: the
     // pre-commit hook now judges the same staged tree `check --staged`
@@ -55,7 +52,7 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let out = adr(&dir, &["check"], &[], "");
     let out_text = stdout(&out);
     assert!(
-        !out_text.contains("owner restores the missing or changed row from git"),
+        !out_text.contains("owner restores the row"),
         "unexpected ledger failure before tampering: {}",
         out_text
     );
@@ -79,7 +76,12 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let out2 = adr(&dir, &["check"], &[], "");
     let out2_text = stdout(&out2);
     assert!(!out2.status.success());
-    assert!(out2_text.contains("a row from HEAD's ledger is missing or changed; owner restores the missing or changed row from git"), "{}", out2_text);
+    assert!(
+        out2_text
+            .contains("a row from HEAD's ledger is missing or changed; owner restores the row"),
+        "{}",
+        out2_text
+    );
 }
 
 // adr: dfd32ef6-c2ac-40ef-b8b3-9c58732516b1
@@ -141,9 +143,6 @@ fn approve_and_answer_write_without_committing_and_the_next_commit_carries_them(
         "approving the topic file must not commit either"
     );
 
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -204,11 +203,8 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
     let terms = "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A clear yes.\naliases: passes\n";
     std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
     approve_terms_via_ledger(&dir, terms);
-    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     // Everything install wrote staged too (see the comment in
     // `ledger_append_only_violation_is_detected_after_a_commit`): the
@@ -222,7 +218,7 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
 
     let clean_check = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&clean_check).contains("owner restores the missing or changed row from git"),
+        !stdout(&clean_check).contains("owner restores the row"),
         "unexpected ledger failure before deleting anything: {}",
         stdout(&clean_check)
     );
@@ -242,7 +238,12 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
     let deleted_check = adr(&dir, &["check"], &[], "");
     assert!(!deleted_check.status.success());
     let deleted_text = stdout(&deleted_check);
-    assert!(deleted_text.contains("a row from HEAD's ledger is missing or changed; owner restores the missing or changed row from git"), "{}", deleted_text);
+    assert!(
+        deleted_text
+            .contains("a row from HEAD's ledger is missing or changed; owner restores the row"),
+        "{}",
+        deleted_text
+    );
 
     // Restore HEAD's content untouched and append a genuinely new row on
     // top: every HEAD row is still present, so the check must pass again.
@@ -283,9 +284,6 @@ fn ledger_rows_from_ask_approve_answer_are_six_fields_with_correct_meaning() {
 
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
@@ -412,9 +410,6 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
         id
     );
 
-    assert!(adr(&dir, &["ask", record_path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let after_first_ask = std::fs::read_to_string(&ledger_path).unwrap();
     let first_row = after_first_ask
@@ -439,9 +434,6 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
         "reword must not mint a new id or drop the old one"
     );
 
-    assert!(adr(&dir, &["ask", record_path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let after_reword_ask = std::fs::read_to_string(&ledger_path).unwrap();
     let second_row = after_reword_ask
         .lines()

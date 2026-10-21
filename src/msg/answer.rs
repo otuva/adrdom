@@ -10,7 +10,7 @@ pub fn id_not_found(id: &str) -> String {
             "id {} not found in any topic file; show prints the id of every question that waits for an answer",
             id
         ),
-        Next::owner_runs(Cmd::fixed("adr show")),
+        Next::owner_runs(Cmd::adr("show")),
     )
 }
 
@@ -24,7 +24,7 @@ pub fn id_not_found_some_unread(id: &str, unread: &[String]) -> String {
             id,
             unread.join(", ")
         ),
-        Next::agent(Act::Rewrites("each file that cannot be read".into())),
+        Next::agent(Act::Rewrites(Part::File(unread.join(", ")))),
     )
 }
 
@@ -37,7 +37,7 @@ pub fn already_closed(heading: &str, st: crate::status::QuestionStatus) -> Strin
             heading,
             st.name()
         ),
-        Next::owner_runs(Cmd::fixed("adr show")),
+        Next::owner_runs(Cmd::adr("show")),
     )
 }
 
@@ -70,15 +70,15 @@ pub fn letter_not_an_option(
 /// (`moves::of_unasked_question_in`).
 pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> String {
     format!(
-        "\"{}\" is edited since it was asked; {}",
+        "\"{}\" is changed since it was asked; {}",
         heading,
         report
-            .moves_tail(Next::agent(Act::Restores("the question".into())))
+            .moves_tail(Next::agent(Act::Restores(Part::Question)))
             .render()
     )
 }
 
-/// A question with a body that no `ask` has put to the owner.
+/// A question with a body that the approve of its file has not put to the owner.
 /// `report`: what the rules find in the question's file and its moves
 /// (`moves::of_unasked_question_in`).
 pub fn not_asked_yet(heading: &str, rel: &str, report: &crate::moves::Report) -> String {
@@ -87,7 +87,7 @@ pub fn not_asked_yet(heading: &str, rel: &str, report: &crate::moves::Report) ->
         heading,
         crate::status::QuestionStatus::NotAsked.name(),
         report
-            .moves_tail(Next::agent_runs(command(&["adr", "ask", rel])))
+            .moves_tail(Next::owner_runs(command(&["approve", rel])))
             .render()
     )
 }
@@ -100,7 +100,7 @@ pub fn drop_without_id(heading: &str, rel: &str) -> Said {
             "answering would remove \"{}\", which has no identifier",
             heading
         ),
-        Next::owner_runs(command(&["adr", "approve", rel])),
+        Next::owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -114,11 +114,7 @@ pub fn drop_of_closed(heading: &str, refused: bool, rel: &str) -> Said {
             heading,
             if refused { "refused" } else { "answered" }
         ),
-        Next::agent(Act::Writes(format!(
-            "a question that supersedes \"{}\"",
-            heading
-        )))
-        .and_owner_runs(command(&["adr", "approve", rel])),
+        Next::agent(Act::Writes(Part::Question)).and_owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -130,7 +126,7 @@ pub fn drop_not_approved(heading: &str, rel: &str) -> Said {
             "answering would remove \"{}\", whose text matches no approved row of {}",
             heading, rel
         ),
-        Next::owner_runs(command(&["adr", "approve", rel])),
+        Next::owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -141,10 +137,9 @@ pub fn not_written(heading: &str, report: &crate::moves::Report) -> String {
         heading,
         crate::status::QuestionStatus::NoBody.name(),
         report
-            .moves_tail(Next::agent(Act::Writes(format!(
-                "the body of \"{}\"",
-                heading
-            ))))
+            .moves_tail(Next::agent(Act::Writes(Part::Body(vec![
+                heading.to_string()
+            ]))))
             .render()
     )
 }
@@ -167,7 +162,7 @@ pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
         ),
         None => refuse(
             format!("{}: no version given", id),
-            Next::owner_runs(Cmd::fixed("adr show")),
+            Next::owner_runs(Cmd::adr("show")),
         ),
     }
 }
@@ -187,7 +182,7 @@ pub fn stale_version(heading: &str, rel: &str) -> String {
             "\"{}\" has moved since that version was read; show prints it as it is now",
             heading
         ),
-        Next::owner_runs(command(&["adr", "show", rel])),
+        Next::owner_runs(command(&["show", rel])),
     )
 }
 
@@ -202,14 +197,14 @@ pub fn invalid_version_format(version: &str) -> String {
             "\"{}\" is not a valid version; show prints the id and version of every question that waits for an answer",
             version
         ),
-        Next::owner_runs(Cmd::fixed("adr show")),
+        Next::owner_runs(Cmd::adr("show")),
     )
 }
 
-/// The move that writes an asked question's terms line again: `ask` of its
-/// file, which rewrites the line in place.
+/// The move that writes an asked question's terms line again: the approve of
+/// its file, which rewrites the line in place.
 pub(super) fn ask_again(rel: &str) -> Next {
-    Next::agent_runs(command(&["adr", "ask", rel]))
+    Next::owner_runs(command(&["approve", rel]))
 }
 
 pub fn no_terms_line(rel: &str, id: &str, heading: &str) -> Said {

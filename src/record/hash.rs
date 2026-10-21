@@ -134,7 +134,7 @@ pub fn hash_range(lines: &[String], sec: &Section) -> (usize, usize) {
 /// The set on a `depends:` entry, canonicalized for hashing and printing:
 /// `*` for `Any`, or its letters sorted and joined with `|` for `Letters`
 /// (so `=B|A` and `=A|B` hash and print the same). The one place both
-/// `ask` (writing an `assumes` row) and `check` (recomputing it to compare)
+/// `approve` (writing an `assumes` row) and `check` (recomputing it to compare)
 /// turn a set into text.
 pub fn canonical_set(set: &AnswerSet) -> String {
     match set {

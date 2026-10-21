@@ -180,8 +180,7 @@ fn approve_refuses_a_depends_on_a_question_in_its_file_without_a_set() {
     let err = stderr(&out);
     assert!(err.contains("without an answer set"), "{}", err);
     assert!(
-        err.contains("agent writes an answer set (=A, =A|B or =*) on that depends entry")
-            && err.contains("owner runs: adr approve"),
+        err.contains("agent writes the answer set") && err.contains("owner runs: adr approve"),
         "{}",
         err
     );
@@ -203,11 +202,6 @@ fn approve_refuses_a_depends_on_a_question_in_its_file_without_a_set() {
 fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
     let dir = setup(&file_of(&[Q1]));
     assert!(approve(&dir).status.success());
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
         .id
         .clone()
@@ -222,8 +216,7 @@ fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
     let err = stderr(&out);
     assert!(err.contains("answered, under an answer set"), "{}", err);
     assert!(
-        err.contains("agent removes the answer set from that entry")
-            && err.contains("owner runs: adr approve"),
+        err.contains("agent removes the answer set") && err.contains("owner runs: adr approve"),
         "{}",
         err
     );
@@ -252,13 +245,13 @@ fn check_passes_a_file_awaiting_approval() {
         stdout(&out)
     );
 
-    // After approve nothing is printed; after an edit check still passes.
+    // After approve nothing is printed; after a question is added check still
+    // passes. (An edit of a question approve asked is a different finding.)
     assert!(approve(&dir).status.success());
     assert_eq!(stdout(&check_out(&dir)), "");
-    let edited = std::fs::read_to_string(dir.join(REL))
-        .unwrap()
-        .replace("s2.", "s2, reworded.");
-    std::fs::write(dir.join(REL), edited).unwrap();
+    let text = std::fs::read_to_string(dir.join(REL)).unwrap();
+    let q3 = Q2.replace("1.2 Second", "1.3 Third");
+    std::fs::write(dir.join(REL), format!("{}\n{}", text.trim_end(), q3)).unwrap();
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(
@@ -277,11 +270,6 @@ fn a_set_approved_before_the_answer_survives_a_reapprove_after_it() {
     let q2 = Q2.replace("depends: decision", "depends: 1.1 First question?=A");
     let dir = setup(&file_of(&[Q1, &q2]));
     assert!(approve(&dir).status.success());
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
         .id
         .clone()
@@ -304,11 +292,6 @@ fn a_set_approved_before_the_answer_survives_a_reapprove_after_it() {
                 .unwrap()
                 .contains("=A")
     );
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     let out = check_out(&dir);
     assert!(
         !stdout(&out).contains("answers:"),
@@ -325,16 +308,11 @@ fn a_set_approved_before_the_answer_survives_a_reapprove_after_it() {
 // was asked stays.
 #[test]
 fn a_set_changed_after_the_answer_on_an_approved_question_is_refused() {
-    // Q2 is approved while Q1 is asked and not yet answered, and no run of
-    // ask has put Q2 to the owner (one run would ask both).
+    // Q2 is approved while Q1 is asked and not yet answered; approve asks it
+    // with an `assumes` row under Q1's answer.
     let q2 = Q2.replace("depends: decision", "depends: 1.1 First question?=A");
     let dir = setup(&file_of(&[Q1]));
     assert!(approve(&dir).status.success());
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
         .id
         .clone()
@@ -372,11 +350,6 @@ fn a_set_changed_after_the_answer_on_an_approved_question_is_refused() {
 fn a_set_first_approved_after_the_ask_stays_after_the_answer() {
     let dir = setup(&file_of(&[Q1]));
     assert!(approve(&dir).status.success());
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0]
         .id
         .clone()
@@ -425,11 +398,7 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
         "{}",
         err
     );
-    assert!(
-        err.contains("agent removes the answer set from that entry"),
-        "{}",
-        err
-    );
+    assert!(err.contains("agent removes the answer set"), "{}", err);
     assert!(ledger_rows(&dir, "approved").is_empty());
 }
 
@@ -442,14 +411,32 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
 fn a_changed_and_a_struck_question_each_await_approval() {
     let dir = setup(&file_of(&[Q1, Q2]));
     assert!(approve(&dir).status.success());
-    let edited = std::fs::read_to_string(dir.join(REL))
-        .unwrap()
-        .replace("s2.", "s2, reworded.");
-    std::fs::write(dir.join(REL), edited).unwrap();
+    // A question added awaits approval and check passes.
+    let approved = std::fs::read_to_string(dir.join(REL)).unwrap();
+    let q3 = Q2.replace("1.2 Second", "1.3 Third");
+    std::fs::write(dir.join(REL), format!("{}\n{}", approved.trim_end(), q3)).unwrap();
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(!stdout(&out).contains("new or changed"), "{}", stdout(&out));
     assert!(awaits_approval(&dir));
+
+    // A question approve asked, then edited, awaits approval too; check names
+    // it as changed since asked, with the owner's approve as the move.
+    let edited = approved.replace("s2.", "s2, reworded.");
+    std::fs::write(dir.join(REL), edited).unwrap();
+    let out = check_out(&dir);
+    assert!(!stdout(&out).contains("new or changed"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains(&format!(
+            "1.2 Second question?: changed since asked; owner runs: adr approve {}",
+            REL
+        )),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    assert!(awaits_approval(&dir));
+    std::fs::write(dir.join(REL), &approved).unwrap();
 
     let id2 = adr::record::load(&dir.join(REL)).unwrap().sections[1]
         .id
@@ -458,12 +445,22 @@ fn a_changed_and_a_struck_question_each_await_approval() {
     let kept = std::fs::read_to_string(dir.join(REL)).unwrap();
     let cut = kept.find("### 1.2 ").unwrap();
     std::fs::write(dir.join(REL), kept[..cut].trim_end().to_string() + "\n").unwrap();
+    // The question approve asked is gone from the plan: check names it with
+    // the owner's approve as the move.
     let out = check_out(&dir);
-    assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(
         !stdout(&out).contains(&format!("struck: {}", id2)),
         "{}",
         stdout(&out)
+    );
+    assert!(
+        stdout(&out).contains(&format!(
+            "{} (\"1.2 Second question?\", asked) was removed from the plan; owner runs: adr approve {}",
+            id2, REL
+        )),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
     );
     assert!(awaits_approval(&dir));
 }

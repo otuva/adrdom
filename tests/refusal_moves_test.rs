@@ -48,9 +48,6 @@ fn an_entry_on_a_question_of_another_file_is_refused_in_both_states() {
         ),
     );
     approve_record(&dir, A);
-    assert!(adr(&dir, &["ask", a.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let b = write_record(
         &dir,
@@ -81,7 +78,7 @@ fn an_entry_on_a_question_of_another_file_is_refused_in_both_states() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\", a decision of another topic file; agent rewrites the depends line of \"Is the widget beta hold?\" to name terms and questions of this file",
+            "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\", a decision of another topic file; agent rewrites the depends line of \"Is the widget beta hold?\"",
             B
         )),
         "{}",
@@ -107,9 +104,6 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
         ),
     );
     approve_record(&dir, A);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let alpha = extract_ids(&std::fs::read_to_string(&path).unwrap())[0].clone();
     assert!(adr_answer(&dir, &alpha, "A").status.success());
 
@@ -176,7 +170,7 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
         "{}: 5 questions stand on terms alone, the most is 4: \
 \"Is the widget one hold?\", \"Is the widget two hold?\", \"Is the widget three hold?\", \
 \"Is the widget four hold?\", \"{}\"; \
-agent writes the question these stand on",
+agent writes the question",
         rel, FIFTH
     );
     let out = adr(&dir, &["check"], &[], "");
@@ -208,9 +202,6 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
     }
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
         assert!(adr_answer(&dir, &id, "A").status.success());
     }
@@ -221,7 +212,7 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
 
     let refusal = format!(
         "{}: 5 questions stand on terms alone, 4 answered, the most is 4: \"Is the widget five hold?\"; \
-agent writes the question these stand on",
+agent writes the question",
         rel
     );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
@@ -229,13 +220,11 @@ agent writes the question these stand on",
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 }
 
-/// Writes `content` to `rel`, approves it, asks it and answers the question
+/// Writes `content` to `rel`, approves it (which asks it) and answers the question
 /// at `index` with A. Returns that question's id.
 fn answered(dir: &std::path::Path, rel: &str, content: &str, index: usize) -> String {
     let path = write_record(dir, rel, content);
     approve_record(dir, rel);
-    let out = adr(dir, &["ask", path.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask {} failed: {}", rel, stderr(&out));
     let id = extract_ids(&std::fs::read_to_string(&path).unwrap())[index].clone();
     let out = adr_answer(dir, &id, "A");
     assert!(
@@ -269,8 +258,8 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&out).contains(&format!(
-            "{}: {} is answered and no tracked file holds its tie; agent builds \"{}\" and puts \"adr: {}\" in a test that shows it",
-            A, ALPHA, ALPHA, alpha
+            "{}: {} is answered and no tracked file holds its tie; agent builds \"{}\"",
+            A, ALPHA, ALPHA
         )),
         "{}",
         stdout(&out)
@@ -317,8 +306,8 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "{} (\"{}\") tied to a test and not a current decision, at tested.txt:1; agent rewrites the tie comment to \"{}\" (\"adr: {}\")",
-            alpha, ALPHA, GAMMA, gamma
+            "{} (\"{}\") tied to a test and not a current decision, at tested.txt:1; agent rewrites the tie comment",
+            alpha, ALPHA
         )),
         "{}",
         text
@@ -336,7 +325,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "{}: \"Is the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent rewrites the supersedes entry",
+            "{}: \"Is the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent rewrites the entry",
             A,
             alpha, ALPHA
         )),
@@ -439,7 +428,10 @@ fn a_settings_file_that_does_not_parse_names_its_fix_once() {
         .find(|l| l.contains("settings.json"))
         .unwrap_or_else(|| panic!("{}", check));
     assert!(
-        line.ends_with("agent rewrites the file, then runs: adr install --claude"),
+        line.ends_with(&format!(
+            "agent rewrites {}, then runs: adr install --claude",
+            dir.join(".claude/settings.json").display()
+        )),
         "check names another move: {}",
         line
     );
@@ -487,7 +479,6 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         (vec!["check", "--message", "m.txt"], false),
         (vec!["check", "--since", "abc123"], false),
         (vec!["check", "--push"], false),
-        (vec!["ask", "x.md"], false),
         (vec!["plan", "x.md"], false),
         (vec!["read"], false),
         (vec!["install"], false),
@@ -580,34 +571,33 @@ fn an_owner_refusal_names_the_command_as_it_can_be_run() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// ask and plan on a topic file that does not exist say, in words, what to
+// plan on a topic file that does not exist says, in words, what to
 // give the command (the file meant is not known, so no command line is
 // printed that would not run as printed), once.
 #[test]
-fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
+fn plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let missing = dir.join("adrdom/decisions/nofile.md");
-    for cmd in ["ask", "plan"] {
-        let out = adr(&dir, &[cmd, missing.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "{}: refused", cmd);
-        let err = stderr(&out);
-        let line = err.lines().next().unwrap_or_default();
-        assert!(
-            line.ends_with(&format!("agent rewrites the topic file given to adr {} to one under adrdom/decisions that exists", cmd)),
-            "{}: {}",
-            cmd,
-            err
-        );
-        assert_one_clearing_move(line, &format!("adr {}", cmd));
-    }
+    let cmd = "plan";
+    let out = adr(&dir, &[cmd, missing.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "{}: refused", cmd);
+    let err = stderr(&out);
+    let line = err.lines().next().unwrap_or_default();
+    assert!(
+        line.ends_with(&"agent rewrites the path"),
+        "{}: {}",
+        cmd,
+        err
+    );
+    assert_one_clearing_move(line, &format!("adr {}", cmd));
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// A refusal of several lines names its move on every line: ask on a terms
-// file with two faulty entries prints each finding with its own agent move
+// A refusal of several lines names its move on every line: approve on a topic file with a terms
+// file of two faulty entries prints each finding with its own agent move
 // and no command name in front.
 #[test]
 fn a_refusal_of_several_lines_names_the_command_on_every_line() {
@@ -623,7 +613,7 @@ fn a_refusal_of_several_lines_names_the_command_on_every_line() {
         "adrdom/decisions/x.md",
         "# X\n\n### Does the widget run?\n",
     );
-    let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!out.status.success());
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();

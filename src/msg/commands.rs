@@ -13,16 +13,14 @@ pub fn invalid_letter(letter: &str, id_arg: &str) -> String {
             "invalid letter {}; an answer is one uppercase letter, or the word refuse",
             letter
         ),
-        Next::owner_runs(command(&["adr", "answer", id_arg]).then("<letter>")),
+        Next::owner_runs(command(&["answer", id_arg]).then("<letter>")),
     )
 }
 
 pub fn no_such_term(name: &str) -> String {
     refuse(
         format!("no term named \"{}\" in adrdom/terms.md", name),
-        Next::agent(Act::Rewrites(
-            "the name to a term that exists in adrdom/terms.md".into(),
-        )),
+        Next::agent(Act::Rewrites(Part::Term)),
     )
 }
 
@@ -33,7 +31,7 @@ pub fn no_terms_file_for_term(name: &str) -> String {
             "cannot look up \"{}\": adrdom/terms.md is missing or cannot be read",
             name
         ),
-        Next::agent(Act::Writes("adrdom/terms.md".into())),
+        Next::agent(Act::Writes(Part::File(crate::repo::TERMS_PATH.to_string()))),
     )
 }
 
@@ -41,7 +39,7 @@ pub fn already_in_use() -> Said {
     said(
         &crate::rule::BAN_NOT_ON_USED_WORD,
         "refusing: already in use",
-        Next::agent(Act::Removes("the word from the repository".into())),
+        Next::agent(Act::Removes(Part::Word)),
     )
 }
 
@@ -51,7 +49,7 @@ pub fn in_use_at(location: &str, again: Cmd) -> Said {
     said(
         &crate::rule::BAN_NOT_ON_USED_WORD,
         format!("{}: holds a word given", location),
-        Next::agent_then_runs(Act::Rewrites("the line".into()), again),
+        Next::agent_then_runs(Act::Rewrites(Part::Line), again),
     )
 }
 
@@ -61,13 +59,13 @@ pub fn in_use_at(location: &str, again: Cmd) -> Said {
 /// running it again (a file it cannot read or write): the agent fixes what
 /// the error names, then the owner runs `command`.
 pub fn after_fix_owner_runs(command: Cmd) -> Next {
-    Next::agent(Act::Rewrites(FIX_THE_THING.to_string())).and_owner_runs(command)
+    Next::agent(Act::Rewrites(Part::Pending)).and_owner_runs(command)
 }
 
 /// The agent's move after a command of its own failed to read or write what
 /// the error names: fix that, then run `command` again.
 pub fn after_fix_agent_runs(command: Cmd) -> Next {
-    Next::agent_then_runs(Act::Rewrites(FIX_THE_THING.to_string()), command)
+    Next::agent_then_runs(Act::Rewrites(Part::Pending), command)
 }
 
 /// The agent's move on a topic file `cmd` could not read at `rel`: a path
@@ -75,43 +73,43 @@ pub fn after_fix_agent_runs(command: Cmd) -> Next {
 pub fn topic_file_unread(cmd: &str, rel: &str, e: &std::io::Error) -> Next {
     if e.kind() == std::io::ErrorKind::NotFound {
         // The file meant is not known, so the command is not named.
-        Next::agent(Act::Rewrites(format!(
-            "the topic file given to adr {} to one under adrdom/decisions that exists",
-            cmd
-        )))
+        Next::agent(Act::Rewrites(Part::Path))
     } else {
-        after_fix_agent_runs(command(&["adr", cmd, rel]))
+        after_fix_agent_runs(command(&[cmd, rel]))
     }
 }
 
 /// The move of a failure inside a step several commands share (the
 /// embedding cache, the reader's file, the terms file as loaded): fix `what`,
 /// then run the command that stopped, named at the head of its line, again.
-pub fn fix_then_same_command(what: &str) -> Next {
-    Next::agent(Act::Rewrites(what.to_string())).then(Act::RunsAgain)
+pub fn fix_then_same_command(what: Part) -> Next {
+    Next::agent(Act::Rewrites(what)).then(Act::RunsAgain)
 }
 
 /// The agent's move on a file a command cannot take as it stands: fix the
 /// file at `path` so `so` holds, then run `command` again.
 pub fn fix_then(path: &str, command: Cmd) -> Next {
-    Next::agent_then_runs(Act::Rewrites(path.to_string()), command)
+    Next::agent_then_runs(Act::Rewrites(Part::File(path.to_string())), command)
 }
 
 pub fn settings_not_json_object(path: &str, next: Next) -> String {
-    refuse(format!("{} is not a JSON object", path), next.on(path))
+    refuse(
+        format!("{} is not a JSON object", path),
+        next.on(Part::File(path.to_string())),
+    )
 }
 
 pub fn settings_permissions_not_object(path: &str, next: Next) -> String {
     refuse(
         format!("{}: permissions is not an object", path),
-        next.on(path),
+        next.on(Part::File(path.to_string())),
     )
 }
 
 pub fn settings_deny_not_array(path: &str, next: Next) -> String {
     refuse(
         format!("{}: permissions.deny is not an array", path),
-        next.on(path),
+        next.on(Part::File(path.to_string())),
     )
 }
 
@@ -121,7 +119,7 @@ pub fn gitignore_differs() -> Said {
     said(
         &crate::rule::GITIGNORE_MATCHES_INSTALL,
         "adrdom/.gitignore differs from what install writes",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -129,7 +127,7 @@ pub fn gitignore_missing() -> Said {
     said(
         &crate::rule::GITIGNORE_MATCHES_INSTALL,
         "adrdom/.gitignore is missing",
-        Next::agent_runs(Cmd::fixed("adr install")),
+        Next::agent_runs(Cmd::adr("install")),
     )
 }
 
@@ -138,7 +136,7 @@ pub fn gitignore_missing() -> Said {
 pub fn model_missing() -> String {
     refuse(
         "model: the embedding model is missing".to_string(),
-        Next::agent(Act::Builds("adr with the model feature".into())),
+        Next::agent(Act::Builds(Part::Program("adr".into()))),
     )
 }
 
@@ -146,7 +144,7 @@ pub fn model_missing() -> String {
 /// embedding model?", e1c305af A).
 #[cfg(feature = "model")]
 fn install_planning() -> Next {
-    Next::agent_runs(Cmd::fixed("adr install --planning"))
+    Next::agent_runs(Cmd::adr("install --planning"))
 }
 
 /// The embedding model is not in the user cache directory.
@@ -189,8 +187,8 @@ pub fn model_load_failed(dir: &str, e: impl Display) -> String {
     refuse(
         format!("model: cannot load the embedding model from {}: {}", dir, e),
         Next::agent_then_runs(
-            Act::Removes(dir.to_string()),
-            Cmd::fixed("adr install --planning"),
+            Act::Removes(Part::File(dir.to_string())),
+            Cmd::adr("install --planning"),
         ),
     )
 }
@@ -261,7 +259,7 @@ pub fn embed_failed(e: impl Display) -> String {
 pub fn reader_missing(program: &str) -> String {
     refuse(
         format!("reader: the {} program is missing", program),
-        Next::agent(Act::Installs(format!("the {} program", program))),
+        Next::agent(Act::Installs(Part::Program(program.to_string()))),
     )
 }
 
@@ -270,9 +268,7 @@ pub fn reader_missing(program: &str) -> String {
 pub fn reader_no_agent() -> String {
     refuse(
         "reader: no agent is installed for this repository".to_string(),
-        Next::agent(Act::Installs(
-            "an agent's files with adr install --claude or adr install --codex".into(),
-        )),
+        Next::agent(Act::Runs(Cmd::adr("install --claude"))),
     )
 }
 
@@ -295,7 +291,7 @@ pub fn reader_write_failed(e: impl Display) -> String {
     write_failed(
         crate::repo::READER_PATH,
         e,
-        fix_then_same_command("the reader file"),
+        fix_then_same_command(Part::File(crate::repo::READER_PATH.to_string())),
     )
 }
 
@@ -303,7 +299,7 @@ pub fn neighbours_write_failed(e: impl Display) -> String {
     write_failed(
         crate::repo::NEIGHBOURS_PATH,
         e,
-        fix_then_same_command("the neighbours file"),
+        fix_then_same_command(Part::File(crate::repo::NEIGHBOURS_PATH.to_string())),
     )
 }
 
@@ -311,25 +307,24 @@ pub fn malformed_reader_row(lineno: usize, raw: &str) -> Said {
     said(
         &crate::rule::READER_ROW_FIELDS,
         format!("line {}: malformed row in the reader file: {}", lineno, raw),
-        Next::owner(Act::Removes(format!("the row at line {}", lineno))),
+        Next::owner(Act::Removes(Part::RowAt(lineno))),
     )
 }
 
-/// A row of HEAD's reader file is edited: its line is not there byte for
-/// byte, and a line with the same time, text, neighbour, prompt and model is.
+/// A row of HEAD's reader file is not in the file byte for byte.
 pub fn reader_row_edited() -> Said {
     said(
         &crate::rule::READER_ROWS_UNEDITED,
-        "a row from HEAD's reader file is edited by hand",
-        Next::owner(Act::Restores("the row".into())),
+        "a row of HEAD's reader file is not in the file",
+        Next::owner(Act::Restores(Part::Row)),
     )
 }
 
 pub fn reader_merge_row_edited() -> Said {
     said(
         &crate::rule::MERGE_LEAVES_READER_ROWS_UNEDITED,
-        "merge edits a reader row of a merged branch",
-        Next::owner(Act::Restores("the row".into())),
+        "merge changes a reader row of a merged branch",
+        Next::owner(Act::Restores(Part::Row)),
     )
 }
 
@@ -340,15 +335,15 @@ pub fn reader_push_row_edited(local_ref: &str, remote_ref: &str) -> Said {
             "push of {} would change a reader row the remote's {} holds",
             local_ref, remote_ref
         ),
-        Next::owner(Act::Restores("the row".into())),
+        Next::owner(Act::Restores(Part::Row)),
     )
 }
 
 pub fn reader_since_row_edited(commit: &str) -> Said {
     said(
         &crate::rule::SINCE_LEAVES_READER_ROWS_UNEDITED,
-        format!("reader file edits a row {} already holds", commit),
-        Next::owner(Act::Restores("the row".into())),
+        format!("reader file changes a row {} already holds", commit),
+        Next::owner(Act::Restores(Part::Row)),
     )
 }
 
@@ -361,7 +356,7 @@ pub fn removal_not_a_topic_file(rel: &str) -> String {
             "{} is absent and was never approved: its removal needs no owner act and there is nothing to approve",
             rel
         ),
-        Next::agent_runs(command(&["git", "commit", rel])),
+        Next::agent_runs(Cmd::adr("check")),
     )
 }
 
@@ -400,7 +395,7 @@ pub fn planner_commit_outside(paths: &[String], named: usize) -> Said {
             "this planner's commit stages {}{} outside adrdom",
             shown, more
         ),
-        Next::builder(Act::Runs(command(&["git", "commit", "--", ":!adrdom"]))),
+        Next::builder(Act::RunsAgain),
     )
 }
 
@@ -412,7 +407,7 @@ pub fn planner_roles_unreadable(path: &str, err: &std::io::Error) -> Said {
             "{} cannot be read, so the role of this session is unknown: {}",
             path, err
         ),
-        Next::owner(Act::Rewrites(path.to_string())),
+        Next::owner(Act::Rewrites(Part::File(path.to_string()))),
     )
 }
 
@@ -421,9 +416,6 @@ pub fn planner_staged_unreadable() -> Said {
     said(
         &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
         "the staged paths of this planner's commit could not be read from git",
-        Next::agent_then_runs(
-            Act::Rewrites("the git repository".into()),
-            Cmd::fixed("git commit"),
-        ),
+        Next::agent(Act::RunsAgain),
     )
 }

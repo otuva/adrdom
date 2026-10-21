@@ -487,9 +487,6 @@ pub fn blame_setup() -> PathBuf {
     approve_terms_via_ledger(&dir, BLAME_TERMS);
     let record = write_record(&dir, "adrdom/decisions/example.md", BLAME_TOPIC);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
     assert_eq!(ids.len(), 2, "{}", content);
@@ -605,9 +602,8 @@ pub fn gate_topic(heading: &str, lines: &str) -> String {
 /// without ever really being approvable (e.g. deliberately missing a
 /// depends line, or naming a term that doesn't exist) -- `check`'s own
 /// independent validation is what such a test means to exercise. Anything
-/// that goes on to run `adr ask`/`adr answer` for real needs `approve_record`
-/// instead: `ask` now refuses outright on a section with no id, and only
-/// real `approve` gives one.
+/// that goes on to run `adr answer` for real needs `approve_record`
+/// instead: only a real `approve` gives a section its id and asks it.
 pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
     let path = dir.join(rel);
     // Guarantee the file on disk is exactly `content`, regardless of what
@@ -628,10 +624,10 @@ pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
 /// Runs the real, owner-gated `adr approve <rel>` (`approve` mints
 /// every heading's id and rewrites its depends entries to ids). Use this,
 /// not `approve_via_ledger`, for any fixture that a test then hands to a
-/// real `adr ask`/`adr answer` call, since those now require a section to
-/// already have an id -- which only a real approve gives it. Panics (with
-/// the command's stderr) if approve refuses, since a fixture meant to reach
-/// `ask` must be one real `approve` actually accepts.
+/// real `adr answer` call: approve gives every section its id and asks
+/// every question open to ask. Panics (with the command's stderr) if
+/// approve refuses, since a fixture meant to be asked must be one real
+/// `approve` actually accepts.
 pub fn approve_record(dir: &Path, rel: &str) {
     plan_record(dir, rel);
     let path = dir.join(rel);
@@ -808,7 +804,7 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
 
 // --- Terms approval, without depending on `adr approve` -------------------
 //
-// `ask` now refuses a candidate section unless adrdom/terms.md exists, is
+// `approve` refuses a topic file unless adrdom/terms.md exists, is
 // approved, and the section's text pairs at least one term. Most tests
 // that only care about plan/context/answer behavior need a minimal, already
 // approved terms.md with a single term whose name appears somewhere in
@@ -845,7 +841,7 @@ pub fn approve_terms_with(dir: &Path, words: &[&str]) {
 /// already pass: a single letter, letters joined by `|`, or `*` for "any".
 /// Lets a test hand-write an `assumes` row that either matches or
 /// deliberately mismatches a depends line's current set, without depending
-/// on `adr ask`.
+/// on `adr approve`.
 pub fn assumes_hash(dependent_key: &str, set: &str) -> String {
     let parsed = if set == "*" {
         record::AnswerSet::Any
@@ -861,7 +857,7 @@ pub fn assumes_hash(dependent_key: &str, set: &str) -> String {
 /// sole question of a throwaway topic file, loads it back through
 /// `record::load`, and hashes its one section for real. Lets a test
 /// hand-craft an `asked`/`refused`/`answered` ledger row matching a record
-/// it edited directly (e.g. after stripping a `terms:` line `ask` wrote).
+/// it edited directly (e.g. after stripping a `terms:` line approve wrote).
 pub fn mirror_section_hash(section_text: &str) -> String {
     let content = format!("# Topic\n\n{}\n", section_text.trim_end_matches('\n'));
     let lines = record::split_lines(&content);
@@ -1123,9 +1119,6 @@ pub fn satellite_pair() -> (PathBuf, PathBuf, String) {
     approve_minimal_terms(&primary, "authority");
     let record = write_record(&primary, "adrdom/decisions/example.md", SATELLITE_QUESTION);
     approve_record(&primary, "adrdom/decisions/example.md");
-    assert!(adr(&primary, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(&primary, &id, "A").status.success());
 

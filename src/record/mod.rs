@@ -44,7 +44,7 @@ pub enum AnswerSet {
 /// line to one. `Text` is anything still unresolved: heading-shaped (ends in `?`, optionally
 /// carrying an answer set) or term-shaped otherwise, exactly as `approve` classifies it when
 /// rewriting. Term/decision/heading resolution for an `Id` or a term-shaped `Text` happens in the
-/// commands (`approve`/`ask`/`check`), not here: record.rs has no ledger or terms access; a
+/// commands (`approve`/`check`), not here: record.rs has no ledger or terms access; a
 /// heading-shaped reference (either form) is resolved locally, in memory, against this file's own
 /// sections (used by `derive_tiers`/`dependents_of` so `show` can print tiers even before a plan is
 /// approved).
@@ -168,14 +168,14 @@ pub struct Section {
     /// Errors from the parser: duplicate id line, an option
     /// with no decision sentence, and an answer naming a missing option.
     /// The option-count rules ("at most three" / "at least two") live in
-    /// `shape_errors` instead, since `ask` and `approve` must refuse on
+    /// `shape_errors` instead, since `approve` must refuse on
     /// them before ever touching the file, same as every other shape rule.
     pub parse_errors: Vec<String>,
     /// Errors from the topic-file-shape rules (4.9/4.7/3.4/8.3): stray
     /// lines in a body, a non-skeleton question missing its
     /// Problem/Standard lines, an option count outside two-to-three, an
     /// option missing its Why/Costs line, and a malformed `depends:` line.
-    /// `ask` and `approve` both refuse on this slice (plus the file-level
+    /// `approve` both refuse on this slice (plus the file-level
     /// `RecordFile::shape_errors`) before doing anything else; `check`'s
     /// `parse` check reads this and `parse_errors` together.
     pub shape_errors: Vec<String>,

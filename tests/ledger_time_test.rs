@@ -1,7 +1,7 @@
 // Decision aefa7f3c-70c3-412e-8d73-16ff9e2b703a: "a command writes its rows
 // with one time, the later of the clock and one second after the last row
 // of the ledger." These tests exercise `ledger::write_time` through the
-// real commands (`ask`, `answer`) rather than calling it directly, so a
+// real commands (`approve`, `answer`) rather than calling it directly, so a
 // regression in any call site -- not just the function itself -- would
 // show up here too.
 
@@ -27,7 +27,7 @@ Standard: clear yes or no.
 "#;
 
 // Two tier-1 questions, neither depending on the other -- both become
-// candidates on the same `adr ask` run, so that run writes two `asked` rows
+// candidates on the same `adr approve` run, so that run writes two `asked` rows
 // in one command, nothing shared between them but the run itself.
 const TWO_QUESTIONS: &str = r#"# Example
 
@@ -90,7 +90,7 @@ fn last_row_time(dir: &std::path::Path, needle: &str) -> String {
 // adr: aefa7f3c-70c3-412e-8d73-16ff9e2b703a
 //
 // A ledger whose last row already carries a time an hour ahead of the
-// clock: the next command to write a row (here, `adr ask`) must not write
+// clock: the next command to write a row (here, `adr approve`) must not write
 // the clock's own time -- it would sit *before* that future row -- but one
 // second past it.
 #[test]
@@ -99,10 +99,11 @@ fn a_command_writes_one_second_past_a_future_last_row() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "pass");
 
-    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    approve_record(&dir, "adrdom/decisions/example.md");
+    write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    plan_record(&dir, "adrdom/decisions/example.md");
+    let record = dir.join("adrdom/decisions/example.md");
 
-    // A throwaway row (never read by anything `ask` checks) whose only job
+    // A throwaway row (never read by anything `approve` checks) whose only job
     // is to sit at a time far in the future, so it is the ledger's latest
     // row regardless of the clock.
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
@@ -116,8 +117,8 @@ fn a_command_writes_one_second_past_a_future_last_row() {
     ));
     std::fs::write(&ledger_path, &content).unwrap();
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
 
     assert_eq!(
         last_row_time(&dir, "\tasked\t"),
@@ -128,7 +129,7 @@ fn a_command_writes_one_second_past_a_future_last_row() {
 
 // adr: aefa7f3c-70c3-412e-8d73-16ff9e2b703a
 //
-// Two commands, run one after the other through the real harness (`ask`
+// Two commands, run one after the other through the real harness (`approve`
 // then, as the owner, `answer`): the second's rows carry a later time than
 // the first's, whether or not the two happened to run inside the same
 // wall-clock second.
@@ -141,9 +142,6 @@ fn two_commands_run_back_to_back_write_different_times() {
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
 
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let asked_time = last_row_time(&dir, "\tasked\t");
 
     let content = std::fs::read_to_string(&record).unwrap();
@@ -170,7 +168,7 @@ fn two_commands_run_back_to_back_write_different_times() {
 
 // adr: aefa7f3c-70c3-412e-8d73-16ff9e2b703a
 //
-// One `adr ask` run, asking two independent tier-1 questions at once: both
+// One `adr approve` run, asking two independent tier-1 questions at once: both
 // `asked` rows it writes carry the exact same time -- the one value taken
 // once for the whole run, not a fresh one per row.
 #[test]
@@ -182,8 +180,7 @@ fn one_commands_rows_share_one_time() {
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_QUESTIONS);
     approve_record(&dir, "adrdom/decisions/example.md");
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+    let _ = &record;
 
     let content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let times: Vec<&str> = content

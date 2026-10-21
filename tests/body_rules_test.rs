@@ -102,7 +102,7 @@ fn check_approve_and_plan_find_a_question_that_pairs_no_term() {
         );
     }
     assert!(
-        apr.contains("uses no term; agent writes the term in adrdom/terms.md"),
+        apr.contains("uses no term; agent writes the term"),
         "{}",
         apr
     );
@@ -175,7 +175,11 @@ fn check_approve_and_plan_find_a_set_on_a_term() {
     let rec = write_record(&dir, REL, &content);
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
-        assert!(out.contains("depends on a term under an answer set; agent removes the answer set from that entry"), "{}", out);
+        assert!(
+            out.contains("depends on a term under an answer set; agent removes the answer set"),
+            "{}",
+            out
+        );
     }
     assert_eq!(apr.matches("under an answer set").count(), 1, "{}", apr);
 }

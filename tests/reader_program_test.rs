@@ -64,13 +64,7 @@ fn a_repository_installed_for_no_agent_has_no_reader() {
         "{}",
         e
     );
-    assert!(
-        e.contains(
-            "agent installs an agent's files with adr install --claude or adr install --codex"
-        ),
-        "{}",
-        e
-    );
+    assert!(e.contains("agent runs: adr install --claude"), "{}", e);
 }
 
 // adr: 5418b256-dfae-439a-96c1-57d82380cd1e

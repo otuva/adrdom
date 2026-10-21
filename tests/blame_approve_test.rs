@@ -242,7 +242,7 @@ fn each_old_destination_is_a_shape_fault() {
         let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
         assert!(!out.status.success(), "{:?} was approved", form);
         let line = format!(
-            "adrdom/blame/x.md: line 4: row value \"{}\" is neither decision nor detail; agent writes decision or detail after the tab",
+            "adrdom/blame/x.md: line 4: row value \"{}\" is neither decision nor detail; agent writes the row",
             form
         );
         assert!(
@@ -304,7 +304,7 @@ fn each_shape_fault_names_its_line_and_its_move() {
             .find(|l| l.starts_with(found))
             .unwrap_or_else(|| panic!("no line opens with {:?}:\n{}", found, stderr(&out)));
         assert!(
-            line.ends_with("; agent rewrites the blame file"),
+            line.ends_with("; agent rewrites adrdom/blame/x.md"),
             "{}",
             line
         );
@@ -337,7 +337,7 @@ fn a_hand_written_id_line_that_is_no_identifier_refuses() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    let line = "adrdom/blame/x.md: line 3: id line holds \"not-an-identifier\", which is no identifier the tool assigns; agent removes the id line, line 3";
+    let line = "adrdom/blame/x.md: line 3: id line holds \"not-an-identifier\", which is no identifier the tool assigns; agent removes the id line";
     assert!(
         refusal_lines(&out, "approve: ").contains(&line.to_string()),
         "{}",
@@ -375,8 +375,7 @@ fn an_id_line_below_the_header_refuses() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    let line =
-        "adrdom/blame/x.md: line 5: id line below the header; agent removes the id line, line 5";
+    let line = "adrdom/blame/x.md: line 5: id line below the header; agent removes the id line";
     assert!(
         refusal_lines(&out, "approve: ").contains(&line.to_string()),
         "{}",
@@ -417,7 +416,7 @@ fn a_copied_blame_file_is_refused_on_the_id_it_shares() {
 
     let out = adr_owner(&dir, &["approve", copy.to_str().unwrap()], "");
     assert!(!out.status.success());
-    let line = "adrdom/blame/y.md: its id line holds the identifier of adrdom/blame/x.md; agent removes the id line from adrdom/blame/y.md";
+    let line = "adrdom/blame/y.md: its id line holds the identifier of adrdom/blame/x.md; agent removes the id line";
     assert!(
         refusal_lines(&out, "approve: ").contains(&line.to_string()),
         "{}",
@@ -478,7 +477,7 @@ fn an_edited_original_keeps_its_id_over_a_copy_never_approved() {
     let text = std::fs::read_to_string(&original).unwrap();
     std::fs::write(&original, text.replacen("2-2\tdetail", "2-2\tdecision", 1)).unwrap();
 
-    let line = "adrdom/blame/a.md: its id line holds the identifier of adrdom/blame/b.md; agent removes the id line from adrdom/blame/a.md";
+    let line = "adrdom/blame/a.md: its id line holds the identifier of adrdom/blame/b.md; agent removes the id line";
     let checked = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&checked).lines().any(|l| l == line),
@@ -529,10 +528,8 @@ fn a_changed_blame_file_that_lost_its_id_line_refuses() {
     let written = std::fs::read_to_string(&path).unwrap();
     let rows_before = blame_row_count(&dir);
 
-    let line = format!(
-        "adrdom/blame/x.md: the id line of its approval is gone; agent writes back the id line \"id: {}\"",
-        id_line.strip_prefix("id: ").unwrap()
-    );
+    let line = "adrdom/blame/x.md: the id line of its approval is gone; agent writes the id line"
+        .to_string();
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(
         !out.status.success(),
@@ -560,7 +557,7 @@ fn a_changed_blame_file_that_lost_its_id_line_refuses() {
     );
     assert_eq!(file_moves(&dir, "adrdom/blame/x.md"), vec![line.clone()]);
 
-    // The agent restores the line from git; the file is as approved again.
+    // The agent restores the line; the file is as approved again.
     std::fs::write(&path, &approved).unwrap();
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -1098,7 +1095,7 @@ fn identifiers_differing_only_in_case_are_one_identifier() {
     let v = mk("v", &lower.to_uppercase());
     let out = adr_owner(&dir, &["approve", v.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
-    let line = "adrdom/blame/v.md: its id line holds the identifier of adrdom/blame/u.md; agent removes the id line from adrdom/blame/v.md";
+    let line = "adrdom/blame/v.md: its id line holds the identifier of adrdom/blame/u.md; agent removes the id line";
     assert_eq!(
         refusal_lines(&out, "approve: "),
         vec![line.to_string()],
@@ -1111,7 +1108,7 @@ fn identifiers_differing_only_in_case_are_one_identifier() {
 //
 // The move names "line 3" for a gap of one line and "lines 3-4" for a longer one.
 #[test]
-fn a_coverage_gap_move_says_line_for_one_line_and_lines_for_more() {
+fn a_coverage_gap_names_its_lines_and_the_move_writes_the_row() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/gap.md", "one\ntwo\nthree\nfour\nfive\nsix\n");
     let path = write_blame_file(
@@ -1124,12 +1121,14 @@ fn a_coverage_gap_move_says_line_for_one_line_and_lines_for_more() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(
-        stderr(&out).contains("agent writes a row for line 3"),
+        stderr(&out)
+            .contains("line(s) 3 of the origin are covered by no row; agent writes the row"),
         "{}",
         stderr(&out)
     );
     assert!(
-        stderr(&out).contains("agent writes a row for line 5"),
+        stderr(&out)
+            .contains("line(s) 5 of the origin are covered by no row; agent writes the row"),
         "{}",
         stderr(&out)
     );
@@ -1143,7 +1142,8 @@ fn a_coverage_gap_move_says_line_for_one_line_and_lines_for_more() {
     );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(
-        stderr(&out).contains("agent writes a row for lines 2-4"),
+        stderr(&out)
+            .contains("line(s) 2-4 of the origin are covered by no row; agent writes the row"),
         "{}",
         stderr(&out)
     );
@@ -1202,7 +1202,7 @@ fn a_hand_written_id_on_a_never_approved_file_is_a_finding_and_approve_refuses()
         &format!("origin: docs/x.md\nblob: {}\nid: 12345678-1234-4234-8234-123456789abc\n\n1-1\tdetail\n", blob),
     );
     let before = std::fs::read_to_string(&path).unwrap();
-    let line = "adrdom/blame/x.md: its id line holds an identifier the tool did not write; agent removes the id line";
+    let line = "adrdom/blame/x.md: its id line holds an identifier no blame row holds; agent removes the id line";
 
     let checked = adr(&dir, &["check"], &[], "");
     assert!(
@@ -1303,11 +1303,11 @@ fn an_approved_file_with_a_faulty_id_line_is_told_to_write_back_its_id() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    let expect = format!("agent writes back the id line \"{}\"", id_line);
+    let expect = "agent writes the id line";
     assert!(
         refusal_lines(&out, "approve: ")
             .iter()
-            .any(|l| l.contains("which is no identifier") && l.ends_with(&expect)),
+            .any(|l| l.contains("which is no identifier") && l.ends_with(expect)),
         "{}",
         stderr(&out)
     );

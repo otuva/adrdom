@@ -16,7 +16,7 @@ pub use topic::{
 pub use waits::{answer_waits, Waits};
 
 use crate::ledger::Ledger;
-use crate::msg::{Act, Next};
+use crate::msg::{Act, LineKind, Next, Part};
 use crate::record::{self, RecordFile};
 use crate::rules::Finding;
 use crate::state;
@@ -59,8 +59,6 @@ pub enum MoveKind {
     /// The owner approves one entry of the terms file that waits, by its
     /// name (da0dc8b1).
     ApproveEntry { name: String },
-    /// The agent asks these questions of `rel`.
-    Ask { rel: String, headings: Vec<String> },
     /// The owner answers this asked question.
     Answer {
         id: String,
@@ -108,6 +106,11 @@ pub struct Move {
     /// The role of the session the move is computed in: a build move prints
     /// with builder in place of agent in a planner's session.
     pub session: crate::session::Role,
+}
+
+/// The identifiers of the decisions a tie moves to.
+fn ids(to: &[(String, String)]) -> Vec<String> {
+    to.iter().map(|(_, id)| id.clone()).collect()
 }
 
 impl Move {
@@ -160,7 +163,6 @@ impl Move {
             | MoveKind::Plan { .. }
             | MoveKind::WriteLines { .. }
             | MoveKind::WriteBodies { .. }
-            | MoveKind::Ask { .. }
             | MoveKind::Refused { .. }
             | MoveKind::Build { .. }
             | MoveKind::Retie { .. }
@@ -176,71 +178,51 @@ impl Move {
     pub fn next(&self) -> Option<Next> {
         Some(match &self.kind {
             MoveKind::PlanUnresolved => Next::all(vec![
-                Next::agent_runs(Cmd::fixed("adr check")),
-                Next::agent(Act::Rewrites(
-                    "the headings and lines of the plan".to_string(),
-                )),
+                Next::agent_runs(Cmd::adr("check")),
+                Next::agent(Act::Rewrites(Part::Plan)),
             ]),
-            MoveKind::Plan { rel } => Next::agent_runs(command(&["adr", "plan", rel])),
+            MoveKind::Plan { rel } => Next::agent_runs(command(&["plan", rel])),
             MoveKind::WriteLines { headings } => {
-                Next::agent(Act::Writes(format!("lines for {}", quoted(headings))))
+                Next::agent(Act::Writes(Part::Lines(headings.clone())))
             }
             MoveKind::WriteBodies { headings } => {
-                Next::agent(Act::Writes(format!("the body of {}", quoted(headings))))
+                Next::agent(Act::Writes(Part::Body(headings.clone())))
             }
-            MoveKind::Approve { path } => Next::owner_runs(command(&["adr", "approve", path])),
+            MoveKind::Approve { path } => Next::owner_runs(command(&["approve", path])),
             MoveKind::ApproveEntry { name } => {
                 Next::owner_runs(crate::msg::approve_entry_cmd(name))
             }
-            MoveKind::Ask { rel, .. } => Next::agent_runs(command(&["adr", "ask", rel])),
             MoveKind::Answer { id, version, .. } => Next::owner_runs(
-                command(&["adr", "answer", &format!("{}@{}", id, version)]).then("<letter>"),
+                command(&["answer", &format!("{}@{}", id, version)]).then("<letter>"),
             ),
-            MoveKind::Refused { heading } => Next::agent(Act::Writes(format!(
-                "the plan change that drops or replaces \"{}\"",
-                heading
-            ))),
-            MoveKind::Build { heading, id } => {
-                let action = Act::Builds(format!(
-                    "\"{}\" and puts \"adr: {}\" in a test that shows it",
-                    heading, id
-                ));
+            MoveKind::Refused { .. } => Next::agent(Act::Rewrites(Part::Plan)),
+            MoveKind::Build { heading, .. } => {
+                let action = Act::Builds(Part::Decision(heading.clone()));
                 self.build_mover(action)
             }
             MoveKind::Retie { to } => {
                 let action = if to.is_empty() {
-                    Act::Removes("the tie comment from the test".to_string())
+                    Act::Removes(Part::LineOf(LineKind::TieComment))
                 } else {
-                    let list: Vec<String> = to
-                        .iter()
-                        .map(|(h, id)| format!("\"{}\" (\"adr: {}\")", h, id))
-                        .collect();
-                    Act::Rewrites(format!("the tie comment to {}", list.join(" and ")))
+                    Act::Rewrites(Part::Retie(LineKind::TieComment, ids(to)))
                 };
                 self.build_mover(action)
             }
-            MoveKind::BriefTieWrite => self.build_mover(Act::Writes(
-                "the from-comment naming the decision or term the sentence states".to_string(),
-            )),
-            MoveKind::BriefTieFix => self.build_mover(Act::Rewrites(
-                "the from-comment to name a decision or term of the records".to_string(),
-            )),
+            MoveKind::BriefTieWrite => {
+                self.build_mover(Act::Writes(Part::LineOf(LineKind::FromComment)))
+            }
+            MoveKind::BriefTieFix => {
+                self.build_mover(Act::Rewrites(Part::LineOf(LineKind::FromComment)))
+            }
             MoveKind::BriefTieRetie { to } => {
                 let action = if to.is_empty() {
-                    Act::Removes("the from-comment from the brief".to_string())
+                    Act::Removes(Part::LineOf(LineKind::FromComment))
                 } else {
-                    let list: Vec<String> = to
-                        .iter()
-                        .map(|(h, id)| format!("\"{}\" ({})", h, id))
-                        .collect();
-                    Act::Rewrites(format!("the from-comment to {}", list.join(" and ")))
+                    Act::Rewrites(Part::Retie(LineKind::FromComment, ids(to)))
                 };
                 self.build_mover(action)
             }
-            MoveKind::SupersedeMarkedPairs => Next::agent(Act::Writes(
-                "a question that supersedes one decision of each same or inconsistent pair"
-                    .to_string(),
-            )),
+            MoveKind::SupersedeMarkedPairs => Next::agent(Act::Writes(Part::Question)),
             MoveKind::CommitWaits
             | MoveKind::AnswerWaits { .. }
             | MoveKind::BuildWaits { .. }
@@ -256,9 +238,6 @@ impl Move {
         match &self.kind {
             MoveKind::Answer { heading, .. } => {
                 format!("{}  # \"{}\"", self.clause_text(), heading)
-            }
-            MoveKind::Ask { headings, .. } => {
-                format!("{}  # {}", self.clause_text(), quoted(headings))
             }
             _ => self.clause_text(),
         }
@@ -357,20 +336,20 @@ mod tests {
         empty.findings.push(Finding::new(
             &crate::rule::ASKED_TEXT_FROZEN,
             "f".into(),
-            Next::agent(Act::Writes("m".to_string())),
+            Next::agent(Act::Writes(Part::Line)),
         ));
         assert_eq!(
             empty
-                .moves_tail(Next::agent(Act::Restores("x.md".to_string())))
+                .moves_tail(Next::agent(Act::Restores(Part::File("x.md".to_string()))))
                 .render(),
-            "agent restores x.md from git"
+            "agent restores x.md"
         );
         assert!(!crate::msg::edited_after_asking("x.md", "h", &empty)
             .text()
             .contains("each finding of the file names"));
         assert!(crate::msg::edited_after_asking("x.md", "h", &empty)
             .text()
-            .ends_with("agent restores x.md from git"));
+            .ends_with("agent restores x.md"));
     }
 
     #[test]
@@ -422,11 +401,6 @@ mod tests {
             m.text(),
             "owner runs: adr answer id-1@abcd <letter>  # \"Does it?\""
         );
-        let m = Move::new(MoveKind::Ask {
-            rel: "x.md".into(),
-            headings: vec!["A?".into(), "B?".into()],
-        });
-        assert_eq!(m.text(), "agent runs: adr ask x.md  # \"A?\", \"B?\"");
         let m = Move::new(MoveKind::BuildWaits {
             heading: "A?".into(),
             beside: "B?".into(),
@@ -451,19 +425,16 @@ mod tests {
             stops: Vec::new(),
             findings: Vec::new(),
             moves: vec![
-                Move::new(MoveKind::Ask {
-                    rel: "x.md".into(),
-                    headings: vec!["A?".into(), "B?".into()],
-                }),
+                Move::new(MoveKind::Plan { rel: "x.md".into() }),
                 Move::new(MoveKind::Approve {
                     path: "x.md".into(),
                 }),
             ],
         };
-        let tail = report.moves_tail(Next::agent(Act::Restores("x.md".to_string())));
+        let tail = report.moves_tail(Next::agent(Act::Restores(Part::File("x.md".to_string()))));
         assert_eq!(
             tail.render(),
-            "agent runs: adr ask x.md, owner runs: adr approve x.md"
+            "agent runs: adr plan x.md, owner runs: adr approve x.md"
         );
         assert!(!tail.render().contains('#'), "{}", tail);
     }

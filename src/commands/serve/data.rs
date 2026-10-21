@@ -87,7 +87,6 @@ fn named(m: &Move) -> Vec<&str> {
         | MoveKind::Refused { heading } => {
             vec![heading]
         }
-        MoveKind::Ask { headings, .. } => headings.iter().map(String::as_str).collect(),
         _ => Vec::new(),
     }
 }

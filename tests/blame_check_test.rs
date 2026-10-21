@@ -380,7 +380,7 @@ fn check_names_an_origin_gone_while_its_blame_file_awaits_approval() {
 
     std::fs::remove_file(dir.join("docs/x.md")).unwrap();
 
-    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is new; agent restores docs/x.md from git";
+    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is new; agent restores docs/x.md";
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
@@ -420,7 +420,7 @@ fn a_renamed_origin_counts_as_missing_and_names_the_old_path() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is changed; agent restores docs/x.md from git";
+    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is changed; agent restores docs/x.md";
     assert!(text.lines().any(|l| l == line), "{}", text);
 }
 
@@ -452,11 +452,7 @@ fn check_notes_a_gone_origin_while_the_blame_file_is_unapproved() {
         "{}",
         text
     );
-    assert!(
-        text.contains("agent restores docs/x.md from git"),
-        "{}",
-        text
-    );
+    assert!(text.contains("agent restores docs/x.md"), "{}", text);
 }
 
 // --- d2851ea1 A: a row says decision or detail -------------------------
@@ -499,7 +495,7 @@ fn an_old_destination_row_fails_check_on_an_approved_file() {
 // adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
 //
 // "No ... no finding, no refusal": an approved blame file with decision rows
-// that no question names is no line of check's, and ask and answer on a
+// that no question names is no line of check's, and approve and answer on a
 // topic file are not refused because of it.
 #[test]
 fn check_is_silent_on_a_decision_row_no_question_names() {
@@ -515,11 +511,11 @@ fn check_is_silent_on_a_decision_row_no_question_names() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    // No question anywhere names the rows; ask and answer run all the same.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    // No question anywhere names the rows; approve and answer run all the same.
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask should not stop for the rows: {}",
+        "approve should not stop for the rows: {}",
         stderr(&out)
     );
     let content = std::fs::read_to_string(&record).unwrap();
@@ -567,12 +563,12 @@ fn check_passes_an_unapproved_blame_file_and_prints_nothing_of_it() {
 }
 
 //
-// `ask` and `answer` stop while the terms file awaits approval ("Does the tool
+// `approve` and `answer` stop while the terms file awaits approval ("Does the tool
 // stop while the terms file waits for approval?"); a blame file awaiting
 // approval is not among what stops them, so both run on an ordinary topic
 // file with one present.
 #[test]
-fn ask_and_answer_ignore_an_unapproved_blame_file() {
+fn approve_and_answer_ignore_an_unapproved_blame_file() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_via_ledger(&dir, BLAME_TERMS);
@@ -589,10 +585,10 @@ fn ask_and_answer_ignore_an_unapproved_blame_file() {
     );
     // Never approved -- a draft the whole time.
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask should ignore blame files: {}",
+        "approve should ignore blame files: {}",
         stderr(&out)
     );
 
@@ -781,7 +777,7 @@ fn check_show_and_approve_print_the_same_line_for_a_bad_row_value() {
     };
     let from_check = blame_lines(&stdout(&check));
     let from_show = blame_lines(&stdout(&show));
-    let line = "adrdom/blame/x.md: line 5: row value \"decision: Is nothing here at all?\" is neither decision nor detail; agent writes decision or detail after the tab";
+    let line = "adrdom/blame/x.md: line 5: row value \"decision: Is nothing here at all?\" is neither decision nor detail; agent writes the row";
     assert_eq!(
         from_check,
         vec![line.to_string()],
@@ -823,7 +819,7 @@ fn of_two_drafts_sharing_an_id_the_first_by_path_keeps_it() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    let line = "adrdom/blame/b.md: its id line holds the identifier of adrdom/blame/a.md; agent removes the id line from adrdom/blame/b.md";
+    let line = "adrdom/blame/b.md: its id line holds the identifier of adrdom/blame/a.md; agent removes the id line";
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
     assert!(
         !stdout(&out)
@@ -929,10 +925,7 @@ fn a_hand_edited_id_makes_an_approved_file_a_draft_check_notes_it_and_approve_re
     // The edit changes the file's hash, so the file is a draft again: the
     // finding is a note in check, and approve refuses on it.
     let out = adr(&dir, &["check"], &[], "");
-    let line = format!(
-        "adrdom/blame/x.md: its id line differs from the identifier of its approval; agent writes back the id line \"id: {}\"",
-        id
-    );
+    let line = "adrdom/blame/x.md: its id line differs from the identifier of its approval; agent writes the id line";
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));

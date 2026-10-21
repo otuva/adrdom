@@ -325,7 +325,7 @@ mod tests {
             Line::Finding(Finding::new(
                 &crate::rule::TOPIC_FILE_SHAPE,
                 "x.md: a fault".to_string(),
-                crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())),
+                crate::msg::Next::agent(crate::msg::Act::Rewrites(crate::msg::Part::Line)),
             )),
             Line::Move(Move::new(MoveKind::Approve {
                 path: "x.md".to_string(),
@@ -377,9 +377,8 @@ mod tests {
             on,
         );
         assert_eq!(stop[0], "\u{1b}[31mshow: no\u{1b}[0m");
-        let agent = Line::Move(Move::new(MoveKind::Ask {
+        let agent = Line::Move(Move::new(MoveKind::Plan {
             rel: "x.md".to_string(),
-            headings: vec![],
         }));
         assert!(!render_lines(&[agent], on)[0].contains('\u{1b}'));
         let hostile = Line::Record {

@@ -70,7 +70,7 @@ fn no_term_found(
 /// question of `rf` that has no such option, for every question of `rf` not
 /// yet asked (per "Does a depends entry carry the answers it holds under?"):
 /// the one function `check`, `approve` and `plan` read, found before approval
-/// what `ask` refuses. Cross-file targets carry no set before they are
+/// what `approve` refuses. Cross-file targets carry no set before they are
 /// answered, so only a same-file target is read.
 pub fn letter_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding> {
     in_sections(Class::Plan, letter_found(rel, rf, led))
@@ -78,7 +78,7 @@ pub fn letter_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
 
 /// A pair is judged when the dependent is open to ask, or when its target
 /// has no letter answer yet: a target edited and asked again can lose the
-/// option an asked dependent's set names, which `ask` refuses.
+/// option an asked dependent's set names, which `approve` refuses.
 pub(super) fn letter_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, msg::Said)> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
@@ -117,7 +117,7 @@ pub(super) fn letter_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usi
 /// against what its topic file holds (per "Does check fail an answered
 /// question whose text changed?", "Does the owner answer a question with a
 /// refusal?" and "Does check fail a question answered with two different
-/// options?"), one judgement `check` fails, `approve` and `ask` refuse on,
+/// options?"), one judgement `check` fails, `approve` refuses on,
 /// and `show` and `plan` print: two standing answers; an answer or refusal
 /// line with no row behind it; a closed question whose text moved since it
 /// was answered or refused; a row whose line the file no longer holds.
@@ -133,7 +133,6 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
             push(msg::answer_conflict(
                 rel,
                 &sec.heading_text,
-                id,
                 &a.label(),
                 &b.label(),
             ));
@@ -185,10 +184,10 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
 /// cap (all `plan`) -- every category `do_approve_record` refuses on
 /// except the cross-file "answered id missing from every topic file"
 /// check, which needs every topic file, not just this one
-/// (`missing_answered_refusals`, below). Shared with `check` and `ask`
+/// (`missing_answered_refusals`, below). Shared with `check` and `approve`
 /// (178a232e A point 1, one function for all three, mirroring
 /// `terms_refusals`): `approve` prefixes each message `approve: `,
-/// `check` prefixes it `<category>: `, `ask` prefixes the "parse" slice
+/// `check` prefixes it `<category>: `, `approve` prefixes the "parse" slice
 /// `ask: `, so the same line reads identically wherever it is printed.
 ///
 /// `terms_list`/`phrase_lookup` are supplied by the caller rather than
@@ -289,9 +288,9 @@ pub fn record_refusals(
     }
     // Per "Does ask refuse an option over a word limit?" and "Does an option
     // under a heading that opens with Does hold one word?": the same length
-    // rules `ask` enforces, found before approval in a question not yet asked.
+    // rules `approve` enforces, found before approval in a question not yet asked.
     out.extend(in_sections(Class::Tells, length_found(rel, rf, led)));
-    // The other two body rules `ask` enforces, found the same way: a loaded
+    // The other two body rules `approve` enforces, found the same way: a loaded
     // phrase in a body, and a question that pairs no term.
     out.extend(in_sections(Class::Tells, body_tell_found(rel, rf, led)));
     out.extend(in_sections(
@@ -337,12 +336,12 @@ pub fn record_refusals(
     for (si, sec) in rf.sections.iter().enumerate() {
         let frozen = state::is_frozen(led, sec);
         for d in &sec.depends {
-            if frozen && matches!(d, record::Dep::Text { .. }) {
+            if let (true, record::Dep::Text { text, .. }) = (frozen, d) {
                 let st = status::question_status(led, sec);
                 out.push(
                     Finding::said(
                         Class::PlanFrozen,
-                        msg::frozen_depends_edited(rel, &sec.heading_text, st),
+                        msg::frozen_depends_text(rel, &sec.heading_text, st, text),
                     )
                     .in_section(si),
                 );

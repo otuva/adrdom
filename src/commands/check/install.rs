@@ -219,9 +219,20 @@ fn judge(root: &Path, source: &Source, satellite: bool) -> Vec<(&'static str, Fa
                         .and_then(|d| d.as_array())
                         .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                         .unwrap_or_default();
-                    for entry in crate::commands::deny_entries() {
+                    let entries = crate::commands::deny_entries();
+                    for entry in &entries {
                         if !deny.contains(&entry.as_str()) {
-                            out.push((SETTINGS, missing_deny_entry(&entry)));
+                            out.push((SETTINGS, missing_deny_entry(entry)));
+                        }
+                    }
+                    for entry in deny {
+                        if crate::commands::is_tool_deny_entry(entry)
+                            && !entries.iter().any(|x| x == entry)
+                        {
+                            out.push((
+                                SETTINGS,
+                                Failure::said(Class::Install, msg::extra_deny_entry(entry)),
+                            ));
                         }
                     }
                 }

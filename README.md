@@ -16,12 +16,12 @@ cd your-repo && adr install --claude
 adr show        # every current decision, and whose move is next
 ```
 
-<p align="center"><img src="docs/demo.gif" alt="adr demo: approve, ask, answer, then a refused commit" width="900"></p>
+<p align="center"><img src="docs/demo.gif" alt="adr demo: approve, answer, then a refused commit" width="900"></p>
 
 ## What it solves
 
 **The agent decides while it codes.** It picks a design mid-task, changes the spec to fit, forgets the spec, or asks a question that contains its answer. You find out at review, or never.
-> A behaviour with no decision is a question first. Questions have a fixed shape, no lean. The session that asks never builds. Owner commands refuse an agent.
+> A behaviour with no decision is a question first. Questions have a fixed shape, no lean. The session that writes a question never builds. Owner commands refuse an agent.
 
 **Spec and code drift apart.** Decisions live in chat and prose; nothing at commit time notices. ADRs go stale.
 > Every answer is a ledger row with a hash of what you read. A decision is built once a test carries `adr: <id>`. `adr check` runs at every commit, push and in CI.
@@ -63,8 +63,8 @@ A hook the repository already has moves to `.githooks/<name>.own` and runs once 
 agent                                      owner
   terms in adrdom/terms.md        ----->    adr approve adrdom/terms.md <name>
   headings in adrdom/decisions/<topic>.md
-  adr plan <file>                 ----->    adr approve <file>
-  adr ask <file>                  ----->    adr answer <id>@<version> <letter>
+  adr plan <file>                 ----->    adr approve <file>  (asks the file's questions)
+                                            adr answer <id>@<version> <letter>
 builder
   code + a test with `adr: <id>`
   adr check at every commit and push
@@ -112,7 +112,6 @@ $ tail -1 adrdom/state/ledger.tsv
 | agent | |
 |---|---|
 | `plan <file>` | do the file's next step, print the move |
-| `ask <file>` | ask the owner the file's open questions |
 | `read` | read current decisions against each other |
 | `show [file]` | decisions and moves |
 | `check` | what the hooks run |
@@ -120,7 +119,7 @@ $ tail -1 adrdom/state/ledger.tsv
 
 | owner | |
 |---|---|
-| `approve <file> [entry]` | topic file, terms entry or blame file |
+| `approve <file> [entry]` | topic file (and ask its questions), terms entry or blame file |
 | `answer <id>@<version> <letter\|refuse>` | pick an option, or refuse the question |
 | `serve` | owner's page on 127.0.0.1 |
 | `unban` | lift a ban |

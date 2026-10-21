@@ -105,9 +105,6 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let c = std::fs::read_to_string(&record).unwrap();
     let id = c
         .lines()

@@ -1,7 +1,7 @@
 // End-to-end walk of the whole plan lifecycle through the built binary:
-// approve derives and caps tiers, ask enforces
-// the derived tier order plus mandatory answer sets and writes
-// `assumes` rows, answer accepts a refusal, check freezes a dependent's
+// approve derives and caps tiers, enforces
+// the derived tier order plus mandatory answer sets, asks every question
+// and writes `assumes` rows, answer accepts a refusal, check freezes a dependent's
 // answer set and reports done, and a plan change (dropping
 // questions, adding one) withdraws the dropped id at the next approve.
 //
@@ -129,6 +129,7 @@ fn plan_lifecycle_end_to_end() {
     let record = write_record(&dir, REL, STATE_0);
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
+    let approve_printed = stdout(&out);
     assert_eq!(tiers_of(&record), vec![1, 2, 2]);
 
     // approve gave every heading (all three) an id.
@@ -144,7 +145,7 @@ fn plan_lifecycle_end_to_end() {
     let q3_id = id_for_heading(&state_0_approved, "### 1.3");
     let _ = &q2_id;
 
-    // --- 2. ask asks the file and writes the assumes rows --------------------
+    // --- 2. approve asks the file and writes the assumes rows -----------------
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(
         !stdout(&check_out).contains("awaiting approval"),
@@ -152,10 +153,9 @@ fn plan_lifecycle_end_to_end() {
         stdout(&check_out)
     );
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should succeed: {}", stderr(&out));
-    let printed = stdout(&out);
-    // One line per row written: three asked rows and two assumes rows.
+    let printed = approve_printed;
+    // One line per asked or assumes row written: three asked rows and two
+    // assumes rows.
     for line in [
         "asked: \"1.1 What color is the widget?\"",
         "assumes: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\" under its answer set",
@@ -163,7 +163,15 @@ fn plan_lifecycle_end_to_end() {
     ] {
         assert!(printed.lines().any(|l| l == line), "{}\n{}", line, printed);
     }
-    assert_eq!(printed.lines().count(), 5, "{}", printed);
+    assert_eq!(
+        printed
+            .lines()
+            .filter(|l| l.starts_with("asked: ") || l.starts_with("assumes: "))
+            .count(),
+        5,
+        "{}",
+        printed
+    );
 
     let state_3 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(id_for_heading(&state_3, "### 1.1"), q1_id);
@@ -190,12 +198,12 @@ fn plan_lifecycle_end_to_end() {
     );
 
     // --- 3. what is left names the owner's answer and what waits for it ----
-    // ask with nothing to ask writes nothing and prints nothing; show names
-    // the moves.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    // approve of the unchanged, fully asked file writes nothing and prints
+    // nothing; show names the moves.
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask should have nothing to ask: {}",
+        "approve should have nothing to ask: {}",
         stderr(&out)
     );
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
@@ -231,7 +239,7 @@ fn plan_lifecycle_end_to_end() {
     );
     assert!(
         stdout(&out).contains(
-            "answer set on 1.1 What color is the widget? changed after ask; agent restores the answer set from git"
+            "answer set on 1.1 What color is the widget? changed after ask; agent restores the answer set"
         ),
         "{}",
         stdout(&out)
@@ -266,14 +274,16 @@ fn plan_lifecycle_end_to_end() {
         stdout(&check_out)
     );
 
-    // Q3 was asked in the first run: nothing is left to ask.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    // Q3 was asked in the first run: approve has nothing left to ask.
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask should have nothing to ask: {}",
+        "approve should have nothing to ask: {}",
         stderr(&out)
     );
-    assert_eq!(stdout(&out), "", "{}", stdout(&out));
+    // The answer cut Q2 out of the file, so approve accepts the changed plan
+    // again; it asks nothing.
+    assert!(!stdout(&out).contains("asked:"), "{}", stdout(&out));
 
     let state_7 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(extract_ids(&state_7).len(), 2, "{}", state_7);
@@ -349,18 +359,12 @@ fn plan_lifecycle_end_to_end() {
     );
     assert_eq!(tiers_of(&record), vec![1, 2]);
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(
-        out.status.success(),
-        "ask should succeed on Q4: {}",
-        stderr(&out)
-    );
-    assert!(
-        stdout(&out)
+        printed
             .lines()
             .any(|l| l == "asked: \"1.4 Does the paint have a glossy finish?\""),
         "{}",
-        stdout(&out)
+        printed
     );
 
     // --- 8. owner answers Q4; tie tests; the file is done -------------------

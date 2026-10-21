@@ -1,16 +1,16 @@
-//! The messages about `adrdom/terms.md`, shared by `actions.rs`, `ask.rs` and `check/terms.rs`.
+//! The messages about `adrdom/terms.md`, shared by `actions` and `check/terms.rs`.
 
 use super::*;
 use crate::status::FileStatus;
 
-// --- adrdom/terms.md: shared by actions.rs, ask.rs, check/terms.rs --------
+// --- adrdom/terms.md: shared by actions, check/terms.rs ------------------
 
 pub fn terms_missing() -> Said {
     said(
         &crate::rule::TERMS_FILE_EXISTS,
         "adrdom/terms.md missing",
-        Next::agent(Act::Writes("adrdom/terms.md".into()))
-            .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::agent(Act::Writes(Part::File(crate::repo::TERMS_PATH.to_string())))
+            .and_owner_runs(Cmd::adr("approve adrdom/terms.md")),
     )
 }
 
@@ -20,7 +20,7 @@ pub fn terms_missing() -> Said {
 pub fn terms_load_error(e: &str, next: Next) -> String {
     refuse(
         format!("adrdom/terms.md: {}", e),
-        next.on("adrdom/terms.md"),
+        next.on(Part::File(crate::repo::TERMS_PATH.to_string())),
     )
 }
 
@@ -33,7 +33,7 @@ pub fn terms_shape_error(e: &str) -> Said {
         said(
             &crate::rule::WORD_NAMES_ONE_TERM,
             found,
-            Next::agent(Act::Removes("the word from one of the two entries".into())),
+            Next::agent(Act::Removes(Part::Word)),
         )
     } else if fault.starts_with("missing h1")
         || fault.starts_with("duplicate h1")
@@ -42,31 +42,31 @@ pub fn terms_shape_error(e: &str) -> Said {
         said(
             &crate::rule::TERMS_FILE_SHAPE,
             found,
-            Next::agent(Act::Rewrites("the line".into())),
+            Next::agent(Act::Rewrites(Part::Line)),
         )
     } else if fault.starts_with("duplicate id ") {
         said(
             &crate::rule::TERM_IDENTIFIER_IS_UNIQUE,
             found,
-            Next::agent(Act::Rewrites("the entry".into())),
+            Next::agent(Act::Rewrites(Part::Entry)),
         )
     } else {
         said(
             &crate::rule::TERM_ENTRY_FIELDS,
             found,
-            Next::agent(Act::Rewrites("the entry".into())),
+            Next::agent(Act::Rewrites(Part::Entry)),
         )
     }
 }
 
 /// `adrdom/terms.md` exists and parses, but isn't approved at its current
 /// hash -- named from a dependent topic file's own path (`rel`), the way
-/// `ask`/`answer`/`approve` all report it.
+/// `approve`/`answer` all report it.
 pub fn terms_not_approved(rel: &str, status: FileStatus) -> Said {
     said(
         &crate::rule::TERMS_FILE_APPROVED,
         format!("{}: adrdom/terms.md is {}", rel, status.name()),
-        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::owner_runs(Cmd::adr("approve adrdom/terms.md")),
     )
 }
 
@@ -79,7 +79,7 @@ pub fn terms_file_not_approved(status: FileStatus) -> Said {
     said(
         &crate::rule::TERMS_FILE_APPROVED,
         format!("adrdom/terms.md is {}", status.name()),
-        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::owner_runs(Cmd::adr("approve adrdom/terms.md")),
     )
 }
 
@@ -91,7 +91,7 @@ pub fn terms_brief_missing() -> Said {
     said(
         &crate::rule::TERMS_BRIEF_MATCHES_TERMS,
         format!("{} missing", crate::repo::TERMS_BRIEF_PATH),
-        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::owner_runs(Cmd::adr("approve adrdom/terms.md")),
     )
 }
 
@@ -103,7 +103,7 @@ pub fn terms_brief_differs() -> Said {
             "{} differs from adrdom/terms.md",
             crate::repo::TERMS_BRIEF_PATH
         ),
-        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::owner_runs(Cmd::adr("approve adrdom/terms.md")),
     )
 }
 
@@ -113,7 +113,7 @@ pub fn terms_brief_not_staged() -> Said {
     said(
         &crate::rule::STAGED_FILES_ARE_JUDGED_FILES,
         format!("{} not staged", crate::repo::TERMS_BRIEF_PATH),
-        Next::agent_runs(command(&["git", "add", crate::repo::TERMS_BRIEF_PATH])),
+        Next::agent(Act::RunsAgain),
     )
 }
 
@@ -145,7 +145,7 @@ pub fn circular_definition(names: &[String]) -> Said {
             "adrdom/terms.md: circular definition: a cycle runs through {}",
             run
         ),
-        Next::agent(Act::Rewrites("one of these definitions".into())),
+        Next::agent(Act::Rewrites(Part::OneOf(Many::Definitions))),
     )
 }
 
@@ -165,13 +165,9 @@ pub fn term_removed_but_carried(
     decision: Option<(&str, &str)>,
 ) -> Said {
     let next = match decision {
-        Some((id, heading)) => {
-            Next::agent(Act::Restores("the term in adrdom/terms.md".into())).then(Act::Writes(
-                format!("a question that supersedes {}", named(id, Some(heading))),
-            ))
-        }
-        None => Next::agent(Act::Restores("the term in adrdom/terms.md".into()))
-            .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Some(_) => Next::agent(Act::Restores(Part::Term)).then(Act::Writes(Part::Question)),
+        None => Next::agent(Act::Restores(Part::Term))
+            .and_owner_runs(Cmd::adr("approve adrdom/terms.md")),
     };
     said(
         &crate::rule::TERM_STAYS_WHILE_USED,
@@ -196,32 +192,27 @@ pub fn term_retired_but_carried(name: &str, source: &str, user: RetiredUser) -> 
         name, source
     );
     match user {
-        RetiredUser::Decision(id, heading) => said(
+        RetiredUser::Decision(..) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent(Act::Rewrites(format!("the entry of \"{}\"", name))).then(Act::Writes(
-                format!("a question that supersedes {}", named(id, Some(heading))),
-            )),
+            Next::agent(Act::Rewrites(Part::EntryOf(name.to_string())))
+                .then(Act::Writes(Part::Question)),
         ),
         RetiredUser::Asked(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent_then_runs(
-                Act::Rewrites("the question".into()),
-                command(&["adr", "ask", rel]),
-            ),
+            Next::agent(Act::Rewrites(Part::Question)).and_owner_runs(command(&["approve", rel])),
         ),
         RetiredUser::PlanHeading(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent(Act::Rewrites("the heading".into()))
-                .and_owner_runs(command(&["adr", "approve", rel])),
+            Next::agent(Act::Rewrites(Part::Heading)).and_owner_runs(command(&["approve", rel])),
         ),
         RetiredUser::Definition => said(
             &crate::rule::DEFINITION_USES_LIVE_TERMS,
             found,
-            Next::agent(Act::Rewrites("the definition".into()))
-                .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+            Next::agent(Act::Rewrites(Part::Definition))
+                .and_owner_runs(Cmd::adr("approve adrdom/terms.md")),
         ),
     }
 }
@@ -250,12 +241,9 @@ pub fn word_moved_off_term(
     let next = match decision_id {
         // A current decision is never re-asked: the wording in the terms
         // file returns.
-        Some(_) => Next::agent(Act::Rewrites(format!(
-            "the entry of \"{}\" so \"{}\" names it",
-            term_name, word
-        ))),
-        None => Next::agent(Act::Rewrites("the definition".into()))
-            .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Some(_) => Next::agent(Act::Rewrites(Part::EntryOf(term_name.to_string()))),
+        None => Next::agent(Act::Rewrites(Part::Definition))
+            .and_owner_runs(Cmd::adr("approve adrdom/terms.md")),
     };
     said(
         &crate::rule::WORD_STAYS_ON_TERM,
@@ -276,7 +264,7 @@ pub fn definition_too_long(name: &str, count: usize) -> Said {
             "adrdom/terms.md: term \"{}\" definition has {} sentences, the most is 2",
             name, count
         ),
-        Next::agent(Act::Rewrites("the definition".into())),
+        Next::agent(Act::Rewrites(Part::Definition)),
     )
 }
 
@@ -284,7 +272,7 @@ pub fn terms_banned_word(line: usize, suffix: &str) -> Said {
     said(
         &crate::rule::BANNED_WORD_ABSENT_FROM_RECORDS,
         format!("adrdom/terms.md:{}: banned word{}", line, suffix),
-        Next::agent(Act::Rewrites("the line".into())),
+        Next::agent(Act::Rewrites(Part::Line)),
     )
 }
 

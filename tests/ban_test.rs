@@ -227,7 +227,7 @@ fn ban_ignores_a_word_present_only_in_a_ledger_row_detail() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
-    // As `adr ask` would have written for a question heading that
+    // As `adr approve` would have written for a question heading that
     // mentioned "gadgetword", followed by the row `adr answer` writes once
     // that section is superseded (the section itself then deleted from
     // the record, per the fixture's premise). The word now lives only in

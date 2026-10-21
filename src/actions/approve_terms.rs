@@ -27,7 +27,7 @@ pub(super) fn do_approve_terms(
     let again = || {
         entry
             .map(msg::approve_entry_cmd)
-            .unwrap_or_else(|| crate::moves::Cmd::fixed("adr approve adrdom/terms.md"))
+            .unwrap_or_else(|| crate::moves::Cmd::adr("approve adrdom/terms.md"))
     };
     // Step 1: parse.
     let mut tf = terms::load(file).map_err(|e| {
@@ -194,7 +194,11 @@ pub(super) fn do_approve_terms(
     let append_failed = |e: std::io::Error| {
         stop(
             Command::Approve,
-            msg::update_failed("ledger", e, msg::after_fix_owner_runs(again())),
+            msg::update_failed(
+                crate::repo::LEDGER_PATH,
+                e,
+                msg::after_fix_owner_runs(again()),
+            ),
         )
     };
 

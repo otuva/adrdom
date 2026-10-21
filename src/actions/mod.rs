@@ -4,6 +4,7 @@ mod answer;
 mod approve;
 mod approve_record;
 mod approve_terms;
+mod ask;
 
 pub use answer::{do_answer, do_refuse};
 pub use approve::do_approve;
@@ -93,7 +94,7 @@ fn load_terms_or_refuse(root: &Path, cmd: Command) -> Result<terms::TermsFile, S
             cmd,
             msg::terms_load_error(
                 &e,
-                msg::fix_then_same_command("adrdom/terms.md so it can be read"),
+                msg::fix_then_same_command(msg::Part::File(crate::repo::TERMS_PATH.to_string())),
             ),
         )),
         TermsLoad::Ok(tf) => Ok(tf),
@@ -105,7 +106,7 @@ fn load_terms_or_refuse(root: &Path, cmd: Command) -> Result<terms::TermsFile, S
 /// caller would print. `rel` is the topic file's path, named in the
 /// not-approved message exactly as the caller already prints it. On
 /// success, the loaded, approved terms file is returned. The one gate for
-/// `ask`, `answer`, `refuse`, and approve-of-a-topic-file (per "Does the
+/// `approve`, `answer`, `refuse`, and approve-of-a-topic-file (per "Does the
 /// tool stop while the terms file waits for approval?", aa475aa3 A).
 pub fn require_terms(
     root: &Path,
@@ -238,9 +239,9 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, Stops> {
         stop(
             Command::Unban,
             msg::update_failed(
-                "ledger",
+                crate::repo::LEDGER_PATH,
                 e,
-                msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban")),
+                msg::after_fix_owner_runs(crate::moves::Cmd::adr("unban")),
             ),
         )
     })?;
@@ -254,7 +255,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, Stops> {
             msg::update_failed(
                 "banned list",
                 e,
-                msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild")),
+                msg::after_fix_agent_runs(crate::moves::Cmd::adr("ban --rebuild")),
             ),
         )
     })?;

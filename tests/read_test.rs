@@ -54,8 +54,6 @@ fn repo_with(markers: &[&str]) -> (PathBuf, Vec<Dec>) {
         }
         let path = write_record(&dir, &rel, &text);
         approve_record(&dir, &rel);
-        let a = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-        assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
         let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
         assert_eq!(ids.len(), headings.len());
         for (id, (h, m)) in ids.iter().zip(headings) {
@@ -140,14 +138,13 @@ fn ordered<'a>(a: &'a Dec, b: &'a Dec) -> (&'a Dec, &'a Dec) {
 
 fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
     format!(
-        "{}: \"{}\" and \"{}\": {}; agent writes a question that supersedes one of the pair",
+        "{}: \"{}\" and \"{}\": {}; agent writes the question",
         word, first.heading, second.heading, REASON
     )
 }
 
 /// The move a same or inconsistent pair calls for, as `adr read` prints it.
-const SUPERSEDE_MOVE: &str =
-    "agent writes a question that supersedes one decision of each same or inconsistent pair";
+const SUPERSEDE_MOVE: &str = "agent writes the question";
 
 /// The word the fake reader gives a pair: the marker of its first decision.
 fn word_of(a: &Dec, b: &Dec) -> String {
@@ -493,8 +490,6 @@ fn a_superseded_decision_drops_out_of_the_reading() {
         ),
     );
     approve_record(&dir, rel);
-    let a = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
-    assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
     let id = extract_ids(&std::fs::read_to_string(&path).unwrap())[0].clone();
     let r = adr_answer(&dir, &id, "A");
     assert!(r.status.success(), "{}{}", stdout(&r), stderr(&r));

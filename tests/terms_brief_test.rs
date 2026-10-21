@@ -188,7 +188,7 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
         text
     );
     assert!(
-        text.contains("agent runs: git add adrdom/state/terms-brief.md"),
+        text.contains("agent runs the same adr command again"),
         "{}",
         text
     );

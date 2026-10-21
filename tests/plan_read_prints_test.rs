@@ -41,9 +41,6 @@ fn repo() -> PathBuf {
         ),
     );
     approve_record(&dir, BASE);
-    assert!(adr(&dir, &["ask", base.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let id = extract_ids(&std::fs::read_to_string(&base).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     write_test_comment(&dir, &id);
@@ -183,15 +180,11 @@ fn plan_names_the_moves_show_names_at_every_step() {
 
     let a = adr_owner(&dir, &["approve", dir.join(REL).to_str().unwrap()], "");
     assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
-    // Approved: the agent asks, and plan no longer names the owner's approval.
+    // Approved, and approve asked every question: plan no longer names the
+    // owner's approval.
     let out = same_moves(&dir, "approved");
     assert!(!out.contains("owner runs: adr approve"), "{}", out);
 
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     // Asked: the owner's answers.
     let out = same_moves(&dir, "asked");
     assert!(
@@ -305,11 +298,6 @@ fn read_prints_the_marked_pairs_and_the_move_and_nothing_else() {
     write(&dir, &format!("# Topic\n{}", section(H1, &body("one"))));
     let a = adr_owner(&dir, &["approve", dir.join(REL).to_str().unwrap()], "");
     assert!(a.status.success(), "{}{}", stdout(&a), stderr(&a));
-    assert!(
-        adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "")
-            .status
-            .success()
-    );
     let id = ids(&dir)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
 
@@ -336,10 +324,7 @@ fn read_prints_the_marked_pairs_and_the_move_and_nothing_else() {
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines.len(), 2, "{}", out);
     assert!(lines[0].starts_with("same: \""), "{}", out);
-    assert_eq!(
-        lines[1],
-        "agent writes a question that supersedes one decision of each same or inconsistent pair"
-    );
+    assert_eq!(lines[1], "agent writes the question");
 }
 
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
@@ -357,7 +342,10 @@ fn plan_refuses_a_path_that_is_no_topic_file() {
         assert!(stdout(&out).is_empty(), "{}: {}", path, stdout(&out));
         assert_eq!(
             stderr(&out).trim_end(),
-            format!("plan: {} is not a topic file; agent rewrites the path to a topic file under adrdom/decisions", path)
+            format!(
+                "plan: {} is not a topic file; agent rewrites the path",
+                path
+            )
         );
     }
 }

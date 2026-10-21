@@ -2,8 +2,8 @@
 // not silently change after the target was asked, but a dependent heading
 // that vanished entirely is fine).
 // Most fixtures are hand-written (record content plus
-// `append_ledger_row`/`assumes_hash`) rather than through a real `adr ask`,
-// though some tests below do run `adr approve`/`adr ask` for real.
+// `append_ledger_row`/`assumes_hash`) rather than through a real `adr approve`,
+// though some tests below do run `adr approve` for real.
 
 mod common;
 
@@ -12,7 +12,7 @@ use common::*;
 const TARGET_ID: &str = "44444444-4444-4444-4444-444444444444";
 // an `assumes` row keys on the dependent's own heading id,
 // not its heading text -- so a fixture that hand-writes such a row (rather
-// than going through real `ask`) needs the dependent heading to carry a
+// than going through real `approve`) needs the dependent heading to carry a
 // fixed id of its own, used as that key.
 const DEPENDENT_ID: &str = "55555555-5555-5555-5555-555555555555";
 const REMOVED_DEPENDENT_ID: &str = "66666666-6666-6666-6666-666666666666";
@@ -50,7 +50,7 @@ fn check_fails_when_a_dependents_answer_set_changed_after_ask() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/colors.md: 1.2 Depends on color? answer set on 1.1 Which color? changed after ask; agent restores the answer set from git"
+            "adrdom/decisions/colors.md: 1.2 Depends on color? answer set on 1.1 Which color? changed after ask; agent restores the answer set"
         ),
         "{}",
         text
@@ -105,17 +105,17 @@ fn check_passes_when_the_dependent_heading_vanished() {
 fn check_passes_when_the_dependents_heading_has_extra_leading_whitespace() {
     // record.rs's `heading_text` used to be trimmed only at the end, so a
     // heading written with extra space right after `### ` kept that space
-    // in the string `ask` hashed into the `assumes` row's detail/hash, while
+    // in the string `approve` hashed into the `assumes` row's detail/hash, while
     // `check`'s frozen-set comparison always trimmed both ends before
     // recomputing the hash. The two disagreed and `check` wrongly reported
-    // the set as "changed after ask". Run through the real `ask`/`check`
+    // the set as "changed after ask". Run through the real `approve`/`check`
     // pair (not hand-written ledger rows) so the fix is verified at the
     // point the mismatch used to happen.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     // "Extra space?" stands on "Which color?" and is a dependent of it for
-    // the assumes row this ask writes.
+    // the assumes row this approve writes.
     // the term-pairing scan now leaves out `depends:` lines
     // (they hold references, not prose), so "widget" has to appear in the
     // heading/Problem/Standard/option text itself for this to pair the term.
@@ -132,16 +132,9 @@ Problem: p of the widget.\n\n\
 Standard: s.\n\n\
 - A) Yes.\n  Why: w.\n  Costs: c.\n\
 - B) No.\n  Why: w.\n  Costs: c.\n";
-    let record = write_record(&dir, "adrdom/decisions/colors.md", content);
+    write_record(&dir, "adrdom/decisions/colors.md", content);
     approve_record(&dir, "adrdom/decisions/colors.md");
-
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(
-        ask_out.status.success(),
-        "stdout: {} stderr: {}",
-        stdout(&ask_out),
-        stderr(&ask_out)
-    );
+    assert!(asked_row_count(&dir) >= 1, "approve should have asked it");
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);

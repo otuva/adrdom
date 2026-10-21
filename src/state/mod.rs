@@ -1,5 +1,5 @@
 // Shared helpers for the commands that gate on approval/terms state
-// (`ask`, `approve`, and anything else that needs the same reads). Kept
+// (`approve`, and anything else that needs the same reads). Kept
 // here so `check` and other slices can reuse them instead of duplicating
 // this logic.
 use crate::ledger::Ledger;
@@ -46,8 +46,8 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
 /// A path a command was given, from the repository root: read the way the
 /// shell that ran the command reads it (relative to the current directory
 /// unless absolute, `.` and `..` resolved), `None` when it lies outside the
-/// repository. What `show`, `plan`, `ask` and `approve` read a path
-/// argument by, so `cd adrdom/decisions && adr ask gate.md` names the file
+/// repository. What `show`, `plan`, `approve` read a path
+/// argument by, so `cd adrdom/decisions && adr approve gate.md` names the file
 /// every other spelling names.
 pub fn given_rel(root: &Path, file: &Path) -> Option<String> {
     let abs = if file.is_absolute() {
@@ -119,7 +119,7 @@ pub fn load_terms(root: &Path) -> Option<TermsFile> {
 /// Like `load_terms`, but through `source` (per "Does check at a commit
 /// read the staged files?"): every `check` caller that needs the terms
 /// file uses this instead, so a staged edit to it is judged, not whatever
-/// is left on disk. Every other caller (`ask`, `approve`, `ban`, `show`,
+/// is left on disk. Every other caller (`approve`, `ban`, `show`,
 /// `serve`) keeps calling `load_terms`, which always wants the working
 /// tree.
 pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
@@ -129,7 +129,7 @@ pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<Terms
     Some(tf)
 }
 
-/// The three ways a caller that requires `adrdom/terms.md` (`ask`, `answer`)
+/// The three ways a caller that requires `adrdom/terms.md` (`approve`, `answer`)
 /// can find it: missing outright, present but unreadable/shape-invalid, or
 /// loaded cleanly.
 pub enum TermsLoad {
@@ -140,7 +140,7 @@ pub enum TermsLoad {
 
 /// Loads `adrdom/terms.md` under `root`, distinguishing "the file does not
 /// exist" from "it exists but failed to read" so callers that must refuse
-/// differently on each (`ask` 3.1/3.2, `answer` 6) don't have to duplicate
+/// differently on each (`approve` 3.1/3.2, `answer` 6) don't have to duplicate
 /// the `Path::exists` check `load_terms` collapses away.
 pub fn load_terms_checked(root: &Path) -> TermsLoad {
     let path = root.join(crate::repo::TERMS_PATH);

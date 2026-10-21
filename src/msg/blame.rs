@@ -21,9 +21,7 @@ fn blame_entry_incomplete(rel: &str, heading: &str, entry: &str, lacks: &str) ->
             "{}: \"{}\": the blame entry \"{}\" names no {}",
             rel, heading, entry, lacks
         ),
-        Next::agent(Act::Writes(
-            "the name of a blame file and the ranges of its rows".into(),
-        )),
+        Next::agent(Act::Writes(Part::LineOf(LineKind::Blame))),
     )
 }
 
@@ -35,9 +33,7 @@ pub fn blame_names_no_file(rel: &str, heading: &str, name: &str) -> Said {
             "{}: \"{}\": the blame entry \"{}\" names no blame file",
             rel, heading, name
         ),
-        Next::agent(Act::Writes(
-            "the path of a blame file under adrdom/blame without .md".into(),
-        )),
+        Next::agent(Act::Writes(Part::LineOf(LineKind::Blame))),
     )
 }
 
@@ -77,7 +73,7 @@ pub fn blame_range_of_no_row(
             "{}: \"{}\": the blame line names {}-{}, the range of no row of {}",
             rel, heading, from, to, blame_rel
         ),
-        Next::agent(Act::Writes("the range of a row of that blame file".into())),
+        Next::agent(Act::Writes(Part::Row)),
     )
 }
 
@@ -118,10 +114,7 @@ pub fn plan_line_missing(rel: &str, heading: &str, kind: &str, name: &str) -> Sa
             "{}: the {} \"{}\" is a neighbour of \"{}\" and is on no line",
             rel, kind, name, heading
         ),
-        Next::agent(Act::Writes(format!(
-            "the missing line under \"{}\"",
-            heading
-        ))),
+        Next::agent(Act::Writes(Part::Lines(vec![heading.to_string()]))),
     )
 }
 
@@ -187,7 +180,7 @@ pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Opt
             "{}: \"{}\": supersedes {}, which is not a current decision",
             rel, heading, target
         ),
-        Next::agent(Act::Rewrites("the supersedes entry".into())),
+        Next::agent(Act::Rewrites(Part::Entry)),
     )
 }
 
@@ -197,7 +190,7 @@ pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Opt
 pub enum SupersedesMoment {
     /// `approve`: nothing of the question has been asked yet.
     Approve,
-    /// `ask` or `answer`: the question was, or is about to be, asked.
+    /// `approve` or `answer`: the question was, or is about to be, asked.
     Asked,
 }
 
@@ -221,10 +214,7 @@ pub fn supersedes_leaves_out(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let add = Act::Rewrites(format!(
-        "the supersedes line of \"{}\" to add {}",
-        heading, names
-    ));
+    let add = Act::Rewrites(Part::LineUnder(LineKind::Supersedes, heading.to_string()));
     said(
         &rule::SUPERSEDES_NAMES_DEPENDENTS,
         format!(
@@ -233,7 +223,8 @@ pub fn supersedes_leaves_out(
         ),
         match moment {
             SupersedesMoment::Approve => Next::agent(add),
-            SupersedesMoment::Asked => Next::agent_then_runs(add, command(&["adr", "ask", rel])),
+            SupersedesMoment::Asked => Next::agent(add)
+                .and_owner_runs(command(&["approve", rel])),
         },
     )
 }
@@ -247,7 +238,7 @@ pub fn stands_on_what_it_supersedes(rel: &str, heading: &str, target: &str) -> S
             "{}: \"{}\" stands on \"{}\", which it supersedes",
             rel, heading, target
         ),
-        Next::agent(Act::Removes("the entry from its depends line".into())),
+        Next::agent(Act::Removes(Part::Entry)),
     )
 }
 
@@ -265,10 +256,7 @@ pub fn stands_on_what_the_plan_supersedes(
             "{}: \"{}\" stands on \"{}\", which \"{}\" supersedes",
             rel, heading, target, replacer
         ),
-        Next::agent(Act::Rewrites(format!(
-            "the depends entry to name \"{}\"",
-            replacer
-        ))),
+        Next::agent(Act::Rewrites(Part::Entry)),
     )
 }
 
@@ -292,7 +280,7 @@ pub fn banned_word_in_candidate(rel: &str, heading: &str, suffix: &str) -> Said 
     said(
         &rule::BANNED_WORD_ABSENT_FROM_RECORDS,
         format!("{}: \"{}\": banned word{}", rel, heading, suffix),
-        Next::agent(Act::Rewrites("the line".into())),
+        Next::agent(Act::Rewrites(Part::Line)),
     )
 }
 
@@ -300,7 +288,7 @@ pub fn pairs_no_term(rel: &str, heading: &str) -> Said {
     said(
         &rule::QUESTION_PAIRS_TO_TERM,
         format!("{}: \"{}\" uses no term", rel, heading),
-        Next::agent(Act::Writes("the term in adrdom/terms.md".into())),
+        Next::agent(Act::Writes(Part::Term)),
     )
 }
 
@@ -319,7 +307,7 @@ pub fn blame_shape_error(rel: &str, e: &str) -> Said {
     said(
         &crate::rule::BLAME_FILE_SHAPE,
         format!("{}: {}", rel, e),
-        Next::agent(Act::Rewrites("the blame file".into())),
+        Next::agent(Act::Rewrites(Part::File(rel.to_string()))),
     )
 }
 
@@ -328,7 +316,7 @@ pub fn blame_row_value_error(rel: &str, e: &str) -> Said {
     said(
         &crate::rule::BLAME_ROW_SAYS_DECISION_OR_DETAIL,
         format!("{}: {}", rel, e),
-        Next::agent(Act::Writes("decision or detail after the tab".into())),
+        Next::agent(Act::Writes(Part::Row)),
     )
 }
 
@@ -338,15 +326,8 @@ pub fn blame_id_error(rel: &str, e: &str, approved: Option<&str>) -> Said {
     // `e` opens with the line it found, as "line N: ...". A file with an
     // approval gets its approved id line back instead.
     let next = match approved {
-        Some(id) => Next::agent(Act::Writes(format!("back the id line \"id: {}\"", id))),
-        None => match e
-            .strip_prefix("line ")
-            .and_then(|r| r.split(':').next())
-            .filter(|n| n.parse::<usize>().is_ok())
-        {
-            Some(n) => Next::agent(Act::Removes(format!("the id line, line {}", n))),
-            None => Next::agent(Act::Removes("the id line".into())),
-        },
+        Some(_) => Next::agent(Act::Writes(Part::LineOf(LineKind::Id))),
+        None => Next::agent(Act::Removes(Part::LineOf(LineKind::Id))),
     };
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
@@ -357,37 +338,36 @@ pub fn blame_id_error(rel: &str, e: &str, approved: Option<&str>) -> Said {
 
 /// `rel` was approved and has no id line now: the identifier its approval
 /// gave is gone, and approve does not assign another.
-pub fn blame_id_line_gone(rel: &str, id: &str) -> Said {
+pub fn blame_id_line_gone(rel: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
         format!("{}: the id line of its approval is gone", rel),
-        Next::agent(Act::Writes(format!("back the id line \"id: {}\"", id))),
+        Next::agent(Act::Writes(Part::LineOf(LineKind::Id))),
     )
 }
 
-/// The id line of `rel` holds an identifier no `blame` ledger row holds: the
-/// tool did not write it.
+/// The id line of `rel` holds an identifier no `blame` ledger row holds.
 pub fn blame_id_not_written(rel: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
         format!(
-            "{}: its id line holds an identifier the tool did not write",
+            "{}: its id line holds an identifier no blame row holds",
             rel
         ),
-        Next::agent(Act::Removes("the id line".into())),
+        Next::agent(Act::Removes(Part::LineOf(LineKind::Id))),
     )
 }
 
 /// `rel` was approved and its id line differs from the identifier its
 /// approval gave (`written`).
-pub fn blame_id_edited(rel: &str, written: &str) -> Said {
+pub fn blame_id_edited(rel: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
         format!(
             "{}: its id line differs from the identifier of its approval",
             rel
         ),
-        Next::agent(Act::Writes(format!("back the id line \"id: {}\"", written))),
+        Next::agent(Act::Writes(Part::LineOf(LineKind::Id))),
     )
 }
 
@@ -397,7 +377,7 @@ pub fn blame_id_shared(rel: &str, other_rel: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_NAMES_ONE_FILE,
         format!("{}: its id line holds the identifier of {}", rel, other_rel),
-        Next::agent(Act::Removes(format!("the id line from {}", rel))),
+        Next::agent(Act::Removes(Part::LineOf(LineKind::Id))),
     )
 }
 
@@ -417,11 +397,7 @@ pub fn blame_coverage_gap(rel: &str, start: usize, end: usize) -> Said {
             rel,
             range_text(start, end)
         ),
-        Next::agent(Act::Writes(format!(
-            "a row for {} {}",
-            if start == end { "line" } else { "lines" },
-            range_text(start, end)
-        ))),
+        Next::agent(Act::Writes(Part::Row)),
     )
 }
 
@@ -434,7 +410,7 @@ pub fn blame_range_beyond(rel: &str, start: usize, end: usize, n: usize) -> Said
             range_text(start, end),
             n
         ),
-        Next::agent(Act::Rewrites("the row".into())),
+        Next::agent(Act::Rewrites(Part::Row)),
     )
 }
 
@@ -446,7 +422,7 @@ pub fn blame_bad_origin_path(rel: &str, path: &str) -> Said {
     said(
         &crate::rule::BLAME_ORIGIN_IS_A_FILE,
         format!("{}: \"{}\" is not a regular file outside adrdom", rel, path),
-        Next::agent(Act::Rewrites("the origin line".into())),
+        Next::agent(Act::Rewrites(Part::LineOf(LineKind::Origin))),
     )
 }
 
@@ -462,11 +438,7 @@ pub fn blame_blob_mismatch(rel: &str, origin: &str) -> Said {
     said(
         &crate::rule::BLAME_BLOB_MATCHES_ORIGIN,
         format!("{}: blob no longer matches {}", rel, origin),
-        Next::agent(Act::Rewrites(format!(
-            "the rows of {} to the current origin",
-            rel
-        )))
-        .and_owner_runs(command(&["adr", "approve", rel])),
+        Next::agent(Act::Rewrites(Part::Row)).and_owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -483,7 +455,7 @@ pub fn blame_origin_missing(rel: &str, origin: &str, status: FileStatus) -> Said
             origin,
             status.name()
         ),
-        Next::agent(Act::Restores(origin.to_string())),
+        Next::agent(Act::Restores(Part::File(origin.to_string()))),
     )
 }
 
@@ -494,7 +466,7 @@ pub fn blame_origin_missing(rel: &str, origin: &str, status: FileStatus) -> Said
 pub fn blame_file_unreadable(rel: &str) -> String {
     refuse(
         format!("{}: cannot be read as text (e.g. its encoding)", rel),
-        Next::agent(Act::Rewrites(rel.to_string())),
+        Next::agent(Act::Rewrites(Part::File(rel.to_string()))),
     )
 }
 
@@ -507,7 +479,10 @@ pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
             "{}: git could not hash the current content of {}",
             rel, origin
         ),
-        Next::agent_then_runs(Act::Rewrites(origin.to_string()), Cmd::fixed("adr check")),
+        Next::agent_then_runs(
+            Act::Rewrites(Part::File(origin.to_string())),
+            Cmd::adr("check"),
+        ),
     )
 }
 
@@ -521,7 +496,7 @@ pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
             "{}: origin {} exists but cannot be read as text (e.g. its encoding)",
             rel, origin
         ),
-        Next::agent(Act::Rewrites(origin.to_string())),
+        Next::agent(Act::Rewrites(Part::File(origin.to_string()))),
     )
 }
 
@@ -539,11 +514,11 @@ mod tests {
         let (r, h) = ("x.md", "Does X?");
         assert_eq!(
             blame_entry_without_range(r, h, "notes").text(),
-            "x.md: \"Does X?\": the blame entry \"notes\" names no row range; agent writes the name of a blame file and the ranges of its rows"
+            "x.md: \"Does X?\": the blame entry \"notes\" names no row range; agent writes the blame line"
         );
         assert_eq!(
             blame_names_no_file(r, h, "notes").text(),
-            "x.md: \"Does X?\": the blame entry \"notes\" names no blame file; agent writes the path of a blame file under adrdom/blame without .md"
+            "x.md: \"Does X?\": the blame entry \"notes\" names no blame file; agent writes the blame line"
         );
         for status in [FileStatus::New, FileStatus::Changed] {
             assert_eq!(
@@ -557,7 +532,7 @@ mod tests {
         }
         assert_eq!(
             blame_range_of_no_row(r, h, "adrdom/blame/notes.md", 3, 3).text(),
-            "x.md: \"Does X?\": the blame line names 3-3, the range of no row of adrdom/blame/notes.md; agent writes the range of a row of that blame file"
+            "x.md: \"Does X?\": the blame line names 3-3, the range of no row of adrdom/blame/notes.md; agent writes the row"
         );
     }
 }

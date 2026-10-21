@@ -20,6 +20,7 @@ mod blame;
 mod check;
 mod check_notes;
 mod commands;
+mod part;
 mod repo;
 mod satellite;
 mod serve;
@@ -33,6 +34,7 @@ pub use blame::*;
 pub use check::*;
 pub use check_notes::*;
 pub use commands::*;
+pub use part::{LineKind, Many, Part};
 pub use repo::*;
 pub use satellite::*;
 pub use serve::*;
@@ -54,21 +56,21 @@ pub enum Actor {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Act {
     /// `writes <thing>`: text that is not there yet.
-    Writes(String),
+    Writes(Part),
     /// `rewrites <thing>`: text that is there.
-    Rewrites(String),
+    Rewrites(Part),
     /// `removes <thing>`.
-    Removes(String),
-    /// `restores <thing> from git`.
-    Restores(String),
+    Removes(Part),
+    /// `restores <thing>`.
+    Restores(Part),
     /// `runs: <command>`.
     Runs(Cmd),
     /// `builds <thing>`.
-    Builds(String),
+    Builds(Part),
     /// `installs <thing>`: a program the tool calls and does not ship.
-    Installs(String),
+    Installs(Part),
     /// `changes into <place>`: the directory a command runs from.
-    ChangesInto(String),
+    ChangesInto(Part),
     /// `runs the same adr command again`: the command that stopped, which
     /// the step that failed inside it does not know.
     RunsAgain,
@@ -94,19 +96,19 @@ pub const NOT_YET: &str = "not yet: ";
 impl Act {
     fn render(&self) -> String {
         match self {
-            Act::Writes(t) => format!("writes {}", t),
-            Act::Rewrites(t) => format!("rewrites {}", t),
-            Act::Removes(t) => format!("removes {}", t),
-            Act::Restores(t) => format!("restores {} from git", t),
+            Act::Writes(t) => format!("writes {}", t.render()),
+            Act::Rewrites(t) => format!("rewrites {}", t.render()),
+            Act::Removes(t) => format!("removes {}", t.render()),
+            Act::Restores(t) => format!("restores {}", t.render()),
             Act::Runs(c) => format!("runs: {}", c),
-            Act::Builds(t) => format!("builds {}", t),
-            Act::Installs(t) => format!("installs {}", t),
-            Act::ChangesInto(t) => format!("changes into {}", t),
+            Act::Builds(t) => format!("builds {}", t.render()),
+            Act::Installs(t) => format!("installs {}", t.render()),
+            Act::ChangesInto(t) => format!("changes into {}", t.render()),
             Act::RunsAgain => "runs the same adr command again".to_string(),
         }
     }
 
-    fn map_thing(self, f: impl Fn(String) -> String) -> Act {
+    fn map_thing(self, f: impl Fn(Part) -> Part) -> Act {
         match self {
             Act::Writes(t) => Act::Writes(f(t)),
             Act::Rewrites(t) => Act::Rewrites(f(t)),
@@ -129,10 +131,9 @@ enum Clause {
     NotYet(String),
 }
 
-/// The thing the fix helpers (`after_fix_agent_runs`, `after_fix_owner_runs`)
-/// rewrite is named by the failure that carries them; `Next::on` puts the
-/// thing in its place.
-const FIX_THE_THING: &str = "\u{1}";
+// The thing the fix helpers (`after_fix_agent_runs`, `after_fix_owner_runs`)
+// rewrite is named by the failure that carries them; `Next::on` puts the
+// thing in place of `Part::Pending`.
 
 /// One or more next-move clauses, joined with `, `. `Next::agent(..)`
 /// reads as `agent <act>`; `Next::owner_runs(..)` as `owner runs:
@@ -231,15 +232,15 @@ impl Next {
         self
     }
 
-    /// Names `thing` as what a generic fix clause (`FIX_THE_THING`) rewrites.
-    pub fn on(self, thing: &str) -> Next {
+    /// Names `thing` as what a generic fix clause (`Part::Pending`) rewrites.
+    pub fn on(self, thing: Part) -> Next {
         Next(
             self.0
                 .into_iter()
                 .map(|c| match c {
                     Clause::Do { actor, act, then } => Clause::Do {
                         actor,
-                        act: act.map_thing(|t| t.replace(FIX_THE_THING, thing)),
+                        act: act.map_thing(|t| if t == Part::Pending { thing.clone() } else { t }),
                         then,
                     },
                     w => w,
@@ -320,32 +321,35 @@ fn refuse(what: String, next: Next) -> String {
 pub fn write_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(
         format!("failed to write {}: {}", target, e),
-        next.on(target),
+        next.on(Part::File(target.to_string())),
     )
 }
 
 pub fn read_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("cannot read {}: {}", target, e), next.on(target))
+    refuse(
+        format!("cannot read {}: {}", target, e),
+        next.on(Part::File(target.to_string())),
+    )
 }
 
 pub fn update_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(
         format!("failed to update {}: {}", target, e),
-        next.on(target),
+        next.on(Part::File(target.to_string())),
     )
 }
 
 pub fn create_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(
         format!("failed to create {}: {}", target, e),
-        next.on(target),
+        next.on(Part::File(target.to_string())),
     )
 }
 
 pub fn remove_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(
         format!("failed to remove {}: {}", target, e),
-        next.on(target),
+        next.on(Part::File(target.to_string())),
     )
 }
 
@@ -354,7 +358,7 @@ pub fn remove_failed(target: &str, e: impl Display, next: Next) -> String {
 pub fn hooks_path_failed(doing: &str, next: Next) -> String {
     refuse(
         format!("git config failed to {} core.hooksPath", doing),
-        next.on("the git configuration of core.hooksPath"),
+        next.on(Part::File("core.hooksPath".into())),
     )
 }
 
@@ -370,10 +374,7 @@ pub fn hooks_path_foreign(value: &str, install: Cmd) -> String {
 /// The move that clears a foreign `core.hooksPath`, for install's refusal and
 /// for check's finding alike: install alone leaves it standing.
 fn hooks_path_foreign_next(install: Cmd) -> Next {
-    Next::owner_then_runs(
-        Act::Removes("the hook manager that set core.hooksPath".into()),
-        install,
-    )
+    Next::owner_then_runs(Act::Removes(Part::File("core.hooksPath".into())), install)
 }
 
 /// Install stops: the hook at `from` moves to `own`, and a file is there
@@ -381,8 +382,8 @@ fn hooks_path_foreign_next(install: Cmd) -> Next {
 pub fn hook_move_blocked(from: &str, own: &str, install: Cmd) -> String {
     refuse(
         format!("{} would move to {}, which exists", from, own),
-        Next::agent(Act::Rewrites(own.to_string()))
-            .then(Act::Removes(from.to_string()))
+        Next::agent(Act::Rewrites(Part::File(own.to_string())))
+            .then(Act::Removes(Part::File(from.to_string())))
             .then(Act::Runs(install)),
     )
 }
@@ -391,22 +392,22 @@ pub fn hook_move_blocked(from: &str, own: &str, install: Cmd) -> String {
 pub fn hook_move_twice(from: &str, other: &str, own: &str, install: Cmd) -> String {
     refuse(
         format!("{} and {} would both move to {}", from, other, own),
-        Next::agent(Act::Writes(own.to_string()))
-            .then(Act::Removes(from.to_string()))
-            .then(Act::Removes(other.to_string()))
+        Next::agent(Act::Writes(Part::File(own.to_string())))
+            .then(Act::Removes(Part::File(from.to_string())))
+            .then(Act::Removes(Part::File(other.to_string())))
             .then(Act::Runs(install)),
     )
 }
 
 pub fn parse_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("{}: {}", target, e), next.on(target))
+    refuse(
+        format!("{}: {}", target, e),
+        next.on(Part::File(target.to_string())),
+    )
 }
 
 pub fn stdin_read_failed(next: Next) -> String {
-    refuse(
-        "failed to read stdin".to_string(),
-        next.on("what is piped to adr"),
-    )
+    refuse("failed to read stdin".to_string(), next.on(Part::Input))
 }
 
 /// Standard output refused a line for a cause other than its reader going
@@ -450,15 +451,15 @@ mod tests {
     fn every_act_opens_with_one_of_the_set() {
         // adr: 50b31713-4fea-4aa3-842a-79c2750660ba
         let acts = [
-            Act::Writes("x".into()),
-            Act::Rewrites("x".into()),
-            Act::Removes("x".into()),
-            Act::Restores("x".into()),
-            Act::Runs(Cmd::fixed("adr check")),
+            Act::Writes(Part::Line),
+            Act::Rewrites(Part::Line),
+            Act::Removes(Part::Line),
+            Act::Restores(Part::Line),
+            Act::Runs(Cmd::adr("check")),
             Act::RunsAgain,
-            Act::Builds("x".into()),
-            Act::Installs("x".into()),
-            Act::ChangesInto("x".into()),
+            Act::Builds(Part::Line),
+            Act::Installs(Part::Line),
+            Act::ChangesInto(Part::Line),
         ];
         for act in acts {
             let text = act.render();
@@ -469,12 +470,12 @@ mod tests {
                 text
             );
         }
-        let mv = Next::agent(Act::Rewrites("the line".into()))
-            .then(Act::Runs(Cmd::fixed("adr ask x.md")))
-            .and_owner_runs(Cmd::fixed("adr approve x.md"));
+        let mv = Next::agent(Act::Rewrites(Part::Line))
+            .then(Act::Runs(Cmd::adr("plan x.md")))
+            .and_owner_runs(Cmd::adr("approve x.md"));
         assert_eq!(
             mv.render(),
-            "agent rewrites the line, then runs: adr ask x.md, owner runs: adr approve x.md"
+            "agent rewrites the line, then runs: adr plan x.md, owner runs: adr approve x.md"
         );
         assert_eq!(
             Next::not_yet("after it is approved").render(),
@@ -513,7 +514,7 @@ mod tests {
             create_failed("x", e, Next::agent(Act::RunsAgain)),
             parse_failed("x", e, Next::agent(Act::RunsAgain)),
             stdin_read_failed(Next::agent(Act::RunsAgain)),
-            not_a_repo("ask", &[], Actor::Agent),
+            not_a_repo("plan", &[], Actor::Agent),
             not_a_repo("approve", &["adrdom/decisions/x.md"], Actor::Owner),
             owner_refusal("approve", &["adrdom/decisions/x.md"]),
             owner_refusal("unban", &[]),
@@ -570,8 +571,13 @@ mod tests {
             term_definition_term_not_found("term", "word").text(),
             term_definition_term_retired("term", "retired-term").text(),
             term_definition_terms_line_malformed("term").text(),
-            frozen_depends_edited("x.md", "heading", crate::status::QuestionStatus::Answered)
-                .text(),
+            frozen_depends_text(
+                "x.md",
+                "heading",
+                crate::status::QuestionStatus::Answered,
+                "x",
+            )
+            .text(),
             dep_not_current_decision("x.md", "heading", "id-1", Some("name")).text(),
             dep_retired_term_id("x.md", "heading", "id-1", Some("name")).text(),
             dep_no_term("x.md", "heading", "widget").text(),
@@ -631,8 +637,6 @@ mod tests {
             malformed_terms_line("x.md", "id-1", "heading").text(),
             terms_line_names_gone_term("x.md", "id-1", "heading", "uuid-1", "word").text(),
             terms_line_names_retired_term("x.md", "id-1", "heading", "term").text(),
-            plan_not_approved("x.md", FileStatus::New, &approve_x).text(),
-            context_not_approved("x.md", FileStatus::New, &approve_x).text(),
             missing_answer_set("x.md", "dependent", "target").text(),
             set_on_answered_question("x.md", "dependent", "target").text(),
             question_without_body("x.md", "heading").text(),
@@ -662,15 +666,14 @@ mod tests {
                 &crate::moves::Report {
                     stops: Vec::new(),
                     findings: Vec::new(),
-                    moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Ask {
-                        rel: "x.md".into(),
-                        headings: vec!["heading".into()],
+                    moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve {
+                        path: "x.md".into(),
                     })],
                 },
             )
             .text(),
             answer_set_changed("x.md", "dependent", "heading").text(),
-            answer_conflict("x.md", "heading", "id-1", "A", "B").text(),
+            answer_conflict("x.md", "heading", "A", "B").text(),
             banned_word_at("x.md:3", "").text(),
             banned_missing_from_file("abcdef123456").text(),
             banned_missing_from_ledger("abcdef123456").text(),
@@ -750,21 +753,25 @@ mod tests {
                 "id-1",
                 None,
                 &["x.rs:3".to_string()],
-                Next::agent(Act::Removes("the tie comment from the test".into())),
+                Next::agent(Act::Removes(Part::LineOf(LineKind::TieComment))),
             )
             .text(),
-            brief_line_unmarked(3, Next::agent(Act::Writes("the from-comment".into()))).text(),
+            brief_line_unmarked(
+                3,
+                Next::agent(Act::Writes(Part::LineOf(LineKind::FromComment))),
+            )
+            .text(),
             brief_comment_malformed(
                 3,
                 "is empty",
-                Next::agent(Act::Rewrites("the from-comment".into())),
+                Next::agent(Act::Rewrites(Part::LineOf(LineKind::FromComment))),
             )
             .text(),
             brief_comment_unknown(
                 3,
                 "x",
                 false,
-                Next::agent(Act::Rewrites("the from-comment".into())),
+                Next::agent(Act::Rewrites(Part::LineOf(LineKind::FromComment))),
             )
             .text(),
             brief_comment_stale(
@@ -772,7 +779,7 @@ mod tests {
                 "id-1",
                 None,
                 false,
-                Next::agent(Act::Removes("the from-comment".into())),
+                Next::agent(Act::Removes(Part::LineOf(LineKind::FromComment))),
             )
             .text(),
             duplicate_heading_in_file("heading", "x.md").text(),
@@ -798,9 +805,9 @@ mod tests {
                 None,
             )
             .text(),
-            blame_id_line_gone("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
+            blame_id_line_gone("adrdom/blame/x.md").text(),
             blame_id_not_written("adrdom/blame/x.md").text(),
-            blame_id_edited("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
+            blame_id_edited("adrdom/blame/x.md").text(),
             blame_id_shared("adrdom/blame/x.md", "adrdom/blame/y.md").text(),
             blame_coverage_gap("adrdom/blame/x.md", 3, 5).text(),
             blame_range_beyond("adrdom/blame/x.md", 1, 10, 5).text(),
@@ -813,27 +820,27 @@ mod tests {
             blame_origin_unreadable("adrdom/blame/x.md", "docs/x.md"),
             // Added with the one-printer build: each names its move too.
             already_closed("heading", crate::status::QuestionStatus::Dropped),
-            in_use_at("x.md:3", command(&["adr", "ban"])).text(),
+            in_use_at("x.md:3", command(&["ban"])).text(),
             supersedes_names_twice("x.md", "heading", "entry").text(),
             depends_names_twice("x.md", "heading", "entry").text(),
-            stdout_write_failed(e, Actor::Owner, command(&["adr", "approve", "x.md"])),
-            stdout_write_failed(e, Actor::Agent, command(&["adr", "show"])),
+            stdout_write_failed(e, Actor::Owner, command(&["approve", "x.md"])),
+            stdout_write_failed(e, Actor::Agent, command(&["show"])),
             file_unreadable("adrdom/terms.md", e),
             plan_not_a_topic_file("adrdom/terms.md"),
             no_terms_line("x.md", "id-1", "heading").text(),
-            remove_failed("x", e, Next::agent(Act::Rewrites("it".into()))),
-            hooks_path_failed("set", Next::agent(Act::Rewrites("it".into()))),
-            hooks_path_foreign(".husky", command(&["adr", "install"])),
+            remove_failed("x", e, Next::agent(Act::Rewrites(Part::Pending))),
+            hooks_path_failed("set", Next::agent(Act::Rewrites(Part::Pending))),
+            hooks_path_foreign(".husky", command(&["install"])),
             hook_move_blocked(
                 ".git/hooks/pre-commit",
                 ".githooks/pre-commit.own",
-                command(&["adr", "install"]),
+                command(&["install"]),
             ),
             hook_move_twice(
                 ".git/hooks/pre-commit",
                 ".githooks/pre-commit",
                 ".githooks/pre-commit.own",
-                command(&["adr", "install"]),
+                command(&["install"]),
             ),
             hooks_path_unset().text(),
             hooks_path_not_ours(".husky").text(),
@@ -882,7 +889,7 @@ mod tests {
                 "id-1",
                 "H?",
                 "asked",
-                Next::owner_runs(command(&["adr", "approve", "x.md"])),
+                Next::owner_runs(command(&["approve", "x.md"])),
             )
             .text(),
             refused_text_changed("x.md", "H?").text(),
@@ -954,30 +961,30 @@ mod tests {
                 "owner changes into a git repository, then runs: adr unban",
             ),
             (
-                stdin_read_failed(after_fix_owner_runs(Cmd::fixed("adr unban"))),
+                stdin_read_failed(after_fix_owner_runs(Cmd::adr("unban"))),
                 "owner runs: adr unban",
             ),
             (
-                stdin_read_failed(after_fix_agent_runs(Cmd::fixed("adr ban"))),
+                stdin_read_failed(after_fix_agent_runs(Cmd::adr("ban"))),
+                "then runs: adr ban",
+            ),
+            (
+                update_failed("banned list", e, after_fix_agent_runs(Cmd::adr("ban"))),
                 "then runs: adr ban",
             ),
             (
                 update_failed(
-                    "banned list",
+                    crate::repo::LEDGER_PATH,
                     e,
-                    after_fix_agent_runs(Cmd::fixed("adr ban")),
+                    after_fix_agent_runs(Cmd::adr("ban")),
                 ),
                 "then runs: adr ban",
             ),
             (
-                update_failed("ledger", e, after_fix_agent_runs(Cmd::fixed("adr ban"))),
-                "then runs: adr ban",
-            ),
-            (
                 update_failed(
                     "banned list",
                     e,
-                    after_fix_agent_runs(Cmd::fixed("adr ban --rebuild")),
+                    after_fix_agent_runs(Cmd::adr("ban --rebuild")),
                 ),
                 "then runs: adr ban --rebuild",
             ),
@@ -1000,7 +1007,7 @@ mod tests {
         let asked =
             term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::Asked("x.md")).text();
         assert!(
-            asked.ends_with("agent rewrites the question, then runs: adr ask x.md"),
+            asked.ends_with("agent rewrites the question, owner runs: adr approve x.md"),
             "{}",
             asked
         );
@@ -1016,37 +1023,28 @@ mod tests {
         let decision =
             term_retired_but_carried("x", "id-1", RetiredUser::Decision("id-1", "H?")).text();
         assert!(
-            decision.contains("then writes a question that supersedes id-1 (\"H?\")"),
+            decision.contains("then writes the question"),
             "{}",
             decision
         );
         let removed = term_removed_but_carried("u", Some("w"), "id-1", Some(("id-1", "H?"))).text();
-        assert!(
-            removed.contains("then writes a question that supersedes id-1 (\"H?\")"),
-            "{}",
-            removed
-        );
+        assert!(removed.contains("then writes the question"), "{}", removed);
         let moved = word_moved_off_term("w", "t", "id-1", Some("id-1")).text();
         assert!(
-            moved.ends_with("agent rewrites the entry of \"t\" so \"w\" names it"),
+            moved.ends_with("agent rewrites the entry of \"t\""),
             "{}",
             moved
         );
         assert!(!moved.contains("or writes a question"), "{}", moved);
         assert!(section_no_terms_line("x.md", "H?", true)
             .text()
-            .contains("agent restores the terms line from git"));
+            .contains("agent restores the terms line"));
         let no_term = dep_no_term("x.md", "H?", "w").text();
-        assert!(
-            no_term.ends_with("agent writes the term in adrdom/terms.md"),
-            "{}",
-            no_term
-        );
+        assert!(no_term.ends_with("agent writes the term"), "{}", no_term);
         assert!(!no_term.contains("or names another"), "{}", no_term);
         let not_current = dep_not_current_decision("x.md", "H?", "id-1", None).text();
         assert!(
-            not_current
-                .ends_with("agent rewrites the entry to name a term or a question of this file"),
+            not_current.ends_with("agent rewrites the entry"),
             "{}",
             not_current
         );

@@ -40,7 +40,7 @@ Standard: clear yes or no.
 /// ledger row, asks, then owner-answers option A. Lifted from
 /// `tests/check_test.rs`'s own helper of the same shape (read, not
 /// edited) -- test (e) below needs exactly "one command run" of each of
-/// `ask`/`approve`/`answer`, not a fixture of its own invention.
+/// `approve`/`answer`, not a fixture of its own invention.
 fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
     let terms_content =
         "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something is accepted.\naliases: \n";
@@ -48,9 +48,6 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
     approve_terms_via_ledger(dir, terms_content);
     let record = write_record(dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_record(dir, "adrdom/decisions/example.md");
-    assert!(adr(dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     let arg = id_at_version(dir, &id);
@@ -282,7 +279,7 @@ fn f_two_approved_rows_for_one_file_at_one_time_names_the_event() {
 
 // adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a
 //
-// The real flow of one command run each (`ask`, `approve`, `answer`,
+// The real flow of one command run each (`approve`, `answer`,
 // through the harness) never trips the rule: `check` passes clean.
 #[test]
 fn e_the_real_flow_of_one_command_run_never_trips_the_rule() {
@@ -294,7 +291,7 @@ fn e_the_real_flow_of_one_command_run_never_trips_the_rule() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(
         out.status.success(),
-        "the real ask/approve/answer flow must never trip the same-time rule: {}",
+        "the real approve/answer flow must never trip the same-time rule: {}",
         stdout(&out)
     );
     assert!(!stdout(&out).contains(COMPETES_TEXT), "{}", stdout(&out));

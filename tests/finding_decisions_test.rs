@@ -275,9 +275,6 @@ fn first_unanswered_waits(dir: &Path) -> std::process::Output {
     );
     let path = write_record(dir, rel, &text);
     approve_record(dir, rel);
-    assert!(adr(dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
     adr_answer(dir, &ids[1], "A")
 }
@@ -287,7 +284,7 @@ fn first_unanswered_waits(dir: &Path) -> std::process::Output {
 // was found and the move, every clause of it one act of the tool's fixed
 // set; nothing on what the rule protects. It opens with no category tag and
 // names neither an identifier nor a heading of this repository's own
-// decisions. check, show, plan, approve, ask and answer print it the same
+// decisions. check, show, plan, approve and answer print it the same
 // way.
 #[test]
 fn a_finding_names_what_it_found_and_the_move() {
@@ -317,7 +314,6 @@ fn a_finding_names_what_it_found_and_the_move() {
     take("show", adr(&dir, &["show", rel], &[], ""));
     take("plan", adr(&dir, &["plan", p], &[], ""));
     take("approve", adr_owner(&dir, &["approve", p], ""));
-    take("ask", adr(&dir, &["ask", p], &[], ""));
     take("answer", first_unanswered_waits(&dir));
 
     let empty: Vec<&str> = seen

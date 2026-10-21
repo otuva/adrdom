@@ -49,7 +49,7 @@ fn approve_refuses_a_heading_that_stands_in_another_topic_file_and_writes_nothin
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains(LINE) && err.contains("agent rewrites one of the two sections"),
+        err.contains(LINE) && err.contains("agent rewrites one of the sections"),
         "{}",
         err
     );
@@ -79,11 +79,12 @@ fn approve_refuses_a_heading_that_stands_in_another_topic_file_and_writes_nothin
 }
 
 #[test]
-fn a_copied_heading_never_reaches_ask_because_approve_refuses_it() {
+fn a_copied_heading_is_never_asked_because_approve_refuses_it() {
     // adr: 23f21671-e34c-44aa-8804-6163d975807f
     let dir = repo();
     write_record(&dir, A, &file("A"));
     approve_record(&dir, A);
+    let asked_before = asked_row_count(&dir);
     let record = write_record(&dir, B, &file("B"));
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
@@ -91,11 +92,7 @@ fn a_copied_heading_never_reaches_ask_because_approve_refuses_it() {
         "{}",
         stderr(&out)
     );
-    // Ask on the unapproved copy refuses on the approval, not on the heading.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("plan is new"), "{}", stderr(&out));
-    assert_eq!(asked_row_count(&dir), 0);
+    assert_eq!(asked_row_count(&dir), asked_before);
 }
 
 #[test]

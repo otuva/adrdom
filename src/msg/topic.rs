@@ -4,22 +4,21 @@ use super::*;
 
 // --- a topic file's own shape/tells/depends/tier refusals ------------------
 // Shared by `rules::record_refusals` (approve + check) and, for the
-// derive-error variant, by `ask` as well.
+// derive-error variant, by `approve` as well.
 
 pub fn shape_error(rel: &str, e: &str) -> Said {
     if e.starts_with("tier heading") {
         return said(
             &rule::TIER_HEADING_ABSENT,
             format!("{}: {}", rel, e),
-            Next::agent(Act::Removes("the heading".into())).then(Act::Writes(
-                "what each question stands on in its depends line".into(),
-            )),
+            Next::agent(Act::Removes(Part::Heading))
+                .then(Act::Writes(Part::LineOf(LineKind::Depends))),
         );
     }
     said(
         &rule::TOPIC_FILE_SHAPE,
         format!("{}: {}", rel, e),
-        Next::agent(Act::Rewrites("the file".into())),
+        Next::agent(Act::Rewrites(Part::File(rel.to_string()))),
     )
 }
 
@@ -32,7 +31,7 @@ pub fn heading_not_a_question(rel: &str, line: usize) -> Said {
             "{}: line {}: a heading is not a question ending in ?",
             rel, line
         ),
-        Next::agent(Act::Rewrites("the line".into())),
+        Next::agent(Act::Rewrites(Part::Line)),
     )
 }
 
@@ -42,21 +41,21 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
         return said(
             &rule::DEPENDS_ENTRY_ONCE,
             format!("{}{}", at, e),
-            Next::agent(Act::Removes("the entry".into())),
+            Next::agent(Act::Removes(Part::Entry)),
         );
     }
     if e.starts_with("second answer line") {
         return said(
             &rule::ANSWER_LINE_IS_LAST,
             format!("{}{}", at, e),
-            Next::agent(Act::Removes("the second answer line".into())),
+            Next::agent(Act::Removes(Part::LineOf(LineKind::Answer))),
         );
     }
     if e.starts_with("answer line not last") {
         return said(
             &rule::ANSWER_LINE_IS_LAST,
             format!("{}{}", at, e),
-            Next::agent(Act::Removes("the lines after the answer line".into())),
+            Next::agent(Act::Removes(Part::Line)),
         );
     }
     for kind in ["depends", "supersedes", "unrelated", "blame", "terms"] {
@@ -68,19 +67,19 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
             return said(
                 &rule::REFERENCE_LINE_ONCE,
                 format!("{}{} second line, line {}", at, kind, n),
-                Next::agent(Act::Rewrites(format!("the {} line", kind))),
+                Next::agent(Act::Rewrites(Part::LineOf(line_kind(kind)))),
             );
         }
         return said(
             &rule::REFERENCE_LINE_ONCE,
             format!("{}{}", at, e),
-            Next::agent(Act::Rewrites(format!("the {} line", kind))),
+            Next::agent(Act::Rewrites(Part::LineOf(line_kind(kind)))),
         );
     }
     said(
         &rule::QUESTION_SECTION_SHAPE,
         format!("{}{}", at, e),
-        Next::agent(Act::Rewrites("the question".into())),
+        Next::agent(Act::Rewrites(Part::Question)),
     )
 }
 
@@ -99,33 +98,33 @@ pub fn tell(
         TellKind::Provenance => (
             &rule::TELL_NAMES_SPEAKER,
             format!("\"{}\" names who said it", phrase),
-            "the line",
+            Part::Line,
         ),
         TellKind::CodeState => (
             &rule::TELL_STATES_CODE_NOW,
             format!("\"{}\" states what the code does", phrase),
-            "the line",
+            Part::Line,
         ),
         TellKind::Date => (
             &rule::TELL_CARRIES_DATE,
             format!("\"{}\" is a date", phrase),
-            "the line",
+            Part::Line,
         ),
         TellKind::LoadedOpening => (
             &rule::TELL_ASSUMES_ANSWER,
             format!("the heading opens with \"{}\"", phrase),
-            "the heading",
+            Part::Heading,
         ),
         TellKind::Join => (
             &rule::TELL_JOINS_TWO_QUESTIONS,
             format!("the heading holds \"{}\"", phrase),
-            "the heading",
+            Part::Heading,
         ),
     };
     said(
         r,
         format!("{}{}", at, found),
-        Next::agent(Act::Rewrites(mv.into())),
+        Next::agent(Act::Rewrites(mv)),
     )
 }
 
@@ -139,15 +138,26 @@ pub fn too_long(
     words: usize,
 ) -> Said {
     use crate::tells::LengthKind;
-    let (r, thing, most) = match kind {
-        LengthKind::Why => (&rule::WHY_WORD_LIMIT, "Why line", crate::tells::WORD_LIMIT),
+    let (r, thing, most, part) = match kind {
+        LengthKind::Why => (
+            &rule::WHY_WORD_LIMIT,
+            "Why line",
+            crate::tells::WORD_LIMIT,
+            Part::Line,
+        ),
         LengthKind::Costs => (
             &rule::COSTS_WORD_LIMIT,
             "Costs line",
             crate::tells::WORD_LIMIT,
+            Part::Line,
         ),
-        LengthKind::OneWordOption => (&rule::DOES_OPTION_IS_ONE_WORD, "option", 1),
-        LengthKind::Option => (&rule::OPTION_WORD_LIMIT, "option", crate::tells::WORD_LIMIT),
+        LengthKind::OneWordOption => (&rule::DOES_OPTION_IS_ONE_WORD, "option", 1, Part::Option),
+        LengthKind::Option => (
+            &rule::OPTION_WORD_LIMIT,
+            "option",
+            crate::tells::WORD_LIMIT,
+            Part::Option,
+        ),
     };
     said(
         r,
@@ -160,7 +170,7 @@ pub fn too_long(
             words,
             most
         ),
-        Next::agent(Act::Rewrites(format!("the {}", thing))),
+        Next::agent(Act::Rewrites(part)),
     )
 }
 
@@ -168,7 +178,10 @@ pub fn no_depends_line(rel: &str, heading: &str) -> Said {
     said(
         &rule::QUESTION_HAS_DEPENDS_LINE,
         format!("{}: \"{}\" has no depends line", rel, heading),
-        Next::agent(Act::Writes(format!("the depends line of \"{}\"", heading))),
+        Next::agent(Act::Writes(Part::LineUnder(
+            LineKind::Depends,
+            heading.to_string(),
+        ))),
     )
 }
 
@@ -179,22 +192,31 @@ pub fn no_depends_line_bare(heading: &str) -> Said {
     said(
         &rule::QUESTION_HAS_DEPENDS_LINE,
         format!("\"{}\" has no depends line", heading),
-        Next::agent(Act::Writes(format!("the depends line of \"{}\"", heading))),
+        Next::agent(Act::Writes(Part::LineUnder(
+            LineKind::Depends,
+            heading.to_string(),
+        ))),
     )
 }
 
-/// A closed question's depends line edited: `st` is its status (answered,
-/// refused or superseded), named as the listing names it.
-pub fn frozen_depends_edited(rel: &str, heading: &str, st: crate::status::QuestionStatus) -> Said {
+/// A closed question's depends line names `entry` by text: `st` is its
+/// status (answered, refused or superseded), named as the listing names it.
+pub fn frozen_depends_text(
+    rel: &str,
+    heading: &str,
+    st: crate::status::QuestionStatus,
+    entry: &str,
+) -> Said {
     said(
         &rule::ANSWERED_DEPENDS_LINE_FROZEN,
         format!(
-            "{}: \"{}\" is [{}] and its depends line was edited",
+            "{}: \"{}\" is [{}] and its depends line names \"{}\" by text",
             rel,
             heading,
-            st.name()
+            st.name(),
+            entry
         ),
-        Next::agent(Act::Restores("the line".into())),
+        Next::agent(Act::Restores(Part::Line)),
     )
 }
 
@@ -207,9 +229,7 @@ pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option
             heading,
             named(id, name)
         ),
-        Next::agent(Act::Rewrites(
-            "the entry to name a term or a question of this file".into(),
-        )),
+        Next::agent(Act::Rewrites(Part::Entry)),
     )
 }
 
@@ -224,9 +244,7 @@ pub fn dep_retired_term_id(rel: &str, heading: &str, id: &str, name: Option<&str
             heading,
             name.map_or_else(|| id.to_string(), |n| format!("\"{}\"", n))
         ),
-        Next::agent(Act::Rewrites(
-            "the entry to name a term that is not retired".into(),
-        )),
+        Next::agent(Act::Rewrites(Part::Entry)),
     )
 }
 
@@ -237,7 +255,7 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> Said {
             "{}: \"{}\" depends on \"{}\" which is no term",
             rel, heading, text
         ),
-        Next::agent(Act::Writes("the term in adrdom/terms.md".into())),
+        Next::agent(Act::Writes(Part::Term)),
     )
 }
 
@@ -264,9 +282,9 @@ fn dep_names_other_file(rel: &str, heading: &str, target: &str) -> Said {
             "{}: \"{}\" depends on {}, a decision of another topic file",
             rel, heading, target
         ),
-        Next::agent(Act::Rewrites(format!(
-            "the depends line of \"{}\" to name terms and questions of this file",
-            heading
+        Next::agent(Act::Rewrites(Part::LineUnder(
+            LineKind::Depends,
+            heading.to_string(),
         ))),
     )
 }
@@ -289,9 +307,9 @@ pub fn depends_line_over_limit(rel: &str, heading: &str, names: &[String], cap: 
             cap,
             list
         ),
-        Next::agent(Act::Rewrites(format!(
-            "the depends line of \"{}\"",
-            heading
+        Next::agent(Act::Rewrites(Part::LineUnder(
+            LineKind::Depends,
+            heading.to_string(),
         ))),
     )
 }
@@ -300,14 +318,12 @@ pub fn depends_line_over_limit(rel: &str, heading: &str, names: &[String], cap: 
 /// `show` names a path approve does not take (per "Does show print what a file
 /// holds past its latest approval?": show takes every file approve
 /// takes).
-/// `ask` names a path that is no topic file: it asks the questions of topic
+/// `approve` names a path that is no topic file: it asks the questions of topic
 /// files alone.
 pub fn plan_not_a_topic_file(rel: &str) -> String {
     refuse(
         format!("{} is not a topic file", rel),
-        Next::agent(Act::Rewrites(
-            "the path to a topic file under adrdom/decisions".into(),
-        )),
+        Next::agent(Act::Rewrites(Part::Path)),
     )
 }
 
@@ -316,14 +332,14 @@ pub fn plan_not_a_topic_file(rel: &str) -> String {
 pub fn approve_not_a_file_approve_takes(path: &str) -> String {
     refuse(
         format!("{} is not a file approve takes", path),
-        Next::owner(Act::Rewrites("the path to a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame".into())),
+        Next::owner(Act::Rewrites(Part::Path)),
     )
 }
 
 pub fn show_not_a_file_approve_takes(rel: &str) -> String {
     refuse(
         format!("{} is not a file approve takes", rel),
-        Next::agent(Act::Rewrites("the path to a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame".into())),
+        Next::agent(Act::Rewrites(Part::Path)),
     )
 }
 
@@ -334,12 +350,12 @@ pub fn dep_retired_term(rel: &str, heading: &str, text: &str) -> Said {
             "{}: \"{}\" names the retired term \"{}\"",
             rel, heading, text
         ),
-        Next::agent(Act::Rewrites("the entry".into())),
+        Next::agent(Act::Rewrites(Part::Entry)),
     )
 }
 
 pub(super) fn ambiguous_heading_next() -> Next {
-    Next::agent(Act::Writes("the identifier of the one it means".into()))
+    Next::agent(Act::Writes(Part::Entry))
 }
 
 /// A heading `depends:` entry's `=A|B` set names a letter its target
@@ -351,7 +367,7 @@ pub fn bad_option_letter(rel: &str, dependent: &str, target: &str, letter: char)
             "{}: \"{}\" depends on \"{}\" under an answer set naming option {}, which it does not have",
             rel, dependent, target, letter
         ),
-        Next::agent(Act::Rewrites("the answer set".into())),
+        Next::agent(Act::Rewrites(Part::AnswerSet)),
     )
 }
 
@@ -395,12 +411,12 @@ pub fn stand_cap_exceeded(
             names
         )
     };
-    let next = Next::agent(Act::Writes("the question these stand on".into()));
+    let next = Next::agent(Act::Writes(Part::Question));
     said(&rule::STAND_QUESTION_LIMIT, found, next)
 }
 
 // `derive_tiers`' three failure shapes (record::DeriveError), each with two
-// wordings: the plain one (`approve`/`check`'s `plan` category) and `ask`'s,
+// wordings: the plain one (`approve`/`check`'s `plan` category) and the one approve's asking uses,
 // which always points at re-approving afterward.
 
 use crate::record::DeriveError;
@@ -413,7 +429,7 @@ fn derive_what(rel: &str, e: &DeriveError) -> (&'static rule::Rule, String, Next
                 "{}: \"{}\" depends on \"{}\" which is no heading in this file",
                 rel, section, entry
             ),
-            Next::agent(Act::Rewrites("the entry".into())),
+            Next::agent(Act::Rewrites(Part::Entry)),
         ),
         DeriveError::Cycle(names) => (
             &rule::DEPENDS_LINES_HAVE_NO_CYCLE,
@@ -426,12 +442,12 @@ fn derive_what(rel: &str, e: &DeriveError) -> (&'static rule::Rule, String, Next
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Next::agent(Act::Rewrites("the depends lines of these questions".into())),
+            Next::agent(Act::Rewrites(Part::LineOf(LineKind::Depends))),
         ),
         DeriveError::SelfDep(h) => (
             &rule::QUESTION_NOT_ON_ITSELF,
             format!("{}: \"{}\" depends on itself", rel, h),
-            Next::agent(Act::Removes("the entry".into())),
+            Next::agent(Act::Removes(Part::Entry)),
         ),
     }
 }
@@ -448,8 +464,19 @@ pub fn answered_id_missing(id: &str, heading: &str) -> Said {
             "id {} (\"{}\") is answered and current but missing from every topic file",
             id, heading
         ),
-        Next::agent(Act::Restores("the section".into())),
+        Next::agent(Act::Restores(Part::Section)),
     )
+}
+
+/// The kind of a reference line by the word that opens it.
+fn line_kind(word: &str) -> LineKind {
+    match word {
+        "depends" => LineKind::Depends,
+        "supersedes" => LineKind::Supersedes,
+        "unrelated" => LineKind::Unrelated,
+        "blame" => LineKind::Blame,
+        _ => LineKind::Terms,
+    }
 }
 
 #[cfg(test)]

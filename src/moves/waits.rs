@@ -38,8 +38,7 @@ pub enum Waits {
 /// question of its file with no decision, or a question of a lower tier is
 /// refused (per "Does answer take a question standing on a question that has no decision?" and
 /// "Does a refused question hold the tiers above it?"). Every question it waits on is named, each
-/// with the move that clears it: the agent's moves first, one `adr ask` naming every heading, and
-/// the one owner move last.
+/// with the move that clears it: the agent's moves first, and the one owner move last.
 pub fn answer_waits(
     heading: &str,
     rel: &str,
@@ -65,21 +64,6 @@ pub fn answer_waits(
         for m in report.moves {
             if m.actor() == Mover::Owner {
                 owner.get_or_insert(m);
-            } else if let MoveKind::Ask { headings, .. } = &m.kind {
-                let have = agent.iter_mut().find_map(|a| match &mut a.kind {
-                    MoveKind::Ask { headings: h, .. } => Some(h),
-                    _ => None,
-                });
-                match have {
-                    Some(h) => {
-                        for x in headings {
-                            if !h.contains(x) {
-                                h.push(x.clone());
-                            }
-                        }
-                    }
-                    None => agent.push(m),
-                }
             } else if !agent.contains(&m) {
                 agent.push(m);
             }
@@ -141,10 +125,7 @@ pub fn answer_waits(
     let mut clauses: Vec<Next> = Vec::new();
     clauses.extend(agent.iter().map(Move::clause));
     if !refused.is_empty() {
-        clauses.push(Next::agent(Act::Writes(format!(
-            "the plan change that drops or replaces {}",
-            quoted(&refused)
-        ))));
+        clauses.push(Next::agent(Act::Rewrites(Part::Plan)));
         owner = Some(Move::new(MoveKind::Approve {
             path: rel.to_string(),
         }));
@@ -156,13 +137,10 @@ pub fn answer_waits(
     if clauses.is_empty() {
         // No move of the questions it waits on: the act on each of them.
         if !unwritten.is_empty() {
-            clauses.push(Next::agent(Act::Writes(format!(
-                "the body of {}",
-                quoted(&unwritten)
-            ))));
+            clauses.push(Next::agent(Act::Writes(Part::Body(unwritten.clone()))));
         }
         if !asking.is_empty() {
-            clauses.push(Next::agent(Act::Rewrites(quoted(&asking))));
+            clauses.push(Next::agent(Act::Rewrites(Part::Question)));
         }
     }
     // What the rules find in the files it waits on is returned apart: each
@@ -187,10 +165,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn answer_waits_merges_the_ask_moves_and_puts_the_owner_last() {
+    fn answer_waits_merges_the_agent_moves_and_puts_the_owner_last() {
         let ask = |h: &str| {
-            Move::new(MoveKind::Ask {
-                rel: "x.md".into(),
+            Move::new(MoveKind::WriteBodies {
                 headings: vec![h.into()],
             })
         };
@@ -212,6 +189,7 @@ mod tests {
                         stops: Vec::new(),
                         findings: Vec::new(),
                         moves: vec![
+                            ask("a"),
                             ask("b"),
                             Move::new(MoveKind::Approve {
                                 path: "x.md".into(),
@@ -227,7 +205,7 @@ mod tests {
         );
         assert_eq!(
             said.next.render(),
-            "agent runs: adr ask x.md, owner runs: adr approve x.md"
+            "agent writes the body of \"a\", agent writes the body of \"b\", owner runs: adr approve x.md"
         );
     }
 }

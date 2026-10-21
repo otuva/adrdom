@@ -204,16 +204,31 @@ fn show_prints_every_status_by_its_name() {
     seen.extend(bracketed(&show(&dir, &[REL])));
     seen.extend(bracketed(&show(&dir, &["adrdom/terms.md"])));
 
-    // Approved, then asked.
+    // Approved, which asks every question of the file.
     write_record(&dir, REL, &format!("# Gate\n\n{}", questions));
     approve_record(&dir, REL);
     commit_all(&dir);
     seen.extend(bracketed(&show(&dir, &[REL])));
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
-        .status
-        .success());
-    commit_all(&dir);
-    seen.extend(bracketed(&show(&dir, &[REL])));
+
+    // A heading added after the approval is not asked; the text goes back.
+    let approved = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        format!(
+            "{}\n{}",
+            approved,
+            gate_question("Does the widget glow?", "the widget dims.")
+        ),
+    )
+    .unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(
+        shown.contains("[not asked] Does the widget glow?"),
+        "{}",
+        shown
+    );
+    seen.extend(bracketed(&shown));
+    std::fs::write(&path, &approved).unwrap();
 
     // Asked, then its text edited: changed since asked; put back as asked.
     let asked = std::fs::read_to_string(&path).unwrap();

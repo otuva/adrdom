@@ -89,8 +89,6 @@ fn base_asked() -> (PathBuf, String, PathBuf) {
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, REL, EXAMPLE_RECORD);
     approve_record(&dir, REL);
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask failed: {}", stderr(&out));
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     assert_eq!(ids.len(), 1);
     let id = ids[0].clone();
@@ -98,14 +96,22 @@ fn base_asked() -> (PathBuf, String, PathBuf) {
     (dir, id, record)
 }
 
-/// Same as `base_asked`, but the question is only approved (id minted),
-/// never asked on the base -- c2's shape, where each branch calls `adr ask`
-/// itself.
+/// Same as `base_asked`, but the question is approved (id minted) with its
+/// `asked` row taken out of the ledger -- c2's shape, where each branch
+/// runs `adr approve` itself and so asks it.
 fn base_unasked() -> (PathBuf, PathBuf) {
     let dir = new_repo();
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, REL, EXAMPLE_RECORD);
     approve_record(&dir, REL);
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let ledger = std::fs::read_to_string(&ledger_path).unwrap();
+    let kept: String = ledger
+        .lines()
+        .filter(|l| !l.contains("\tasked\t"))
+        .map(|l| format!("{}\n", l))
+        .collect();
+    std::fs::write(&ledger_path, kept).unwrap();
     commit_all(&dir, "base: approved, not yet asked");
     (dir, record)
 }
@@ -137,7 +143,7 @@ fn sleep_a_beat() {
 /// c1, both merge directions, walked end to end: base asks once; branch
 /// `first` answers `letter_first`, branch `second` answers `letter_second`;
 /// merging `merge_source` into `merge_target` conflicts (`adr check`
-/// fails, staged and committed); `adr ask` re-asks it (c6: open, no
+/// fails, staged and committed); `adr approve` re-asks it (c6: open, no
 /// conflict any more); the owner answers again and `adr check` passes.
 fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
     let (dir, id, record) = base_asked();
@@ -179,7 +185,11 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
         "{}",
         stdout(&staged)
     );
-    assert!(stdout(&staged).contains(&id), "{}", stdout(&staged));
+    assert!(
+        stdout(&staged).contains("owner runs: adr approve adrdom/decisions/example.md"),
+        "{}",
+        stdout(&staged)
+    );
 
     finish_merge_commit(&dir);
     let committed = adr(&dir, &["check"], &[], "");
@@ -194,11 +204,11 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
         stdout(&committed)
     );
 
-    // c6: `adr ask` re-asks the conflicted question -- open, no conflict.
-    let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    // c6: `adr approve` re-asks the conflicted question -- open, no conflict.
+    let reask = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         reask.status.success(),
-        "conflict re-ask failed: {}",
+        "conflict re-ask by approve failed: {}",
         stderr(&reask)
     );
     assert!(
@@ -285,7 +295,7 @@ fn c1_conflict_then_resolved_merging_a_into_b() {
 
 // adr: e3200081-9995-4bbe-983f-2f430dc341e7
 //
-// c2: the base never asks the question at all; each branch calls `adr ask`
+// c2: the base never asks the question at all; each branch calls `adr approve`
 // itself, then answers differently. The later branch's own `asked` row has
 // no `answered` row before it (only the other branch's, off to the side in
 // ledger order), so it is not an "asked again" row: every `answered` row of
@@ -296,8 +306,13 @@ fn c2_independently_asked_on_each_branch_conflicts() {
     let base = current_branch(&dir);
 
     checkout_new_branch(&dir, "a");
-    let ask_a = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask_a.status.success(), "a: ask failed: {}", stderr(&ask_a));
+    let ask_a = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(
+        ask_a.status.success(),
+        "a: approve failed: {}",
+        stderr(&ask_a)
+    );
+    assert!(stdout(&ask_a).contains("asked: \""), "{}", stdout(&ask_a));
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     assert_eq!(ids.len(), 1);
     let id = ids[0].clone();
@@ -312,8 +327,13 @@ fn c2_independently_asked_on_each_branch_conflicts() {
     checkout(&dir, &base);
     sleep_a_beat();
     checkout_new_branch(&dir, "b");
-    let ask_b = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask_b.status.success(), "b: ask failed: {}", stderr(&ask_b));
+    let ask_b = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(
+        ask_b.status.success(),
+        "b: approve failed: {}",
+        stderr(&ask_b)
+    );
+    assert!(stdout(&ask_b).contains("asked: \""), "{}", stdout(&ask_b));
     let ans_b = adr_answer(&dir, &id, "B");
     assert!(
         ans_b.status.success(),
@@ -333,7 +353,11 @@ fn c2_independently_asked_on_each_branch_conflicts() {
         stdout(&out)
     );
     assert!(stdout(&out).contains(CONFLICT_TEXT), "{}", stdout(&out));
-    assert!(stdout(&out).contains(&id), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("owner runs: adr approve adrdom/decisions/example.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 /// c1's shape, but branch `b` refuses instead of naming a second letter: a
@@ -371,7 +395,11 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
         "{}",
         stdout(&staged)
     );
-    assert!(stdout(&staged).contains(&id), "{}", stdout(&staged));
+    assert!(
+        stdout(&staged).contains("owner runs: adr approve adrdom/decisions/example.md"),
+        "{}",
+        stdout(&staged)
+    );
 
     finish_merge_commit(&dir);
     let committed = adr(&dir, &["check"], &[], "");
@@ -388,10 +416,10 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
 
     // The re-ask clears the conflict (asked-again is now decided from the
     // rulings before the latest ask, an answer and a refusal both counted).
-    let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let reask = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         reask.status.success(),
-        "conflict re-ask failed: {}",
+        "conflict re-ask by approve failed: {}",
         stderr(&reask)
     );
     assert!(

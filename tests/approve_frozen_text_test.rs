@@ -25,12 +25,9 @@ fn approved_rows(dir: &Path) -> usize {
         .count()
 }
 
-/// Approves, asks and answers A on every question of `rel`, tier by tier.
-fn answer_all(dir: &Path, rel: &str, ids: &[String]) {
-    let path = dir.join(rel);
+/// Answers A on every question; the approval asked them all.
+fn answer_all(dir: &Path, ids: &[String]) {
     for id in ids {
-        let o = adr(dir, &["ask", path.to_str().unwrap()], &[], "");
-        assert!(o.status.success(), "ask failed: {}", stderr(&o));
         let o = adr_answer(dir, id, "A");
         assert!(o.status.success(), "answer failed: {}", stderr(&o));
     }
@@ -67,7 +64,7 @@ fn approve_refuses_a_swapped_uuid_entry_in_an_answered_section() {
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
-    answer_all(&dir, rel, &ids);
+    answer_all(&dir, &ids);
 
     let cur = std::fs::read_to_string(&path).unwrap();
     let swapped = cur.replacen(
@@ -106,7 +103,7 @@ fn approve_refuses_a_deleted_entry_in_an_answered_section() {
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
-    answer_all(&dir, rel, &ids);
+    answer_all(&dir, &ids);
 
     let cur = std::fs::read_to_string(&path).unwrap();
     let cut = cur
@@ -139,7 +136,7 @@ fn approve_accepts_an_untouched_answered_section_with_a_new_heading() {
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
-    answer_all(&dir, rel, &ids);
+    answer_all(&dir, &ids);
 
     let mut cur = std::fs::read_to_string(&path).unwrap();
     cur.push_str(&format!(
@@ -169,7 +166,7 @@ fn approve_refuses_a_changed_answer_set_on_an_answered_section() {
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
-    answer_all(&dir, rel, &ids);
+    answer_all(&dir, &ids);
 
     let cur = std::fs::read_to_string(&path).unwrap();
     assert!(cur.contains("=A\n"), "fixture: {}", cur);

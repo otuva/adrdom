@@ -257,7 +257,7 @@ fn approve_refuses_a_blame_line_naming_no_blame_file() {
     for entry in ["nosuch", "0e0e0e0e-1111-4222-8333-444455556666"] {
         let rec = write_record(&dir, REL, &topic(&format!("blame: {} 1-2\n", entry)));
         let line = found(&format!(
-            "the blame entry \"{}\" names no blame file; agent writes the path of a blame file under adrdom/blame without .md",
+            "the blame entry \"{}\" names no blame file; agent writes the blame line",
             entry
         ));
         assert_refused_and_noted(&dir, &rec, &[line]);
@@ -307,7 +307,7 @@ fn approve_refuses_a_blame_line_naming_a_range_of_no_row() {
     let (dir, _x) = gate_repo();
     let missing = |range: &str| {
         found(&format!(
-            "the blame line names {}, the range of no row of adrdom/blame/x.md; agent writes the range of a row of that blame file",
+            "the blame line names {}, the range of no row of adrdom/blame/x.md; agent writes the row",
             range
         ))
     };
@@ -331,9 +331,7 @@ fn approve_refuses_a_blame_line_naming_a_range_of_no_row() {
 fn approve_refuses_a_blame_entry_with_no_range() {
     let (dir, _x) = gate_repo();
     let rec = write_record(&dir, REL, &topic("blame: x\n"));
-    let line = found(
-        "the blame entry \"x\" names no row range; agent writes the name of a blame file and the ranges of its rows",
-    );
+    let line = found("the blame entry \"x\" names no row range; agent writes the blame line");
     assert_refused_and_noted(&dir, &rec, &[line]);
 }
 
@@ -345,9 +343,7 @@ fn approve_refuses_a_blame_entry_with_no_range() {
 fn approve_refuses_a_lone_range_shaped_token_as_a_name_with_no_range() {
     let (dir, _x) = gate_repo();
     let rec = write_record(&dir, REL, &topic("blame: 1-2\n"));
-    let line = found(
-        "the blame entry \"1-2\" names no row range; agent writes the name of a blame file and the ranges of its rows",
-    );
+    let line = found("the blame entry \"1-2\" names no row range; agent writes the blame line");
     assert_refused_and_noted(&dir, &rec, &[line]);
 }
 
@@ -376,7 +372,7 @@ fn a_blame_file_named_like_a_range_is_named_by_the_first_token() {
 // adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
 //
 // "no finding, no refusal": a question that carries no blame line is
-// complete. It approves with no blame line written for it, and ask and check
+// complete. It approves with no blame line written for it, and approve again and check
 // have nothing to say of the decision rows of the blame file no question
 // names.
 #[test]
@@ -388,12 +384,13 @@ fn a_question_with_no_blame_line_approves() {
     let saved = std::fs::read_to_string(&rec).unwrap();
     assert!(!saved.contains("blame:"), "{}", saved);
 
-    let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(
         out.status.success(),
-        "ask should not stop for a missing blame line: {}",
+        "approve should not stop for a missing blame line: {}",
         stderr(&out)
     );
+    assert_eq!(stdout(&out), "", "nothing left to write");
     let checked = adr(&dir, &["check"], &[], "");
     assert!(checked.status.success(), "{}", stdout(&checked));
     assert!(!stdout(&checked).contains("blame"), "{}", stdout(&checked));
@@ -482,16 +479,14 @@ fn a_blame_line_is_part_of_the_approved_question() {
 //
 // "the approved blame file never changes": a question asked and standing as
 // asked has text that cannot change, so its blame line is not judged again.
-// The blame file edited after the ask, so that it is changed and no longer
+// The blame file edited after the approval asked it, so that it is changed and no longer
 // holds the range the line names, gives check nothing to print of the topic
 // file.
 #[test]
 fn an_asked_question_is_not_judged_again_when_its_blame_file_changes() {
     let (dir, x) = gate_repo();
-    let rec = write_record(&dir, REL, &topic("blame: x 1-2\n"));
+    write_record(&dir, REL, &topic("blame: x 1-2\n"));
     approve_record(&dir, REL);
-    let asked = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
-    assert!(asked.status.success(), "{}", stderr(&asked));
 
     edit_file(
         &x,
@@ -514,13 +509,15 @@ fn an_asked_question_is_not_judged_again_when_its_blame_file_changes() {
 //
 // "what approve refuses, check reports with the same move" (fe14991d A): on
 // an approved topic file whose question is not asked, a blame file edited
-// since is changed, and the line naming it fails check; ask refuses the
-// question on the same line and writes no row.
+// since is changed, and the line naming it fails check; approve refuses the
+// question on the same line and writes no row. The approval rows are written
+// by hand: a real approve asks the question.
 #[test]
-fn ask_refuses_what_check_fails_on_a_blame_line() {
+fn approve_refuses_what_check_fails_on_a_blame_line() {
     let (dir, x) = gate_repo();
-    let rec = write_record(&dir, REL, &topic("blame: x 1-2\n"));
-    approve_record(&dir, REL);
+    let id = id_line_of(&x);
+    let rec = dir.join(REL);
+    approve_via_ledger(&dir, REL, &topic(&format!("blame: {} 1-2\n", id)));
     edit_file(&x, "3-3\tdetail", "3-3\tdecision");
     let line = found(
         "the blame line names adrdom/blame/x.md, which is changed; not yet: after it is approved",
@@ -539,15 +536,15 @@ fn ask_refuses_what_check_fails_on_a_blame_line() {
         stdout(&checked)
     );
 
-    let asked = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
+    let asked = approve_unplanned(&dir, &rec);
     assert!(
         !asked.status.success(),
-        "ask should refuse: {}",
+        "approve should refuse: {}",
         stdout(&asked)
     );
     assert!(
-        refusal_lines(&asked, "ask: ").contains(&line),
-        "ask lacks {:?}:\n{}",
+        refusal_lines(&asked, "approve: ").contains(&line),
+        "approve lacks {:?}:\n{}",
         line,
         stderr(&asked)
     );

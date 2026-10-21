@@ -61,10 +61,10 @@ Standard: s.
 
 const HEADING_REMOVED: &str = "# Example\n\nContext prose.\n";
 
-// --- ask refusals naming `adr approve` -------------------------------
+// --- an unapproved file names `adr approve` ---------------------------
 
 #[test]
-fn ask_refuses_an_unapproved_file_naming_adr_approve() {
+fn show_names_adr_approve_for_an_unapproved_file_and_writes_nothing() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["question", "decision"]);
@@ -72,16 +72,16 @@ fn ask_refuses_an_unapproved_file_naming_adr_approve() {
     plan_record(&dir, "adrdom/decisions/example.md");
     let planned = std::fs::read_to_string(&record).unwrap();
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
-    let err = stderr(&out);
     // A plan approve would take: the owner's approve is the file's move.
+    let moves = file_moves(&dir, "adrdom/decisions/example.md");
     assert!(
-        err.contains("owner runs: adr approve adrdom/decisions/example.md"),
-        "{}",
-        err
+        moves
+            .iter()
+            .any(|m| m.contains("owner runs: adr approve adrdom/decisions/example.md")),
+        "{:?}",
+        moves
     );
-    assert!(err.contains("adrdom/decisions/example.md"), "{}", err);
+    assert_eq!(asked_row_count(&dir), 0);
 
     // Nothing written.
     let content = std::fs::read_to_string(&record).unwrap();
@@ -236,8 +236,8 @@ fn approve_refuses_a_question_with_four_options() {
 //
 // Editing only the
 // context prose leaves the plan hash (and its `approved` row) untouched
-// while the context hash moves, so `ask` stops on "prose not approved"
-// even though the heading itself is still approved.
+// while the context hash moves, so the file awaits approval again even
+// though the heading itself is still approved; no question is asked anew.
 #[test]
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     // adr: 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
@@ -259,13 +259,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
         approved_content.replace("Context prose line one.", "Context prose line one, edited.");
     std::fs::write(&record, &edited).unwrap();
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
-    assert!(
-        stderr(&out).contains("prose is changed"),
-        "{}",
-        stderr(&out)
-    );
+    let asked_before = asked_row_count(&dir);
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_before = ledger_before
@@ -299,21 +293,24 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
         context_before + 1,
         "exactly one new context row expected"
     );
-
-    // ask now succeeds.
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
+    assert_eq!(
+        asked_row_count(&dir),
+        asked_before,
+        "no question asked anew"
+    );
+    assert_eq!(
+        stdout(&out2),
+        "approved: prose of adrdom/decisions/example.md\n"
+    );
 }
 
 //
 // The other direction from `editing_context_prose_requires_reapproval...`
 // above -- here the context prose is left untouched (so the `context`
 // hash, and its row, never move) while a heading's own text is edited
-// after approval, which moves only the plan hash. `ask` stops the file on
-// "plan not approved" even though the context is still approved, and
-// re-approving writes exactly one new `approved` row and no new `context`
-// row.
+// after approval, which moves only the plan hash. The renamed question
+// stands as changed since asked, and re-approving writes exactly one new
+// `approved` row and no new `context` row, and asks the question again.
 #[test]
 fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
     // adr: 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
@@ -339,9 +336,12 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
     );
     std::fs::write(&record, &edited).unwrap();
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains("plan is changed"), "{}", stderr(&out));
+    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    assert!(
+        shown.contains("[changed since asked] 1.1 First question, renamed?"),
+        "{}",
+        shown
+    );
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_before = ledger_before
@@ -355,10 +355,11 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
 
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
-    // The renamed question's row and the file row; no prose row.
+    // The renamed question's row and the file row, then the question asked
+    // again; no prose row.
     assert_eq!(
         stdout(&out2),
-        "approved: \"1.1 First question, renamed?\"\napproved: plan of adrdom/decisions/example.md\n",
+        "approved: \"1.1 First question, renamed?\"\napproved: plan of adrdom/decisions/example.md\nasked: \"1.1 First question, renamed?\"\n",
         "{}",
         stdout(&out2)
     );
@@ -394,25 +395,17 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
         context_after, context_before,
         "context hash did not change; no new context row expected"
     );
-
-    // ask now succeeds.
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 }
 
 // --- tier rule: a later group waits on an earlier one ------------------
 
 #[test]
-fn ask_asks_group_two_beside_group_one_and_answer_waits_for_group_one() {
+fn approve_asks_group_two_beside_group_one_and_answer_waits_for_group_one() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
 
@@ -423,17 +416,21 @@ fn ask_asks_group_two_beside_group_one_and_answer_waits_for_group_one() {
     let mut content2 = std::fs::read_to_string(&record).unwrap();
     content2.push_str(GROUP_TWO_ADDITION);
     std::fs::write(&record, &content2).unwrap();
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-
-    // Per "What does ask put to the owner at one run?": group two is asked
-    // now, beside the open group one.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+    // Group two is asked by this approve, beside the open group one.
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
     assert_eq!(stderr(&out), "");
-    let shown = stdout(&out);
-    assert_eq!(shown, "asked: \"2.1 Second question?\"\n", "{}", shown);
+    let shown: Vec<String> = stdout(&out)
+        .lines()
+        .filter(|l| l.starts_with("asked: "))
+        .map(|l| l.to_string())
+        .collect();
+    assert_eq!(
+        shown,
+        vec!["asked: \"2.1 Second question?\""],
+        "{:?}",
+        shown
+    );
     assert_eq!(asked_row_count(&dir), 2);
 
     // `answer` takes group two only after group one has its decision.
@@ -477,9 +474,6 @@ fn approve_withdraws_a_struck_asked_heading() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
@@ -519,9 +513,6 @@ fn approve_withdraws_a_struck_refused_heading() {
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
@@ -579,9 +570,6 @@ fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
@@ -615,9 +603,6 @@ fn approve_leaves_file_and_ledger_unchanged_when_missing_answered_id_refuses() {
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
@@ -672,9 +657,6 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
@@ -695,9 +677,6 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     content2.push_str(&superseding);
     std::fs::write(&record, &content2).unwrap();
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
     let content3 = std::fs::read_to_string(&record).unwrap();
@@ -757,9 +736,6 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
             .status
             .success()
     );
-    assert!(adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content_a = std::fs::read_to_string(&record_a).unwrap();
     let old_id = extract_ids(&content_a)[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
@@ -785,9 +761,6 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
             .status
             .success()
     );
-    assert!(adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content_b = std::fs::read_to_string(&record_b).unwrap();
     let new_id = extract_ids(&content_b)[0].clone();
     assert!(adr_answer(&dir, &new_id, "A").status.success());
@@ -851,9 +824,6 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
@@ -866,9 +836,6 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     content2.push_str(&superseding);
     std::fs::write(&record, &content2).unwrap();
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
     let content3 = std::fs::read_to_string(&record).unwrap();
@@ -920,13 +887,13 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Only question?\" is [superseded] and its depends line was edited; agent restores the line from git"),
+        err.contains("\"1.1 Only question?\" is [superseded] and its depends line names \"decision\" by text; agent restores the line"),
         "{}",
         err
     );
 }
 
-// --- terms: ask waits on terms approval ---------------------------------
+// --- terms: approve waits on terms approval ---------------------------------
 
 const TERMS_BASIC: &str = "# Terms\n\n\
 ## decision\n\
@@ -935,7 +902,7 @@ definition: A choice answered by the owner.\n\
 aliases: \n";
 
 #[test]
-fn ask_refuses_while_terms_unapproved() {
+fn approve_refuses_while_terms_unapproved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
@@ -944,13 +911,12 @@ fn ask_refuses_while_terms_unapproved() {
     // `adrdom/terms.md` itself is unapproved: it used to succeed here since
     // the hand-written id in `TERMS_BASIC` let depends resolution go
     // through despite there being no `terms` ledger row at all.
-    // `approve_via_ledger` gets the record "looks approved" to `ask` the
-    // same way real approve's write step would have, without depending on
-    // the now-refusing terms gate -- `ask`'s own terms gate fires before it
-    // ever needs the section's id.
+    // `approve_via_ledger` gets the record to look approved without
+    // depending on the now-refusing terms gate; the second approve meets the
+    // terms gate before it needs the section's id.
     approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(
@@ -993,7 +959,7 @@ fn approve_fills_missing_term_ids() {
     assert!(ledger.lines().any(|l| l.contains("\tterms\t")));
 }
 
-// --- ask writes a terms: line binding a word to the term id ------------
+// --- approve writes a terms: line binding a word to the term id ------------
 
 const DECISION_QUESTION_RECORD: &str = r#"# Example
 
@@ -1015,7 +981,7 @@ Standard: plain words.
 "#;
 
 #[test]
-fn ask_writes_terms_line_binding_word_to_term_id() {
+fn approve_writes_terms_line_binding_word_to_term_id() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(
@@ -1029,9 +995,6 @@ fn ask_writes_terms_line_binding_word_to_term_id() {
         .status
         .success());
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
 
@@ -1118,9 +1081,6 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
 
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
@@ -1143,7 +1103,7 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
     let err = stderr(&out);
     assert!(
         err.contains(
-            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; agent rewrites the entry of \"decision\" so \"choice\" names it"
+            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; agent rewrites the entry of \"decision\""
         ),
         "{}",
         err
@@ -1400,7 +1360,7 @@ fn approve_refuses_a_circular_definition() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("circular definition: a cycle runs through alpha, beta and alpha; agent rewrites one of these definitions"),
+        err.contains("circular definition: a cycle runs through alpha, beta and alpha; agent rewrites one of the definitions"),
         "{}",
         err
     );
@@ -1448,14 +1408,14 @@ fn approve_and_check_report_a_cycle_and_a_shape_error() {
         stdout(&out)
     );
     let err = stderr(&out);
-    assert!(err.contains("circular definition: a cycle runs through alpha and alpha; agent rewrites one of these definitions"), "{}", err);
+    assert!(err.contains("circular definition: a cycle runs through alpha and alpha; agent rewrites one of the definitions"), "{}", err);
     assert!(err.contains("missing field \"aliases\""), "{}", err);
 
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     let text = stdout(&check_out);
     assert!(
-        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha and alpha; agent rewrites one of these definitions"),
+        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha and alpha; agent rewrites one of the definitions"),
         "{}",
         text
     );
@@ -1554,9 +1514,6 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
@@ -1578,7 +1535,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains(&format!("agent restores the term in adrdom/terms.md from git, then writes a question that supersedes {} (\"1.1 What is the decision?\")", id)),
+        err.contains("agent restores the term, then writes the question"),
         "{}",
         err
     );
@@ -1601,9 +1558,6 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
@@ -1624,14 +1578,14 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
         err.contains(&"agent rewrites the entry of".to_string())
-            && err.contains(&format!("then writes a question that supersedes {} (", id)),
+            && err.contains("then writes the question"),
         "{}",
         err
     );
 }
 
 // Two terms: "flag" (this test retires it) and "step" (stays current, and
-// is the only one the heading's prose actually mentions -- `ask` refuses a
+// is the only one the heading's prose actually mentions -- `approve` refuses a
 // heading whose terms line pairs no term at all, so the prose needs *some*
 // term, just never "flag").
 const TERMS_FLAG_AND_STEP: &str = "# Terms\n\n\
@@ -1699,9 +1653,6 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
@@ -1737,7 +1688,7 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
     assert!(err.contains("What comes next?"), "{}", err);
     assert!(
         err.contains(&"agent rewrites the entry of".to_string())
-            && err.contains(&format!("then writes a question that supersedes {} (", id)),
+            && err.contains("then writes the question"),
         "{}",
         err
     );
@@ -1813,9 +1764,6 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
@@ -1845,9 +1793,6 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
     content2.push_str(&superseding);
     std::fs::write(&record, &content2).unwrap();
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
     let content3 = std::fs::read_to_string(&record).unwrap();
@@ -1920,14 +1865,11 @@ fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
 
-    // The question's own terms line, written by `ask` before the rename,
+    // The question's own terms line, written by `approve` before the rename,
     // pairs the word "decision" to the term's identifier -- not its name.
     let term_uuid = "55555555-5555-5555-5555-555555555555";
     let before_rename = std::fs::read_to_string(&record).unwrap();
@@ -2238,9 +2180,6 @@ fn approve_turns_a_supersedes_heading_on_a_skeleton_into_an_identifier() {
     let rel = "adrdom/decisions/example.md";
     let record = write_record(&dir, rel, ONE_QUESTION_RECORD);
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let old_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
 
@@ -2260,7 +2199,7 @@ fn approve_turns_a_supersedes_heading_on_a_skeleton_into_an_identifier() {
 // adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 //
 // A supersedes line written after approval moves the plan hash: check says
-// the plan is not approved and ask stops until approve runs again.
+// the plan is not approved and nothing is asked anew until approve runs again.
 #[test]
 fn a_supersedes_line_added_after_approval_waits_for_approval() {
     let dir = init_repo();
@@ -2269,9 +2208,6 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     let rel = "adrdom/decisions/example.md";
     let record = write_record(&dir, rel, ONE_QUESTION_RECORD);
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let old_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
 
@@ -2288,16 +2224,22 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     assert_ne!(edited, approved);
     std::fs::write(&record, &edited).unwrap();
 
-    // A plan awaiting approval is a status, not a finding: check passes it
-    // and prints no line for it (bd83aa22); ask waits for the approval.
+    // A plan awaiting approval is a status, not a finding (bd83aa22): check
+    // prints no line for it, only for the question approve asked and the
+    // edit then changed; nothing is asked until approve runs.
+    let rows = asked_row_count(&dir);
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(checked.status.success(), "{}", stdout(&checked));
-    let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(
-        stderr(&asked).contains("plan is changed"),
+        stdout(&checked).contains("changed since asked; owner runs: adr approve"),
         "{}",
-        stderr(&asked)
+        stdout(&checked)
     );
+    assert!(
+        !stdout(&checked).contains("plan is changed"),
+        "{}",
+        stdout(&checked)
+    );
+    assert_eq!(asked_row_count(&dir), rows);
 
     approve_record(&dir, rel);
     let checked = adr(&dir, &["check"], &[], "");
@@ -2343,9 +2285,6 @@ fn approve_leaves_the_supersedes_line_of_an_asked_split_sibling() {
         ),
     );
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
     let old_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(&dir, &old_id, "A").status.success());
 
@@ -2354,8 +2293,6 @@ fn approve_leaves_the_supersedes_line_of_an_asked_split_sibling() {
     content.push_str(&split_question("New two?", Some(&old_id)));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);
-    let ask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(ask.status.success(), "ask failed: {}", stderr(&ask));
     let ids: Vec<String> = extract_ids(&std::fs::read_to_string(&record).unwrap())
         .into_iter()
         .filter(|i| i != &old_id)
