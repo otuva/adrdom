@@ -128,8 +128,9 @@ pub fn of_topic_file(
         if bare {
             out.extend(of_planning(rf, planning));
         }
-        // Approving the file asks its unasked questions.
-        if !to_ask.is_empty() {
+        // Approving the file asks its unasked questions, once no finding
+        // stands that approve would refuse on.
+        if !to_ask.is_empty() && !refused {
             push_approve(&mut out, rf);
         }
     } else if !refused {
@@ -327,9 +328,10 @@ pub fn of_untested(rf: &RecordFile, i: usize, id: &str, role: crate::session::Ro
 /// The moves for one question that is not asked or was edited since
 /// (`unwritten`: it has no body), for the refusal `answer` makes of a
 /// question waiting on it, by the rule `of_topic_file` applies: under an
-/// approved plan, the owner's approve (or, for a question with no body,
-/// the planning move); under a plan that waits for its approval and has no
-/// finding, the planning move. The findings carry their own moves.
+/// approved plan with no finding, the owner's approve (or, for a question
+/// with no body, the planning move); under a plan that waits for its
+/// approval and has no finding, the planning move. The findings carry their
+/// own moves.
 pub fn of_unasked_question(
     rf: &RecordFile,
     plan_ok: bool,
@@ -341,7 +343,7 @@ pub fn of_unasked_question(
     if plan_ok {
         if unwritten {
             out.extend(of_planning(rf, planning));
-        } else {
+        } else if findings.is_empty() {
             push_approve(&mut out, rf);
         }
     } else if findings.is_empty() {

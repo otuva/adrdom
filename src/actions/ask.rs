@@ -77,7 +77,7 @@ pub(super) fn ask_open_questions(
         let Some(id) = sec.id.clone() else { continue };
         // Read again on the text as rewritten: a question whose terms line
         // alone was edited stands as asked once the line is written back.
-        if !status::open_to_ask(led, rf, sec) {
+        if touched && !status::open_to_ask(led, rf, sec) {
             continue;
         }
         rows.push(asked_row(rf, i, &id, write_time));
@@ -127,13 +127,17 @@ fn assumes_rows(rf: &RecordFile, idx: usize, id: &str, write_time: &str) -> Vec<
 }
 
 /// The first section of `rf` in conflict (per "Does check fail a question
-/// answered with two different options?", e3200081): it carries an id and
-/// the ledger holds two standing rulings for it, whether or not the file
-/// shows one of them on an `**Answer:**` line.
+/// answered with two different options?", e3200081): it carries an id, the
+/// ledger holds two standing rulings for it, whether or not the file shows
+/// one of them on an `**Answer:**` line, and its text is the text it was
+/// last asked under. A question edited since is no conflict to ask again:
+/// approve's judgement refuses it with the move that restores the text.
 pub(super) fn conflicted_section(rf: &RecordFile, led: &Ledger) -> Option<(usize, String)> {
     rf.sections.iter().enumerate().find_map(|(i, sec)| {
         let id = sec.id.as_ref()?;
-        state::conflicting_rulings(led, id).map(|_| (i, id.clone()))
+        state::conflicting_rulings(led, id)?;
+        let asked = led.latest_asked(id)?;
+        (asked.hash == record::section_hash(&rf.lines, sec)).then(|| (i, id.clone()))
     })
 }
 

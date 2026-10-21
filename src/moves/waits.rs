@@ -172,7 +172,11 @@ mod tests {
 
     #[test]
     fn answer_waits_merges_the_agent_moves_and_puts_the_owner_last() {
-        let ask = |_h: &str| Move::new(MoveKind::Plan { rel: "x.md".into() });
+        let ask = |h: &str| {
+            Move::new(MoveKind::WriteBodies {
+                headings: vec![h.into()],
+            })
+        };
         let (said, _) = answer_waits(
             "heading",
             "x.md",
@@ -191,6 +195,7 @@ mod tests {
                         stops: Vec::new(),
                         findings: Vec::new(),
                         moves: vec![
+                            ask("a"),
                             ask("b"),
                             Move::new(MoveKind::Approve {
                                 path: "x.md".into(),
@@ -206,7 +211,7 @@ mod tests {
         );
         assert_eq!(
             said.next.render(),
-            "agent runs: adr plan x.md, owner runs: adr approve x.md"
+            "agent writes the body of \"a\", agent writes the body of \"b\", owner runs: adr approve x.md"
         );
     }
 }
