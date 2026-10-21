@@ -128,17 +128,17 @@ fn assumes_rows(rf: &RecordFile, idx: usize, id: &str, write_time: &str) -> Vec<
 
 /// The first section of `rf` in conflict (per "Does check fail a question
 /// answered with two different options?", e3200081): it carries an id and
-/// an `**Answer:**` line, and the ledger holds two standing rulings for it.
+/// the ledger holds two standing rulings for it, whether or not the file
+/// shows one of them on an `**Answer:**` line.
 pub(super) fn conflicted_section(rf: &RecordFile, led: &Ledger) -> Option<(usize, String)> {
     rf.sections.iter().enumerate().find_map(|(i, sec)| {
         let id = sec.id.as_ref()?;
-        sec.answer_line?;
         state::conflicting_rulings(led, id).map(|_| (i, id.clone()))
     })
 }
 
-/// Asks a question in conflict again: strips its `**Answer:**` line (and
-/// the blank line `answer` put above it), saves the file, and writes a
+/// Asks a question in conflict again: strips its `**Answer:**` line, if it
+/// has one (and the blank line `answer` put above it), saves the file, and writes a
 /// fresh `asked` row with its `assumes` rows. The text never moved, so the
 /// hash is the one it was first asked under. Ahead of every other gate,
 /// none of which bears on text that has not changed; the file goes back
@@ -155,15 +155,14 @@ pub(super) fn reask_conflict(
     let original = std::fs::read_to_string(&rf.path).ok();
 
     let sec = &rf.sections[idx];
-    let al = sec
-        .answer_line
-        .expect("conflicted_section returns a section with an answer line");
-    let from = if al > sec.start && rf.lines[al - 1].trim().is_empty() {
-        al - 1
-    } else {
-        al
-    };
-    rf.lines.drain(from..=al);
+    if let Some(al) = sec.answer_line {
+        let from = if al > sec.start && rf.lines[al - 1].trim().is_empty() {
+            al - 1
+        } else {
+            al
+        };
+        rf.lines.drain(from..=al);
+    }
     let rf = record::build(rf.path.clone(), rel.clone(), rf.lines.clone());
 
     record::save(&rf).map_err(|e| stop(Command::Approve, msg::write_failed(&rel, e, again())))?;

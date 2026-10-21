@@ -8,9 +8,8 @@
 //! never frozen.
 //!
 //! Used by `actions::do_approve_record` (a heading with any tell, or a
-//! context prose line with a provenance/code-state/date tell, refuses
-//! before any write), `actions::ask` (a candidate section's body with
-//! a provenance/code-state/date tell refuses), and
+//! context prose line or a question's body with a provenance/code-state/date
+//! tell, refuses before any write), and
 //! `commands::check::tells` (the same scan, reported rather than refused,
 //! for unfrozen text).
 

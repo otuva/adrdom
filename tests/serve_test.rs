@@ -2510,3 +2510,41 @@ fn terms_page_gives_each_waiting_entry_its_own_approve_control() {
     let _ = child.kill();
     let _ = child.wait();
 }
+
+// adr: 3762e14b-6dfe-45ee-b407-d2718e817348
+//
+// The page's approve of a topic file is the same act as the terminal's: it
+// asks every question of the file, and the page names the owner's answer.
+#[test]
+fn post_approve_of_a_topic_file_asks_its_questions_from_the_page() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision", "example"]);
+    let rel = "adrdom/decisions/example.md";
+    write_record(&dir, rel, EXAMPLE_RECORD);
+    plan_record(&dir, rel);
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+    let resp = post(
+        port,
+        "/approve",
+        Some(&cookie),
+        &format!("file={}&t={}", rel, token),
+    );
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    assert_eq!(asked_row_count(&dir), 1);
+    let content = std::fs::read_to_string(dir.join(rel)).unwrap();
+    assert!(content.contains("\nterms: "), "{}", content);
+
+    let overview = follow(port, &resp, &cookie);
+    let lines = page_lines(&overview.body);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l == "asked: \"1.1 What is the unit of authority called?\""),
+        "{:#?}",
+        lines
+    );
+}

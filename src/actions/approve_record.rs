@@ -20,8 +20,10 @@ use std::path::Path;
 /// withdrawing an asked/refused one and allowing a superseded one silently happen after, since
 /// neither is a refusal; only then mint an id for every heading that lacks one, compute plan hash
 /// and context hash over the rewritten file, write an `approved` row if it differs from the latest
-/// for the path, a `context` row likewise, and finally write the withdrawn rows. Nothing is written
-/// to disk (file or ledger) when any check refuses.
+/// for the path, a `context` row likewise, then ask every question open to ask (its `terms:` line,
+/// its `asked` and `assumes` rows), and finally write the withdrawn rows, all in one append. A
+/// question in conflict is asked again first and alone. Nothing is written to disk (file or
+/// ledger) when any check refuses.
 pub(super) fn do_approve_record(
     root: &Path,
     file: &Path,

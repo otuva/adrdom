@@ -1,9 +1,9 @@
-//! The messages about `adrdom/terms.md`, shared by `actions.rs`, `ask.rs` and `check/terms.rs`.
+//! The messages about `adrdom/terms.md`, shared by `actions` and `check/terms.rs`.
 
 use super::*;
 use crate::status::FileStatus;
 
-// --- adrdom/terms.md: shared by actions.rs, ask.rs, check/terms.rs --------
+// --- adrdom/terms.md: shared by actions, check/terms.rs ------------------
 
 pub fn terms_missing() -> Said {
     said(

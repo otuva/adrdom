@@ -16,6 +16,10 @@ fn ledger(dir: &Path) -> String {
     std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default()
 }
 
+fn both(out: &std::process::Output) -> String {
+    format!("{}{}", stdout(out), stderr(out))
+}
+
 fn approve(dir: &Path) -> std::process::Output {
     plan_record(dir, REL);
     adr_owner(dir, &["approve", dir.join(REL).to_str().unwrap()], "")
@@ -151,4 +155,46 @@ fn no_ask_command_remains() {
         "{}",
         help
     );
+}
+
+// adr: 3762e14b-6dfe-45ee-b407-d2718e817348
+#[test]
+fn approve_asks_a_question_in_conflict_again_with_or_without_its_answer_line() {
+    for keep_line in [true, false] {
+        let dir = repo();
+        let record = write_record(&dir, REL, EXAMPLE_RECORD);
+        assert!(approve(&dir).status.success());
+        let id = extract_ids(&std::fs::read_to_string(&record).unwrap()).remove(0);
+        run_git(&dir, &["add", "-A"]);
+        run_git(&dir, &["commit", "-q", "-m", "asked"]);
+        run_git(&dir, &["checkout", "-q", "-b", "other"]);
+        assert!(adr_answer(&dir, &id, "B").status.success());
+        run_git(&dir, &["commit", "-q", "-am", "B"]);
+        run_git(&dir, &["checkout", "-q", "-"]);
+        assert!(adr_answer(&dir, &id, "A").status.success());
+        run_git(&dir, &["commit", "-q", "-am", "A"]);
+        if !run_git(&dir, &["merge", "-q", "--no-edit", "other"])
+            .status
+            .success()
+        {
+            run_git(&dir, &["checkout", "--ours", REL]);
+        }
+        if !keep_line {
+            let text = std::fs::read_to_string(&record).unwrap();
+            std::fs::write(&record, text.replace("\n\n**Answer:** A", "")).unwrap();
+        }
+        let check = both(&adr(&dir, &["check"], &[], ""));
+        assert!(check.contains("two standing answers"), "{}", check);
+        assert!(check.contains("owner runs: adr approve"), "{}", check);
+
+        let out = adr_owner(&dir, &["approve", dir.join(REL).to_str().unwrap()], "");
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert!(stdout(&out).contains("asked: \""), "{}", stdout(&out));
+        assert!(!std::fs::read_to_string(&record)
+            .unwrap()
+            .contains("**Answer:**"));
+        assert!(adr_answer(&dir, &id, "B").status.success());
+        let check = both(&adr(&dir, &["check"], &[], ""));
+        assert!(!check.contains("two standing answers"), "{}", check);
+    }
 }
