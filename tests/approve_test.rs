@@ -887,7 +887,7 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Only question?\" is [superseded] and its depends line was edited; agent restores the line from git"),
+        err.contains("\"1.1 Only question?\" is [superseded] and its depends line names \"decision\" by text; agent restores the line from git"),
         "{}",
         err
     );

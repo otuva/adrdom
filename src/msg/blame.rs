@@ -366,13 +366,12 @@ pub fn blame_id_line_gone(rel: &str, id: &str) -> Said {
     )
 }
 
-/// The id line of `rel` holds an identifier no `blame` ledger row holds: the
-/// tool did not write it.
+/// The id line of `rel` holds an identifier no `blame` ledger row holds.
 pub fn blame_id_not_written(rel: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
         format!(
-            "{}: its id line holds an identifier the tool did not write",
+            "{}: its id line holds an identifier no blame row holds",
             rel
         ),
         Next::agent(Act::Removes("the id line".into())),

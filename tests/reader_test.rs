@@ -98,7 +98,12 @@ fn check_fails_an_edited_row_at_head_and_passes_a_row_gone_whole() {
 
     std::fs::write(reader_path(&dir), original.replacen("same", "depends", 1)).unwrap();
     let f = reader_failures(&dir, &[]);
-    assert!(f.iter().any(|l| l.contains("edited by hand")), "{:?}", f);
+    assert!(
+        f.iter()
+            .any(|l| l.contains("reader file is not in the file")),
+        "{:?}",
+        f
+    );
 
     let first_only: String = original
         .lines()
@@ -232,7 +237,9 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
     git_ok(&dir, &["add", "-A"]);
     let f = reader_failures(&dir, &[]);
     assert_eq!(
-        f.iter().filter(|l| l.contains("edited by hand")).count(),
+        f.iter()
+            .filter(|l| l.contains("reader file is not in the file"))
+            .count(),
         1,
         "{:?}",
         f
@@ -555,7 +562,8 @@ fn check_judges_a_new_line_by_its_shape_alone() {
         std::fs::write(reader_path(&dir), original.replacen(from, to, 1)).unwrap();
         let f = reader_failures(&dir, &[]);
         assert!(
-            f.iter().any(|l| l.contains("edited by hand")),
+            f.iter()
+                .any(|l| l.contains("reader file is not in the file")),
             "{} {:?}",
             from,
             f

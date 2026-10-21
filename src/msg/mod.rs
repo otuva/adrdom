@@ -370,10 +370,7 @@ pub fn hooks_path_foreign(value: &str, install: Cmd) -> String {
 /// The move that clears a foreign `core.hooksPath`, for install's refusal and
 /// for check's finding alike: install alone leaves it standing.
 fn hooks_path_foreign_next(install: Cmd) -> Next {
-    Next::owner_then_runs(
-        Act::Removes("the hook manager that set core.hooksPath".into()),
-        install,
-    )
+    Next::owner_then_runs(Act::Removes("core.hooksPath".into()), install)
 }
 
 /// Install stops: the hook at `from` moves to `own`, and a file is there
@@ -570,8 +567,13 @@ mod tests {
             term_definition_term_not_found("term", "word").text(),
             term_definition_term_retired("term", "retired-term").text(),
             term_definition_terms_line_malformed("term").text(),
-            frozen_depends_edited("x.md", "heading", crate::status::QuestionStatus::Answered)
-                .text(),
+            frozen_depends_text(
+                "x.md",
+                "heading",
+                crate::status::QuestionStatus::Answered,
+                "x",
+            )
+            .text(),
             dep_not_current_decision("x.md", "heading", "id-1", Some("name")).text(),
             dep_retired_term_id("x.md", "heading", "id-1", Some("name")).text(),
             dep_no_term("x.md", "heading", "widget").text(),

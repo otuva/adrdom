@@ -32,8 +32,7 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::ID_NAMES_ONE_QUESTION,
         format!("duplicate id {} in {} and {}:{}", id, prev, rel, heading),
-        Next::agent(Act::Rewrites("the copied section".into()))
-            .then(Act::Removes("the id line copied with it".into()))
+        Next::agent(Act::Removes("one of the two id lines".into()))
             .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
@@ -560,7 +559,7 @@ pub fn ledger_merge_drops_rows() -> Said {
 /// looked passing anyway.
 pub fn ledger_merge_parents_unreadable() -> String {
     refuse(
-        "this merge commit's parents cannot be read; the clone is too shallow".to_string(),
+        "this merge commit's parents are not in the repository".to_string(),
         Next::agent_runs(Cmd::fixed("git fetch --deepen=1")),
     )
 }

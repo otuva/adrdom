@@ -1095,7 +1095,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
         stdout(&out)
     );
     assert!(
-        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent restores the line from git"),
+        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line from git"),
         "{}",
         stderr(&out)
     );
@@ -1109,7 +1109,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
 
     let check = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent restores the line from git"),
+        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line from git"),
         "check must report the same frozen-edit refusal: {}",
         stdout(&check)
     );

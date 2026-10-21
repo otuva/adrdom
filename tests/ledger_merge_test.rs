@@ -82,7 +82,7 @@ fn finish_merge_commit(dir: &Path) {
 const MERGE_DROPS_ROWS_TEXT: &str = "merge drops a ledger row of a merged branch";
 
 /// Distinctive text from `msg::ledger_merge_parents_unreadable`.
-const PARENTS_UNREADABLE_TEXT: &str = "this merge commit's parents cannot be read";
+const PARENTS_UNREADABLE_TEXT: &str = "this merge commit's parents are not in the repository";
 
 /// Builds a base repo with an empty, tracked `adrdom/state/ledger.tsv`,
 /// then branches "a" and "b" off it, each appending one distinct row to
@@ -375,7 +375,7 @@ fn d_a_shallow_clone_of_a_merge_commit_fails_until_deepened() {
     assert!(text.contains("check: "), "{}", text);
     assert!(text.contains(PARENTS_UNREADABLE_TEXT), "{}", text);
     assert!(
-        text.contains("the clone is too shallow; agent runs: git fetch --deepen=1"),
+        text.contains("are not in the repository; agent runs: git fetch --deepen=1"),
         "{}",
         text
     );

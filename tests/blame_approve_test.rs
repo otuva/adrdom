@@ -1202,7 +1202,7 @@ fn a_hand_written_id_on_a_never_approved_file_is_a_finding_and_approve_refuses()
         &format!("origin: docs/x.md\nblob: {}\nid: 12345678-1234-4234-8234-123456789abc\n\n1-1\tdetail\n", blob),
     );
     let before = std::fs::read_to_string(&path).unwrap();
-    let line = "adrdom/blame/x.md: its id line holds an identifier the tool did not write; agent removes the id line";
+    let line = "adrdom/blame/x.md: its id line holds an identifier no blame row holds; agent removes the id line";
 
     let checked = adr(&dir, &["check"], &[], "");
     assert!(

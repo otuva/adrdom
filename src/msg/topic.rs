@@ -183,16 +183,22 @@ pub fn no_depends_line_bare(heading: &str) -> Said {
     )
 }
 
-/// A closed question's depends line edited: `st` is its status (answered,
-/// refused or superseded), named as the listing names it.
-pub fn frozen_depends_edited(rel: &str, heading: &str, st: crate::status::QuestionStatus) -> Said {
+/// A closed question's depends line names `entry` by text: `st` is its
+/// status (answered, refused or superseded), named as the listing names it.
+pub fn frozen_depends_text(
+    rel: &str,
+    heading: &str,
+    st: crate::status::QuestionStatus,
+    entry: &str,
+) -> Said {
     said(
         &rule::ANSWERED_DEPENDS_LINE_FROZEN,
         format!(
-            "{}: \"{}\" is [{}] and its depends line was edited",
+            "{}: \"{}\" is [{}] and its depends line names \"{}\" by text",
             rel,
             heading,
-            st.name()
+            st.name(),
+            entry
         ),
         Next::agent(Act::Restores("the line".into())),
     )

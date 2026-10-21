@@ -315,12 +315,11 @@ pub fn malformed_reader_row(lineno: usize, raw: &str) -> Said {
     )
 }
 
-/// A row of HEAD's reader file is edited: its line is not there byte for
-/// byte, and a line with the same time, text, neighbour, prompt and model is.
+/// A row of HEAD's reader file is not in the file byte for byte.
 pub fn reader_row_edited() -> Said {
     said(
         &crate::rule::READER_ROWS_UNEDITED,
-        "a row from HEAD's reader file is edited by hand",
+        "a row of HEAD's reader file is not in the file",
         Next::owner(Act::Restores("the row".into())),
     )
 }

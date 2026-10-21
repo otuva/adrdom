@@ -336,12 +336,12 @@ pub fn record_refusals(
     for (si, sec) in rf.sections.iter().enumerate() {
         let frozen = state::is_frozen(led, sec);
         for d in &sec.depends {
-            if frozen && matches!(d, record::Dep::Text { .. }) {
+            if let (true, record::Dep::Text { text, .. }) = (frozen, d) {
                 let st = status::question_status(led, sec);
                 out.push(
                     Finding::said(
                         Class::PlanFrozen,
-                        msg::frozen_depends_edited(rel, &sec.heading_text, st),
+                        msg::frozen_depends_text(rel, &sec.heading_text, st, text),
                     )
                     .in_section(si),
                 );
