@@ -16,7 +16,6 @@ const ALL_DENY_ENTRIES: &[&str] = &[
     "Bash(adr uninstall*)",
     "Bash(* adr uninstall*)",
     "Edit(adrdom/state/**)",
-    "Write(adrdom/state/**)",
 ];
 
 // The one owner-commands list (`OWNER_COMMANDS` in src/commands/mod.rs)

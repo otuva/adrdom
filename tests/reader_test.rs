@@ -313,14 +313,9 @@ fn the_permission_file_forbids_edits_of_the_reader_file() {
         .iter()
         .filter_map(|d| d.as_str())
         .collect();
-    // The glob covers adrdom/state/reader.tsv.
-    for tool in ["Edit", "Write"] {
-        assert!(
-            deny.contains(&format!("{}(adrdom/state/**)", tool).as_str()),
-            "{:?}",
-            deny
-        );
-    }
+    // The glob covers adrdom/state/reader.tsv; Claude Code's Edit rule
+    // covers Write too.
+    assert!(deny.contains(&"Edit(adrdom/state/**)"), "{:?}", deny);
 }
 
 fn pair(kind: Kind, new_text: &str, neighbour: &str) -> Pair {
