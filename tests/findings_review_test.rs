@@ -333,7 +333,7 @@ fn generic_moves_name_an_act_on_a_thing() {
         findings: vec![Finding::new(
             &adr::rule::TERMS_FILE_EXISTS,
             "x".to_string(),
-            adr::msg::Next::agent(adr::msg::Act::Writes("y".into())),
+            adr::msg::Next::agent(adr::msg::Act::Writes(adr::msg::Part::Line)),
         )],
         moves: Vec::new(),
     };
@@ -344,19 +344,17 @@ fn generic_moves_name_an_act_on_a_thing() {
         msg::update_failed(
             "adrdom/ledger.tsv",
             "boom",
-            msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr plan x.md")),
+            msg::after_fix_agent_runs(adr::moves::Cmd::adr("plan x.md")),
         ),
         msg::read_failed(
             "x.md",
             "boom",
-            msg::after_fix_owner_runs(adr::moves::Cmd::fixed("adr approve x.md")),
+            msg::after_fix_owner_runs(adr::moves::Cmd::adr("approve x.md")),
         ),
-        msg::stdin_read_failed(msg::after_fix_owner_runs(adr::moves::Cmd::fixed(
-            "adr unban",
-        ))),
+        msg::stdin_read_failed(msg::after_fix_owner_runs(adr::moves::Cmd::adr("unban"))),
         msg::hooks_path_failed(
             "set",
-            msg::after_fix_agent_runs(adr::moves::Cmd::fixed("adr install")),
+            msg::after_fix_agent_runs(adr::moves::Cmd::adr("install")),
         ),
     ];
     let wants = [
@@ -365,8 +363,8 @@ fn generic_moves_name_an_act_on_a_thing() {
         "agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md",
         "agent rewrites adrdom/ledger.tsv, then runs: adr plan x.md",
         "agent rewrites x.md, owner runs: adr approve x.md",
-        "agent rewrites what is piped to adr, owner runs: adr unban",
-        "agent rewrites the git configuration of core.hooksPath, then runs: adr install",
+        "agent rewrites the input, owner runs: adr unban",
+        "agent rewrites core.hooksPath, then runs: adr install",
     ];
     for (got, want) in said.iter().zip(wants) {
         assert!(got.ends_with(want), "{} should end with {}", got, want);
@@ -398,7 +396,7 @@ fn generic_moves_name_an_act_on_a_thing() {
             .0
             .next
             .render()
-            .contains("agent writes the body of \"A?\", agent rewrites \"B?\""),
+            .contains("agent writes the body of \"A?\", agent rewrites the question"),
         "{}",
         waits.0.next
     );

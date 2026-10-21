@@ -9,7 +9,7 @@ use super::*;
 /// The git command that puts `rel` back as the last commit holds it, its
 /// path quoted so the hint runs as printed.
 fn adr_command(cmd: &str, args: &[&str]) -> Cmd {
-    let mut words = vec!["adr", cmd];
+    let mut words = vec![cmd];
     words.extend_from_slice(args);
     command(&words)
 }
@@ -25,7 +25,7 @@ pub fn not_a_repo(cmd: &str, args: &[&str], actor: Actor) -> String {
     let command = adr_command(cmd, args);
     // What clears it is where the command runs, so the move names that
     // first: the command itself is run again from inside a repository.
-    let into = Act::ChangesInto("a git repository".into());
+    let into = Act::ChangesInto(Part::Repository);
     let next = match actor {
         Actor::Agent | Actor::Builder => Next::agent(into).then(Act::Runs(command)),
         Actor::Owner => Next::owner(into).then(Act::Runs(command)),

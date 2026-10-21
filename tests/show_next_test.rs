@@ -84,7 +84,7 @@ fn plan_for() -> String {
 
 fn lines_for(headings: &[&str]) -> String {
     let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
-    format!("agent writes the missing line under {}", names.join(", "))
+    format!("agent writes the lines of {}", names.join(", "))
 }
 
 /// Asserts `lines` are the findings of one planning step: one or more per
@@ -120,11 +120,8 @@ fn answer_for(dir: &Path, id: &str, heading: &str) -> String {
     )
 }
 
-fn build_of(heading: &str, id: &str) -> String {
-    format!(
-        "agent builds \"{}\" and puts \"adr: {}\" in a test that shows it",
-        heading, id
-    )
+fn build_of(heading: &str, _id: &str) -> String {
+    format!("agent builds \"{}\"", heading)
 }
 
 /// The line for an asked question `answer` would refuse: it names what the
@@ -240,13 +237,7 @@ fn show_names_the_next_move_at_every_step() {
     assert_eq!(next(&dir), vec![answer_for(&dir, &three, THREE)]);
 
     assert!(adr_answer(&dir, &three, "refuse").status.success());
-    assert_eq!(
-        next(&dir),
-        vec![format!(
-            "agent writes the plan change that drops or replaces \"{}\"",
-            THREE
-        )]
-    );
+    assert_eq!(next(&dir), vec!["agent rewrites the plan".to_string()]);
 }
 
 // adr: da80931c-68cf-4c51-acce-060307bbd973
@@ -328,10 +319,7 @@ fn show_names_the_plan_change_an_answered_decision_waits_for() {
         .status
         .success());
 
-    let refused = format!(
-        "agent writes the plan change that drops or replaces \"{}\"",
-        TWO
-    );
+    let refused = "agent rewrites the plan".to_string();
     let waits_for_plan = |heading: &str| {
         format!(
             "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
@@ -391,7 +379,7 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
 
     let refusal = format!(
         "{}: 5 questions stand on terms alone, 4 answered, the most is 4: \"Is the widget gate five hold?\"; \
-agent writes the question these stand on",
+agent writes the question",
         REL
     );
     let five = "Is the widget gate five hold?";
@@ -497,7 +485,7 @@ fn show_names_what_replaced_a_superseded_question() {
     assert!(!approved.status.success());
     assert!(
         stderr(&approved).contains(&format!(
-            "{}: \"{}\": supersedes \"{}\", which is not a current decision; agent rewrites the supersedes entry",
+            "{}: \"{}\": supersedes \"{}\", which is not a current decision; agent rewrites the entry",
             REL, THREE, ONE
         )),
         "{}",
@@ -637,7 +625,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     assert_eq!(
         stderr(&refused).trim_end(),
         format!(
-            "answer: \"{}\" is edited since it was asked; {}",
+            "answer: \"{}\" is changed since it was asked; {}",
             TWO,
             approve_move()
         )
@@ -711,7 +699,7 @@ fn show_refuses_a_file_approve_does_not_take() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "show: README.md is not a file approve takes; agent rewrites the path to a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame"
+        "show: README.md is not a file approve takes; agent rewrites the path"
     );
     let terms = adr(&dir, &["show", "adrdom/terms.md"], &[], "");
     assert!(terms.status.success(), "{}", stderr(&terms));

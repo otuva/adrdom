@@ -84,7 +84,7 @@ fn text_under_a_tier_heading_between_questions_is_reported_by_plan_approve_and_c
         + 1;
     reported_by_all(
         &content,
-        &format!("{}: stray line {}; agent rewrites the file", REL, n),
+        &format!("{}: stray line {}; agent rewrites {}", REL, n, REL),
     );
 }
 

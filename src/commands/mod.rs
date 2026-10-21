@@ -62,10 +62,10 @@ pub const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "un
 /// per `OWNER_COMMANDS` entry, then the `Edit(adrdom/state/**)` entry
 /// (Claude Code's `Edit` rule covers `Write` too; a `Write` rule never
 /// matches and Claude Code warns about it).
-/// `check` (`commands/check/install.rs`) compares this list against
-/// `.claude/settings.json` by membership only, not by order, so an install
-/// with the entries in a different order (or interleaved with owner-added
-/// ones) still passes.
+/// `check` (`commands/check/install.rs`) compares this list against the
+/// entries of `.claude/settings.json` in the tool's form (`is_tool_deny_entry`)
+/// by membership only, not by order, so an install with the entries in a
+/// different order (or interleaved with owner-added ones) still passes.
 pub fn deny_entries() -> Vec<String> {
     let mut out = Vec::new();
     for cmd in OWNER_COMMANDS {
@@ -74,4 +74,14 @@ pub fn deny_entries() -> Vec<String> {
     }
     out.push("Edit(adrdom/state/**)".to_string());
     out
+}
+
+/// Whether a deny entry is in the form install writes, and so of the block
+/// install owns (per "Does check hold the files install writes?", 6ef9eca6
+/// A): a rule on an adr command or on adrdom/state. Every other entry is
+/// the repository's own, which install and check leave alone.
+pub fn is_tool_deny_entry(entry: &str) -> bool {
+    entry.starts_with("Bash(adr ")
+        || entry.starts_with("Bash(* adr ")
+        || entry.ends_with("(adrdom/state/**)")
 }

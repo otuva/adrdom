@@ -142,7 +142,7 @@ fn a_tie_in_a_satellite_clears_the_untested_note_and_the_build_move_of_the_prima
     );
     let shown = adr(&primary, &["show"], &[], "");
     assert!(
-        stdout(&shown).contains("in a test that shows it"),
+        stdout(&shown).contains("agent builds \"1.1 What is the unit of authority called?\""),
         "{}",
         stdout(&shown)
     );
@@ -157,7 +157,7 @@ fn a_tie_in_a_satellite_clears_the_untested_note_and_the_build_move_of_the_prima
     );
     let shown = adr(&primary, &["show"], &[], "");
     assert!(
-        !stdout(&shown).contains("in a test that shows it"),
+        !stdout(&shown).contains("agent builds \"1.1 What is the unit of authority called?\""),
         "{}",
         stdout(&shown)
     );
@@ -243,7 +243,7 @@ fn an_untested_decision_is_not_reported_in_a_satellite_and_a_stale_tie_is() {
     assert!(!stdout(&out).contains("no tracked file holds its tie"));
     let shown = adr(&sat, &["show"], &[], "");
     assert!(
-        !stdout(&shown).contains("in a test that shows it"),
+        !stdout(&shown).contains("agent builds \"1.1 What is the unit of authority called?\""),
         "{}",
         stdout(&shown)
     );
@@ -290,7 +290,7 @@ fn a_satellite_missing_at_its_path_is_a_note_with_its_url_and_clears_nothing_els
         text
     );
     assert!(
-        text.contains(&format!("agent runs: git clone {} {}", url, rel)),
+        text.contains(&format!("agent restores {}", rel)),
         "{}",
         text
     );
@@ -302,7 +302,7 @@ fn a_satellite_missing_at_its_path_is_a_note_with_its_url_and_clears_nothing_els
         "{}",
         shown
     );
-    assert!(!shown.contains("in a test that shows it"), "{}", shown);
+    assert!(!shown.contains("agent builds"), "{}", shown);
     assert!(!sat.exists());
     assert!(moved.exists());
 }
@@ -474,8 +474,7 @@ fn a_linked_worktree_of_the_primary_finds_its_satellite_and_counts_the_tie_in_it
         assert!(out.status.success(), "{:?}: {}", args, text);
         assert!(!text.contains("not found"), "{:?}: {}", args, text);
         assert!(
-            !text.contains("no tracked file holds its tie")
-                && !text.contains("in a test that shows it"),
+            !text.contains("no tracked file holds its tie") && !text.contains("agent builds"),
             "{:?}: {}",
             args,
             text

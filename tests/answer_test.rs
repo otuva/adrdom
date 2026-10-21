@@ -287,7 +287,9 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         stdout(&check_out)
     );
     assert!(
-        stdout(&check_out).contains("text changed since being answered; agent restores adrdom/decisions/example.md from git"),
+        stdout(&check_out).contains(
+            "text changed since being answered; agent restores adrdom/decisions/example.md"
+        ),
         "{}",
         stdout(&check_out)
     );
@@ -297,7 +299,7 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         stdout(&check_out)
     );
     assert!(
-        stdout(&check_out).contains("agent restores adrdom/decisions/example.md from git")
+        stdout(&check_out).contains("agent restores adrdom/decisions/example.md")
             && !stdout(&check_out).contains(&format!("supersedes {}", old_id)),
         "next move must be restore-from-git, never re-ask or remove the (genuine) answer line: {}",
         stdout(&check_out)
@@ -863,15 +865,11 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     );
     assert!(err.contains(old_id.as_str()), "{}", err);
     assert!(
-        err.contains("which is not a current decision; agent rewrites the supersedes entry"),
+        err.contains("which is not a current decision; agent rewrites the entry"),
         "{}",
         err
     );
-    assert!(
-        err.contains("agent rewrites the supersedes entry"),
-        "{}",
-        err
-    );
+    assert!(err.contains("agent rewrites the entry"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(

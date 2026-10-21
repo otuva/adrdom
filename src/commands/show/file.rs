@@ -58,9 +58,7 @@ pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line
             (None, None) => Err(msg::read_failed(
                 rel,
                 "no such file",
-                msg::Next::agent(msg::Act::Rewrites(
-                    "the file name to a file that exists".to_string(),
-                )),
+                msg::Next::agent(msg::Act::Rewrites(msg::Part::Path)),
             )),
         };
     }

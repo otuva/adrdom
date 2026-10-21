@@ -243,11 +243,7 @@ fn b_merge_dropping_the_other_branchs_row_fails_staged() {
     );
     let text = stdout(&staged);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(
-        text.contains("owner restores the missing rows of the ledger from git"),
-        "{}",
-        text
-    );
+    assert!(text.contains("owner restores the missing rows"), "{}", text);
 }
 
 // adr: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
@@ -283,11 +279,7 @@ fn c_committed_merge_that_dropped_a_branchs_row_fails_plain_check() {
     );
     let text = stdout(&out);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(
-        text.contains("owner restores the missing rows of the ledger from git"),
-        "{}",
-        text
-    );
+    assert!(text.contains("owner restores the missing rows"), "{}", text);
 }
 
 /// A fresh, otherwise-empty directory to clone into: its own path, never a
@@ -375,7 +367,7 @@ fn d_a_shallow_clone_of_a_merge_commit_fails_until_deepened() {
     assert!(text.contains("check: "), "{}", text);
     assert!(text.contains(PARENTS_UNREADABLE_TEXT), "{}", text);
     assert!(
-        text.contains("are not in the repository; agent runs: git fetch --deepen=1"),
+        text.contains("are not in the repository; agent runs the same adr command again"),
         "{}",
         text
     );
@@ -595,7 +587,7 @@ fn c_a_missing_or_changed_head_row_still_fails() {
 
     let clean = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&clean).contains("owner restores the missing or changed row from git"),
+        !stdout(&clean).contains("owner restores the row"),
         "unexpected ledger failure before tampering: {}",
         stdout(&clean)
     );
@@ -608,7 +600,7 @@ fn c_a_missing_or_changed_head_row_still_fails() {
     let removed = adr(&dir, &["check"], &[], "");
     assert!(!removed.status.success());
     assert!(
-        stdout(&removed).contains("owner restores the missing or changed row from git"),
+        stdout(&removed).contains("owner restores the row"),
         "{}",
         stdout(&removed)
     );
@@ -619,7 +611,7 @@ fn c_a_missing_or_changed_head_row_still_fails() {
     let byte_changed = adr(&dir, &["check"], &[], "");
     assert!(!byte_changed.status.success());
     assert!(
-        stdout(&byte_changed).contains("owner restores the missing or changed row from git"),
+        stdout(&byte_changed).contains("owner restores the row"),
         "{}",
         stdout(&byte_changed)
     );

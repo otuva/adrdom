@@ -511,11 +511,7 @@ fn approve_refuses_a_candidate_that_pairs_no_term() {
         "{}",
         err
     );
-    assert!(
-        err.contains("agent writes the term in adrdom/terms.md"),
-        "{}",
-        err
-    );
+    assert!(err.contains("agent writes the term"), "{}", err);
     assert!(err.contains("agent "), "{}", err);
 
     // No terms line written to the record...

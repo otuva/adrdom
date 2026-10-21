@@ -333,8 +333,7 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
         show
     );
     assert!(
-        show.iter()
-            .any(|l| l.starts_with("agent writes the plan change that drops or replaces ")),
+        show.iter().any(|l| l == "agent rewrites the plan"),
         "{:?}",
         show
     );

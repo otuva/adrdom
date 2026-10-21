@@ -125,7 +125,7 @@ fn a_superseded_decision_in_a_from_comment_is_a_note_with_the_successor_move() {
         text
     );
     assert!(
-        text.contains("not a current decision; agent rewrites the from-comment to"),
+        text.contains("not a current decision; agent rewrites the from-comment"),
         "{}",
         text
     );

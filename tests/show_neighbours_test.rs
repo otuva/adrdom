@@ -308,7 +308,7 @@ fn the_next_lines_follow_the_planning_steps() {
         .status
         .success());
     ends(&next(&dir), &|h| {
-        format!("agent writes the missing line under \"{}\"", h)
+        format!("agent writes the lines of \"{}\"", h)
     });
     plan_record(&dir, REL);
     ends(&next(&dir), &|h| {
@@ -317,7 +317,7 @@ fn the_next_lines_follow_the_planning_steps() {
     // The bodies written over a file without the lines: the lines come first.
     write_topic(&dir);
     ends(&next(&dir), &|h| {
-        format!("agent writes the missing line under \"{}\"", h)
+        format!("agent writes the lines of \"{}\"", h)
     });
     plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);

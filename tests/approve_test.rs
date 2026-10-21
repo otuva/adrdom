@@ -887,7 +887,7 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Only question?\" is [superseded] and its depends line names \"decision\" by text; agent restores the line from git"),
+        err.contains("\"1.1 Only question?\" is [superseded] and its depends line names \"decision\" by text; agent restores the line"),
         "{}",
         err
     );
@@ -1103,7 +1103,7 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
     let err = stderr(&out);
     assert!(
         err.contains(
-            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; agent rewrites the entry of \"decision\" so \"choice\" names it"
+            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; agent rewrites the entry of \"decision\""
         ),
         "{}",
         err
@@ -1360,7 +1360,7 @@ fn approve_refuses_a_circular_definition() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("circular definition: a cycle runs through alpha, beta and alpha; agent rewrites one of these definitions"),
+        err.contains("circular definition: a cycle runs through alpha, beta and alpha; agent rewrites one of the definitions"),
         "{}",
         err
     );
@@ -1408,14 +1408,14 @@ fn approve_and_check_report_a_cycle_and_a_shape_error() {
         stdout(&out)
     );
     let err = stderr(&out);
-    assert!(err.contains("circular definition: a cycle runs through alpha and alpha; agent rewrites one of these definitions"), "{}", err);
+    assert!(err.contains("circular definition: a cycle runs through alpha and alpha; agent rewrites one of the definitions"), "{}", err);
     assert!(err.contains("missing field \"aliases\""), "{}", err);
 
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     let text = stdout(&check_out);
     assert!(
-        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha and alpha; agent rewrites one of these definitions"),
+        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha and alpha; agent rewrites one of the definitions"),
         "{}",
         text
     );
@@ -1535,7 +1535,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains(&format!("agent restores the term in adrdom/terms.md from git, then writes a question that supersedes {} (\"1.1 What is the decision?\")", id)),
+        err.contains("agent restores the term, then writes the question"),
         "{}",
         err
     );
@@ -1578,7 +1578,7 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
         err.contains(&"agent rewrites the entry of".to_string())
-            && err.contains(&format!("then writes a question that supersedes {} (", id)),
+            && err.contains("then writes the question"),
         "{}",
         err
     );
@@ -1688,7 +1688,7 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
     assert!(err.contains("What comes next?"), "{}", err);
     assert!(
         err.contains(&"agent rewrites the entry of".to_string())
-            && err.contains(&format!("then writes a question that supersedes {} (", id)),
+            && err.contains("then writes the question"),
         "{}",
         err
     );
@@ -2230,7 +2230,7 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     let rows = asked_row_count(&dir);
     let checked = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&checked).contains("edited after asking; owner runs: adr approve"),
+        stdout(&checked).contains("changed since asked; owner runs: adr approve"),
         "{}",
         stdout(&checked)
     );

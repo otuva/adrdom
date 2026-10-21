@@ -32,7 +32,7 @@ pub fn file_unreadable(path: &str, e: impl Display) -> String {
             "{}: cannot be read as text (e.g. its encoding): {}",
             path, e
         ),
-        Next::agent(Act::Rewrites(path.to_string())),
+        Next::agent(Act::Rewrites(Part::File(path.to_string()))),
     )
 }
 
@@ -40,13 +40,13 @@ pub fn file_unreadable(path: &str, e: impl Display) -> String {
 /// <name>` (per "What does approve take for a terms file holding several
 /// entries that wait?", da0dc8b1 A).
 pub fn approve_entry_cmd(name: &str) -> Cmd {
-    command(&["adr", "approve", crate::repo::TERMS_PATH, name])
+    command(&["approve", crate::repo::TERMS_PATH, name])
 }
 
 /// The owner's approve of one entry of those the finding names: the owner
 /// writes the name in place of `<name>`, as `<letter>` in an answer.
 fn approve_one_of() -> Next {
-    Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md").then("<name>"))
+    Next::owner_runs(Cmd::adr("approve adrdom/terms.md").then("<name>"))
 }
 
 fn quoted_list(names: &[String]) -> String {
@@ -93,7 +93,7 @@ pub fn approve_terms_entry_not_waiting(name: &str, waiting: &[String]) -> Said {
                 "adrdom/terms.md: \"{}\" does not wait, and no entry does",
                 name
             ),
-            Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+            Next::owner_runs(Cmd::adr("approve adrdom/terms.md")),
         )
     } else {
         (
@@ -116,7 +116,7 @@ pub fn approve_entry_on_other_file(rel: &str) -> Said {
             "{}: approve takes an entry name for adrdom/terms.md only",
             rel
         ),
-        Next::owner_runs(command(&["adr", "approve", rel])),
+        Next::owner_runs(command(&["approve", rel])),
     )
 }
 
@@ -126,7 +126,7 @@ pub fn approve_entry_on_other_file(rel: &str) -> Said {
 pub fn unban_not_banned(n: usize) -> String {
     refuse(
         format!("unban: {} of the words given were not banned", n),
-        Next::owner_runs(Cmd::fixed("adr unban")),
+        Next::owner_runs(Cmd::adr("unban")),
     )
 }
 
@@ -134,7 +134,7 @@ pub fn unban_not_banned(n: usize) -> String {
 pub fn message_file_unreadable(path: &str, e: impl Display) -> String {
     refuse(
         format!("cannot read the commit message file {}: {}", path, e),
-        Next::agent(Act::Rewrites(format!("the commit message file {}", path))),
+        Next::agent(Act::Rewrites(Part::File(path.to_string()))),
     )
 }
 
@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn untested_names_the_decision_its_place_and_its_move() {
-        let line = untested("x.md", "heading", Next::agent(Act::Builds("it".into()))).text();
+        let line = untested("x.md", "heading", Next::agent(Act::Builds(Part::Pending))).text();
         assert_eq!(
             line,
             "x.md: heading is answered and no tracked file holds its tie; agent builds it"

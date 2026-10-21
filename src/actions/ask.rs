@@ -155,7 +155,7 @@ pub(super) fn reask_conflict(
     id: &str,
 ) -> Result<Outcome, Stops> {
     let rel = rf.rel.clone();
-    let again = || msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel]));
+    let again = || msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel]));
     let original = std::fs::read_to_string(&rf.path).ok();
 
     let sec = &rf.sections[idx];
@@ -180,7 +180,7 @@ pub(super) fn reask_conflict(
         }
         return Err(stop(
             Command::Approve,
-            msg::update_failed("ledger", e, again()),
+            msg::update_failed(crate::repo::LEDGER_PATH, e, again()),
         ));
     }
     Ok(Outcome::of_rows(

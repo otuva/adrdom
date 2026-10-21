@@ -397,11 +397,7 @@ fn an_answer_never_removes_an_answered_question() {
     assert!(!out.status.success(), "{}{}", stdout(&out), stderr(&out));
     let err = stderr(&out);
     assert!(err.contains(TWO) && err.contains("answered"), "{}", err);
-    assert!(
-        err.contains("agent writes a question that supersedes"),
-        "{}",
-        err
-    );
+    assert!(err.contains("agent writes the question"), "{}", err);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     assert_eq!(
         std::fs::read_to_string(ledger_path(&dir)).unwrap(),
@@ -504,15 +500,15 @@ fn a_waiting_chain_ending_on_a_refused_question_names_the_plan_change() {
         err
     );
     assert!(
-        err.contains("writes the plan change") && err.contains("adr approve"),
+        err.contains("agent rewrites the plan") && err.contains("adr approve"),
         "{}",
         err
     );
     assert!(!err.contains("adr answer"), "{}", err);
-    // The refused question is named once in the plan change move, though
-    // Three both waits on it through Two and sits in a tier above it.
+    // The move names the plan change once, though Three both waits on the
+    // refused question through Two and sits in a tier above it.
     assert!(
-        err.contains(&format!("drops or replaces \"{}\", owner runs", ONE)),
+        err.contains("agent rewrites the plan, owner runs"),
         "{}",
         err
     );

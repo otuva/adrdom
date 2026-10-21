@@ -101,7 +101,7 @@ pub fn run(satellite: Option<PathBuf>) -> i32 {
                 failed = Some(msg::write_failed(
                     repo::SATELLITES_PATH,
                     e,
-                    msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+                    msg::after_fix_owner_runs(crate::moves::Cmd::adr("uninstall")),
                 ))
             }
         }
@@ -161,7 +161,6 @@ fn drop_missing(given: &Path, place: &Place) -> i32 {
                     repo::SATELLITES_PATH,
                     e,
                     msg::after_fix_owner_runs(crate::moves::command(&[
-                        "adr",
                         "uninstall",
                         "--satellite",
                         &shown,
@@ -180,14 +179,14 @@ fn remove_all(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
         msg::update_failed(
             "AGENTS.md",
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+            msg::after_fix_owner_runs(crate::moves::Cmd::adr("uninstall")),
         )
     })?);
     events.extend(remove_claude_md_import(root).map_err(|e| {
         msg::update_failed(
             "CLAUDE.md",
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+            msg::after_fix_owner_runs(crate::moves::Cmd::adr("uninstall")),
         )
     })?);
     remove_hooks(root, events)?;
@@ -319,7 +318,7 @@ fn remove_hooks(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
             if repo::git(root, &["config", "--unset", "core.hooksPath"]).is_none() {
                 return Err(msg::hooks_path_failed(
                     "unset",
-                    msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+                    msg::after_fix_owner_runs(crate::moves::Cmd::adr("uninstall")),
                 ));
             }
             events.push(Event::ConfigUnset {
@@ -337,7 +336,7 @@ fn remove<T>(path: &Path, done: std::io::Result<T>) -> Result<T, String> {
         msg::remove_failed(
             &path.display().to_string(),
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+            msg::after_fix_owner_runs(crate::moves::Cmd::adr("uninstall")),
         )
     })
 }
@@ -392,7 +391,7 @@ fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), Stri
         msg::update_failed(
             REL,
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+            msg::after_fix_owner_runs(crate::moves::Cmd::adr("uninstall")),
         )
     };
     let dir = root.join(".claude");
@@ -408,8 +407,8 @@ fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), Stri
         msg::parse_failed(
             REL,
             e,
-            Next::agent(msg::Act::Rewrites(REL.to_string()))
-                .and_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+            Next::agent(msg::Act::Rewrites(msg::Part::File(REL.to_string())))
+                .and_owner_runs(crate::moves::Cmd::adr("uninstall")),
         )
     })?;
 
@@ -438,7 +437,7 @@ fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), Stri
             msg::remove_failed(
                 ".claude",
                 e,
-                msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")),
+                msg::after_fix_owner_runs(crate::moves::Cmd::adr("uninstall")),
             )
         })? {
             events.push(removed(".claude"));

@@ -138,14 +138,13 @@ fn ordered<'a>(a: &'a Dec, b: &'a Dec) -> (&'a Dec, &'a Dec) {
 
 fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
     format!(
-        "{}: \"{}\" and \"{}\": {}; agent writes a question that supersedes one of the pair",
+        "{}: \"{}\" and \"{}\": {}; agent writes the question",
         word, first.heading, second.heading, REASON
     )
 }
 
 /// The move a same or inconsistent pair calls for, as `adr read` prints it.
-const SUPERSEDE_MOVE: &str =
-    "agent writes a question that supersedes one decision of each same or inconsistent pair";
+const SUPERSEDE_MOVE: &str = "agent writes the question";
 
 /// The word the fake reader gives a pair: the marker of its first decision.
 fn word_of(a: &Dec, b: &Dec) -> String {

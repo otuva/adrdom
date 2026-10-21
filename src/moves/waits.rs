@@ -125,10 +125,7 @@ pub fn answer_waits(
     let mut clauses: Vec<Next> = Vec::new();
     clauses.extend(agent.iter().map(Move::clause));
     if !refused.is_empty() {
-        clauses.push(Next::agent(Act::Writes(format!(
-            "the plan change that drops or replaces {}",
-            quoted(&refused)
-        ))));
+        clauses.push(Next::agent(Act::Rewrites(Part::Plan)));
         owner = Some(Move::new(MoveKind::Approve {
             path: rel.to_string(),
         }));
@@ -140,13 +137,10 @@ pub fn answer_waits(
     if clauses.is_empty() {
         // No move of the questions it waits on: the act on each of them.
         if !unwritten.is_empty() {
-            clauses.push(Next::agent(Act::Writes(format!(
-                "the body of {}",
-                quoted(&unwritten)
-            ))));
+            clauses.push(Next::agent(Act::Writes(Part::Body(unwritten.clone()))));
         }
         if !asking.is_empty() {
-            clauses.push(Next::agent(Act::Rewrites(quoted(&asking))));
+            clauses.push(Next::agent(Act::Rewrites(Part::Question)));
         }
     }
     // What the rules find in the files it waits on is returned apart: each

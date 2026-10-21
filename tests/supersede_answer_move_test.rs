@@ -158,7 +158,7 @@ fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
             Q7,
             "c.md",
             "agent rewrites the supersedes line of",
-            "to add adrdom/decisions/c.md",
+            "leaves out adrdom/decisions/c.md",
             "owner runs: adr approve adrdom/decisions/a.md",
         ],
     );

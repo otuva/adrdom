@@ -324,10 +324,7 @@ fn read_prints_the_marked_pairs_and_the_move_and_nothing_else() {
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines.len(), 2, "{}", out);
     assert!(lines[0].starts_with("same: \""), "{}", out);
-    assert_eq!(
-        lines[1],
-        "agent writes a question that supersedes one decision of each same or inconsistent pair"
-    );
+    assert_eq!(lines[1], "agent writes the question");
 }
 
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
@@ -345,7 +342,10 @@ fn plan_refuses_a_path_that_is_no_topic_file() {
         assert!(stdout(&out).is_empty(), "{}: {}", path, stdout(&out));
         assert_eq!(
             stderr(&out).trim_end(),
-            format!("plan: {} is not a topic file; agent rewrites the path to a topic file under adrdom/decisions", path)
+            format!(
+                "plan: {} is not a topic file; agent rewrites the path",
+                path
+            )
         );
     }
 }

@@ -156,7 +156,11 @@ fn approve_refuses_an_entry_naming_a_current_decision_of_another_file() {
         let err = stderr(&out);
         assert!(err.contains("\"Third?\" depends on "), "{}", err);
         assert!(err.contains(OTHER_FILE_REFUSAL), "{}", err);
-        assert!(err.contains(&"agent rewrites the depends line of \"Third?\" to name terms and questions of this file".to_string()), "{}", err);
+        assert!(
+            err.contains(&"agent rewrites the depends line of \"Third?\"".to_string()),
+            "{}",
+            err
+        );
         assert!(
             err.contains("Some earlier heading?") || err.contains(&decided_id),
             "{}",
@@ -419,7 +423,9 @@ fn approve_refuses_a_term_entry_that_resolves_to_nothing() {
     );
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"nosuchterm\" which is no term; agent writes the term in adrdom/terms.md"),
+        err.contains(
+            "\"1.1 Q?\" depends on \"nosuchterm\" which is no term; agent writes the term"
+        ),
         "{}",
         err
     );
@@ -480,7 +486,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
     let err = stderr(&out);
     assert!(
         err.contains(&format!(
-            "\"1.1 Q?\" depends on {} which names no term and no question of this file; agent rewrites the entry to name a term or a question of this file",
+            "\"1.1 Q?\" depends on {} which names no term and no question of this file; agent rewrites the entry",
             uuid
         )),
         "{}",
@@ -538,11 +544,7 @@ fn approve_refuses_a_cycle_between_two_headings() {
     );
     assert!(err.contains("\"A?\""), "{}", err);
     assert!(err.contains("\"B?\""), "{}", err);
-    assert!(
-        err.contains("agent rewrites the depends lines of these questions"),
-        "{}",
-        err
-    );
+    assert!(err.contains("agent rewrites the depends line"), "{}", err);
 }
 
 #[test]
@@ -974,7 +976,7 @@ fn a_depends_line_reverted_by_hand_after_approve_awaits_the_next_approve() {
     let checked = stdout(&check_out);
     assert!(
         checked.contains(
-            "1.1 Is B stand on A?: edited after asking; owner runs: adr approve adrdom/decisions/topic.md"
+            "1.1 Is B stand on A?: changed since asked; owner runs: adr approve adrdom/decisions/topic.md"
         ),
         "{}",
         checked
@@ -1095,7 +1097,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
         stdout(&out)
     );
     assert!(
-        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line from git"),
+        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line"),
         "{}",
         stderr(&out)
     );
@@ -1109,7 +1111,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
 
     let check = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line from git"),
+        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line names \"1.1 Does Y do a thing?\" by text; agent restores the line"),
         "check must report the same frozen-edit refusal: {}",
         stdout(&check)
     );

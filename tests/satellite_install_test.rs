@@ -80,9 +80,8 @@ fn install_satellite_refuses_a_path_that_is_not_a_repository() {
     );
     assert!(!out.status.success());
     assert!(
-        stderr(&out).contains(
-            "install: ../no-such-dir is not a git repository; agent rewrites the path after --satellite"
-        ),
+        stderr(&out)
+            .contains("install: ../no-such-dir is not a git repository; agent rewrites the path"),
         "{}",
         stderr(&out)
     );
@@ -99,7 +98,7 @@ fn install_satellite_refuses_a_repository_with_a_record_and_this_one() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "install: {} holds a record of its own; agent rewrites the path after --satellite",
+            "install: {} holds a record of its own; agent rewrites the path",
             r
         )),
         "{}",
@@ -394,7 +393,7 @@ fn install_in_a_satellite_whose_record_is_missing_refuses_and_writes_nothing() {
     let back = std::fs::read_to_string(sat.join("adrdom/primary")).unwrap();
     assert!(
         stderr(&out).contains(&format!(
-            "install: record not found at {}; agent restores the primary's checkout at {} from git",
+            "install: record not found at {}; agent restores {}",
             back.trim(),
             back.trim()
         )),

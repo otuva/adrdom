@@ -37,7 +37,7 @@ pub(super) fn do_approve_record(
             msg::read_failed(
                 rel,
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
             ),
         )
     })?;
@@ -337,7 +337,7 @@ pub(super) fn do_approve_record(
             msg::write_failed(
                 &file.display().to_string(),
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
             ),
         )
     })?;
@@ -455,9 +455,9 @@ pub(super) fn do_approve_record(
         return Err(stop(
             Command::Approve,
             msg::update_failed(
-                "ledger",
+                crate::repo::LEDGER_PATH,
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["approve", rel])),
             ),
         ));
     }

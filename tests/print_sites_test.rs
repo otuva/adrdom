@@ -349,7 +349,7 @@ fn every_command_names_the_move_for_an_asked_question_edited_since_asked() {
     let check = all_of(&dir, &["check"]);
     let edited = check
         .lines()
-        .find(|l| l.contains("edited after asking"))
+        .find(|l| l.contains("changed since asked"))
         .unwrap_or_else(|| panic!("check names the edit:\n{}", check))
         .to_string();
     let mv = move_of(&edited).to_string();

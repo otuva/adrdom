@@ -7,7 +7,7 @@ use super::*;
 pub fn bind_failed(port: u16, e: impl Display) -> String {
     refuse(
         format!("failed to bind 127.0.0.1:{}: {}", port, e),
-        Next::owner_runs(Cmd::fixed("adr serve --port").then("<port>")),
+        Next::owner_runs(Cmd::adr("serve --port").then("<port>")),
     )
 }
 

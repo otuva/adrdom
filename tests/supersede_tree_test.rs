@@ -292,7 +292,7 @@ fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_
         Q7,
         "c.md",
         "agent rewrites the supersedes line of",
-        "to add adrdom/decisions/c.md",
+        "leaves out adrdom/decisions/c.md",
     ] {
         assert!(all.contains(n), "check output should name {:?}: {}", n, all);
     }

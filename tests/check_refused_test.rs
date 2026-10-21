@@ -58,7 +58,7 @@ fn check_fails_a_refused_row_without_the_line() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("adrdom/decisions/example.md: 1.1 Q?: refused row without answer line; agent restores adrdom/decisions/example.md from git"),
+        text.contains("adrdom/decisions/example.md: 1.1 Q?: refused row without answer line; agent restores adrdom/decisions/example.md"),
         "{}",
         text
     );
@@ -134,7 +134,7 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_reported() {
             &text,
             REFUSABLE_ID,
             " tied to a test and not a current decision"
-        ) && text.contains("agent removes the tie comment from the test"),
+        ) && text.contains("agent removes the tie comment"),
         "a tie to a refused id must be reported: {}",
         text
     );

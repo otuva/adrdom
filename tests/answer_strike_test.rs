@@ -195,11 +195,7 @@ fn a_superseded_section_put_back_fails_check_with_the_agent_move() {
     std::fs::write(dir.join(rel("a")), a_text).unwrap();
     let f = check_failures(&dir);
     assert!(f.contains(&format!("\"{}\" is superseded", Q1)), "{}", f);
-    assert!(
-        f.contains("agent removes the question from the file"),
-        "{}",
-        f
-    );
+    assert!(f.contains("agent removes the question"), "{}", f);
 }
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252

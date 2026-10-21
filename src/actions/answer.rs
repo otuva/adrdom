@@ -344,7 +344,6 @@ fn finish_answer(
     let path = rf.path.clone();
     let again = || {
         msg::after_fix_owner_runs(crate::moves::command(&[
-            "adr",
             "answer",
             &format!("{}@{}", id, version),
             given,
@@ -414,18 +413,14 @@ fn finish_answer(
             return Err(stop(
                 Command::Answer,
                 msg::update_failed(
-                    "ledger",
+                    crate::repo::LEDGER_PATH,
                     format!(
                         "{}; {} holds the answer line and could not be put back: {}",
                         e, rf.rel, back
                     ),
-                    Next::agent(msg::Act::Rewrites("the ledger".to_string()))
-                        .then(msg::Act::Removes(format!(
-                            "the answer line from {}",
-                            rf.rel
-                        )))
+                    Next::agent(msg::Act::Rewrites(msg::Part::Ledger))
+                        .then(msg::Act::Removes(msg::Part::LineOf(msg::LineKind::Answer)))
                         .and_owner_runs(crate::moves::command(&[
-                            "adr",
                             "answer",
                             &format!("{}@{}", id, version),
                             given,
@@ -435,7 +430,7 @@ fn finish_answer(
         }
         return Err(stop(
             Command::Answer,
-            msg::update_failed("ledger", e, again()),
+            msg::update_failed(crate::repo::LEDGER_PATH, e, again()),
         ));
     }
 

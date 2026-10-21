@@ -154,7 +154,7 @@ pub fn refresh(
     recs: &[Rec],
     extra: &[String],
 ) -> Result<Vectors, String> {
-    let retry = || msg::fix_then_same_command("the cache directory the error names");
+    let retry = || msg::fix_then_same_command(msg::Part::File(repo::CACHE_DIR.to_string()));
     let dir = root.join(repo::CACHE_DIR);
     fs::create_dir_all(&dir).map_err(|e| msg::create_failed(repo::CACHE_DIR, e, retry()))?;
     let mut have = read(root, emb.name());

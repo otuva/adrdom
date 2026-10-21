@@ -188,7 +188,8 @@ fn approve_refuses_the_removal_of_a_file_holding_a_current_decision() {
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
     assert!(
-        text.contains("agent restores") && text.contains(&format!("supersedes {}", id)),
+        text.contains(&format!("agent restores {}, then writes the question", REL))
+            && text.contains(&id),
         "{}",
         text
     );
@@ -196,7 +197,8 @@ fn approve_refuses_the_removal_of_a_file_holding_a_current_decision() {
     let out = adr(&dir, &["show"], &[], "");
     let text = stdout(&out);
     assert!(
-        text.contains("agent restores") && text.contains(&format!("supersedes {}", id)),
+        text.contains(&format!("agent restores {}, then writes the question", REL))
+            && text.contains(&id),
         "{}",
         text
     );
@@ -321,7 +323,12 @@ fn show_and_plan_do_not_crash_on_a_removed_file() {
     );
     // A named refusal, an exit code of 1: the file is not there to plan.
     assert_eq!(out.status.code(), Some(1), "{}", text);
-    assert!(text.contains(&format!("plan: cannot read {}:", REL)) && text.contains("agent rewrites the topic file given to adr plan to one under adrdom/decisions that exists"), "{}", text);
+    assert!(
+        text.contains(&format!("plan: cannot read {}:", REL))
+            && text.contains("agent rewrites the path"),
+        "{}",
+        text
+    );
 }
 
 #[test]
@@ -427,7 +434,7 @@ fn deleting_a_draft_never_approved_needs_no_owner_act() {
         stderr(&out)
     );
     assert!(
-        stderr(&out).contains("agent runs: git commit"),
+        stderr(&out).contains("agent runs: adr check"),
         "{}",
         stderr(&out)
     );

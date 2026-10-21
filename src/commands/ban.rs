@@ -47,7 +47,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     // The command line every move of this run names to run again, each
     // word quoted as a shell reads it.
-    let mut words = vec!["adr", "ban"];
+    let mut words = vec!["ban"];
     words.extend_from_slice(&args);
     let again = crate::moves::command(&words);
     let root = match repo::find_root() {
@@ -223,7 +223,11 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     if let Err(e) = ledger::append(&ledger_path, &rows) {
         out::eprint_stop(
             Command::Ban,
-            &msg::update_failed("ledger", e, msg::after_fix_agent_runs(again.clone())),
+            &msg::update_failed(
+                crate::repo::LEDGER_PATH,
+                e,
+                msg::after_fix_agent_runs(again.clone()),
+            ),
         );
         return 1;
     }
@@ -263,7 +267,7 @@ fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> 
                 &msg::update_failed(
                     "banned list",
                     e,
-                    msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild")),
+                    msg::after_fix_agent_runs(crate::moves::Cmd::adr("ban --rebuild")),
                 ),
             );
             1
@@ -301,7 +305,7 @@ mod tests {
     fn the_arguments_a_move_names_run_as_printed() {
         let line = |term: Option<&str>, rebuild: bool| {
             let args = ban_args(&term.map(str::to_string), rebuild);
-            let mut words = vec!["adr", "ban"];
+            let mut words = vec!["ban"];
             words.extend(args.iter().map(String::as_str));
             crate::moves::command(&words).to_string()
         };

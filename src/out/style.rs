@@ -325,7 +325,7 @@ mod tests {
             Line::Finding(Finding::new(
                 &crate::rule::TOPIC_FILE_SHAPE,
                 "x.md: a fault".to_string(),
-                crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())),
+                crate::msg::Next::agent(crate::msg::Act::Rewrites(crate::msg::Part::Line)),
             )),
             Line::Move(Move::new(MoveKind::Approve {
                 path: "x.md".to_string(),

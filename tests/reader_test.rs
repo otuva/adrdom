@@ -168,7 +168,7 @@ fn check_since_fails_a_row_the_commit_holds_edited_and_passes_one_gone_whole() {
     let f = reader_failures(&dir, &["--since", &sha]);
     assert!(
         f.iter()
-            .any(|l| l.contains(&format!("edits a row {} already holds", sha))),
+            .any(|l| l.contains(&format!("changes a row {} already holds", sha))),
         "{:?}",
         f
     );
@@ -217,7 +217,7 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
     let f = reader_failures(&dir, &[]);
     assert!(
         f.iter()
-            .any(|l| l.contains("merge edits a reader row of a merged branch")),
+            .any(|l| l.contains("merge changes a reader row of a merged branch")),
         "{:?}",
         f
     );
@@ -245,7 +245,7 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
         f
     );
     assert!(
-        !f.iter().any(|l| l.contains("merge edits a reader row")),
+        !f.iter().any(|l| l.contains("merge changes a reader row")),
         "{:?}",
         f
     );

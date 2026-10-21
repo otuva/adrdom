@@ -138,7 +138,7 @@ fn approve_refuses_five_questions_standing_on_terms_alone() {
     let out = approve(&dir, "a");
     refused_with(&out, &["5 questions stand on terms alone, the most is 4"]);
     assert!(
-        said_cap(&out).contains("agent writes the question these stand on"),
+        said_cap(&out).contains("agent writes the question"),
         "{}",
         said_cap(&out)
     );

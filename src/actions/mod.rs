@@ -94,7 +94,7 @@ fn load_terms_or_refuse(root: &Path, cmd: Command) -> Result<terms::TermsFile, S
             cmd,
             msg::terms_load_error(
                 &e,
-                msg::fix_then_same_command("adrdom/terms.md so it can be read"),
+                msg::fix_then_same_command(msg::Part::File(crate::repo::TERMS_PATH.to_string())),
             ),
         )),
         TermsLoad::Ok(tf) => Ok(tf),
@@ -239,9 +239,9 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, Stops> {
         stop(
             Command::Unban,
             msg::update_failed(
-                "ledger",
+                crate::repo::LEDGER_PATH,
                 e,
-                msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban")),
+                msg::after_fix_owner_runs(crate::moves::Cmd::adr("unban")),
             ),
         )
     })?;
@@ -255,7 +255,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, Stops> {
             msg::update_failed(
                 "banned list",
                 e,
-                msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild")),
+                msg::after_fix_agent_runs(crate::moves::Cmd::adr("ban --rebuild")),
             ),
         )
     })?;

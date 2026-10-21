@@ -257,7 +257,7 @@ fn approve_refuses_a_blame_line_naming_no_blame_file() {
     for entry in ["nosuch", "0e0e0e0e-1111-4222-8333-444455556666"] {
         let rec = write_record(&dir, REL, &topic(&format!("blame: {} 1-2\n", entry)));
         let line = found(&format!(
-            "the blame entry \"{}\" names no blame file; agent writes the path of a blame file under adrdom/blame without .md",
+            "the blame entry \"{}\" names no blame file; agent writes the blame line",
             entry
         ));
         assert_refused_and_noted(&dir, &rec, &[line]);
@@ -307,7 +307,7 @@ fn approve_refuses_a_blame_line_naming_a_range_of_no_row() {
     let (dir, _x) = gate_repo();
     let missing = |range: &str| {
         found(&format!(
-            "the blame line names {}, the range of no row of adrdom/blame/x.md; agent writes the range of a row of that blame file",
+            "the blame line names {}, the range of no row of adrdom/blame/x.md; agent writes the row",
             range
         ))
     };
@@ -331,9 +331,7 @@ fn approve_refuses_a_blame_line_naming_a_range_of_no_row() {
 fn approve_refuses_a_blame_entry_with_no_range() {
     let (dir, _x) = gate_repo();
     let rec = write_record(&dir, REL, &topic("blame: x\n"));
-    let line = found(
-        "the blame entry \"x\" names no row range; agent writes the name of a blame file and the ranges of its rows",
-    );
+    let line = found("the blame entry \"x\" names no row range; agent writes the blame line");
     assert_refused_and_noted(&dir, &rec, &[line]);
 }
 
@@ -345,9 +343,7 @@ fn approve_refuses_a_blame_entry_with_no_range() {
 fn approve_refuses_a_lone_range_shaped_token_as_a_name_with_no_range() {
     let (dir, _x) = gate_repo();
     let rec = write_record(&dir, REL, &topic("blame: 1-2\n"));
-    let line = found(
-        "the blame entry \"1-2\" names no row range; agent writes the name of a blame file and the ranges of its rows",
-    );
+    let line = found("the blame entry \"1-2\" names no row range; agent writes the blame line");
     assert_refused_and_noted(&dir, &rec, &[line]);
 }
 

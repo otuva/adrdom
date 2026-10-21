@@ -872,9 +872,7 @@ fn overview_shows_the_move_of_a_refused_question() {
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     let shown = cli_lines(&dir, &["show"]);
     assert!(
-        shown.iter().any(
-            |l| l.contains("agent writes the plan change that drops or replaces \"1.1 Root?\"")
-        ),
+        shown.iter().any(|l| l.contains("agent rewrites the plan")),
         "{:?}",
         shown
     );
@@ -1657,7 +1655,7 @@ fn page_shows_no_form_for_an_edited_question() {
     assert!(
         page_lines(&overview.body)
             .iter()
-            .any(|l| l.contains("edited after asking") && l.ends_with(&approve_move)),
+            .any(|l| l.contains("changed since asked") && l.ends_with(&approve_move)),
         "{:#?}",
         page_lines(&overview.body)
     );

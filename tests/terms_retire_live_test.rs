@@ -217,7 +217,7 @@ fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
         err
     );
     assert!(
-        err.contains("agent restores adrdom/decisions/example.md from git"),
+        err.contains("agent restores adrdom/decisions/example.md"),
         "{}",
         err
     );

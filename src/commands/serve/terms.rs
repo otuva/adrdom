@@ -22,9 +22,7 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
                     &crate::msg::read_failed(
                         repo::TERMS_PATH,
                         "no such file",
-                        crate::msg::Next::agent(crate::msg::Act::Rewrites(
-                            "the file name to a file that exists".to_string()
-                        ))
+                        crate::msg::Next::agent(crate::msg::Act::Rewrites(crate::msg::Part::Path))
                     ),
                 ))
             )),

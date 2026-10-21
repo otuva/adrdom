@@ -180,8 +180,7 @@ fn approve_refuses_a_depends_on_a_question_in_its_file_without_a_set() {
     let err = stderr(&out);
     assert!(err.contains("without an answer set"), "{}", err);
     assert!(
-        err.contains("agent writes an answer set (=A, =A|B or =*) on that depends entry")
-            && err.contains("owner runs: adr approve"),
+        err.contains("agent writes the answer set") && err.contains("owner runs: adr approve"),
         "{}",
         err
     );
@@ -217,8 +216,7 @@ fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
     let err = stderr(&out);
     assert!(err.contains("answered, under an answer set"), "{}", err);
     assert!(
-        err.contains("agent removes the answer set from that entry")
-            && err.contains("owner runs: adr approve"),
+        err.contains("agent removes the answer set") && err.contains("owner runs: adr approve"),
         "{}",
         err
     );
@@ -400,11 +398,7 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
         "{}",
         err
     );
-    assert!(
-        err.contains("agent removes the answer set from that entry"),
-        "{}",
-        err
-    );
+    assert!(err.contains("agent removes the answer set"), "{}", err);
     assert!(ledger_rows(&dir, "approved").is_empty());
 }
 
@@ -427,14 +421,14 @@ fn a_changed_and_a_struck_question_each_await_approval() {
     assert!(awaits_approval(&dir));
 
     // A question approve asked, then edited, awaits approval too; check names
-    // it as edited after asking, with the owner's approve as the move.
+    // it as changed since asked, with the owner's approve as the move.
     let edited = approved.replace("s2.", "s2, reworded.");
     std::fs::write(dir.join(REL), edited).unwrap();
     let out = check_out(&dir);
     assert!(!stdout(&out).contains("new or changed"), "{}", stdout(&out));
     assert!(
         stdout(&out).contains(&format!(
-            "1.2 Second question?: edited after asking; owner runs: adr approve {}",
+            "1.2 Second question?: changed since asked; owner runs: adr approve {}",
             REL
         )),
         "{}{}",

@@ -96,7 +96,9 @@ pub fn run(file: PathBuf) -> i32 {
             &msg::write_failed(
                 repo::ROLES_PATH,
                 &e,
-                msg::Next::owner(msg::Act::Rewrites(repo::ROLES_PATH.to_string())),
+                msg::Next::owner(msg::Act::Rewrites(msg::Part::File(
+                    repo::ROLES_PATH.to_string(),
+                ))),
             ),
         )]);
         return 1;

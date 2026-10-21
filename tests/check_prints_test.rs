@@ -105,7 +105,7 @@ fn every_line_check_prints_names_a_move() {
     let (ok, out, _) = check(&dir);
     assert!(!ok, "the approved file with no depends line fails: {}", out);
     assert!(
-        out.contains(&format!("adr: {}", id)),
+        out.contains("agent builds \"Does the widget hold?\""),
         "the untested decision is printed: {}",
         out
     );
@@ -142,10 +142,7 @@ fn an_untested_decision_carries_the_move_that_builds_it() {
     let (ok, out, _) = check(&dir);
     assert!(ok, "an untested decision fails nothing: {}", out);
     assert!(
-        out.contains(&format!(
-            "agent builds \"Does the widget hold?\" and puts \"adr: {}\" in a test that shows it",
-            id
-        )),
+        out.contains("agent builds \"Does the widget hold?\""),
         "{}",
         out
     );
@@ -430,7 +427,8 @@ fn a_commit_prints_each_finding_once_and_the_message_hook_reads_the_message_alon
     assert!(out.status.success(), "{}", stderr(&out));
     let said = stdout(&out) + &stderr(&out);
     assert_eq!(
-        said.matches(&format!("adr: {}\" in a test", id)).count(),
+        said.matches("agent builds \"Does the widget hold?\"")
+            .count(),
         1,
         "{}",
         said

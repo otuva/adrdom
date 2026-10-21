@@ -322,7 +322,7 @@ fn approve_asks_a_candidate_standing_on_a_refused_question_and_the_plan_change_w
     assert_eq!(
         moves_of(&shown),
         vec![
-            "agent writes the plan change that drops or replaces \"1.1 What color is the widget?\"".to_string(),
+            "agent rewrites the plan".to_string(),
             "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
         ],
         "{}",
@@ -428,12 +428,14 @@ Standard: plain words.
         err
     );
     assert!(
-        err.contains("agent writes the plan change that drops or replaces \"1.0 Is the widget on backorder?\", owner runs: adr approve adrdom/decisions/example.md"),
+        err.contains(
+            "agent rewrites the plan, owner runs: adr approve adrdom/decisions/example.md"
+        ),
         "{}",
         err
     );
     let next = nothing_to_ask_and_show(&dir, &record);
-    assert!(next.contains("agent writes the plan change that drops or replaces \"1.0 Is the widget on backorder?\""), "{}", next);
+    assert!(next.contains("agent rewrites the plan"), "{}", next);
     assert!(
         next.contains("not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.0 Is the widget on backorder?\""),
         "{}",
@@ -571,7 +573,7 @@ Standard: plain words.
             qx_id,
             current_version(&dir, &qx_id)
         ),
-        "agent writes the plan change that drops or replaces \"1.1 What color is the widget?\"".to_string(),
+        "agent rewrites the plan".to_string(),
         "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
     ];
     assert_eq!(moves_of(&shown), expected, "{}", shown);
@@ -669,7 +671,7 @@ fn answer_refuses_a_question_standing_on_a_refused_question() {
         assert!(!out.status.success(), "{}", letter);
         assert_eq!(
             stderr(&out).trim_end(),
-            "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" is refused and the question stands on it; agent writes the plan change that drops or replaces \"1.1 What color is the widget?\", owner runs: adr approve adrdom/decisions/example.md"
+            "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" is refused and the question stands on it; agent rewrites the plan, owner runs: adr approve adrdom/decisions/example.md"
         );
     }
 }
@@ -862,7 +864,7 @@ fn approve_refuses_when_a_refused_section_was_edited_since_refusal() {
     // rule, with its move.
     assert_eq!(
         stderr(&out).trim_end(),
-        "adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused; agent restores adrdom/decisions/example.md from git"
+        "adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused; agent restores adrdom/decisions/example.md"
     );
     let checked = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(checked.contains("adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", checked);

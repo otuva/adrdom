@@ -138,9 +138,9 @@ fn do_approve_removal(
         stop(
             Command::Approve,
             msg::update_failed(
-                "ledger",
+                crate::repo::LEDGER_PATH,
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
             ),
         )
     })?;
@@ -190,7 +190,7 @@ fn do_approve_blame(
             msg::read_failed(
                 rel,
                 e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
             ),
         )
     })?;
@@ -246,7 +246,7 @@ fn do_approve_blame(
                 msg::write_failed(
                     &file.display().to_string(),
                     "no second line to insert the id line after",
-                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                    msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
                 ),
             )
         })?);
@@ -272,9 +272,9 @@ fn do_approve_blame(
             stop(
                 Command::Approve,
                 msg::update_failed(
-                    "ledger",
+                    crate::repo::LEDGER_PATH,
                     e,
-                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                    msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
                 ),
             )
         })?;
@@ -287,7 +287,7 @@ fn do_approve_blame(
                 msg::write_failed(
                     &file.display().to_string(),
                     e,
-                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                    msg::after_fix_owner_runs(crate::moves::command(&["approve", &*rel])),
                 ),
             )
         })?;
