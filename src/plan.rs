@@ -378,11 +378,6 @@ fn describe(
     Some((NKind::Decision, name, Target::Decision(key.to_string())))
 }
 
-/// The pool is empty: no current decision and no term that is not retired.
-fn pool_is_empty(all: &[RecordFile], led: &Ledger, terms_list: &[Term]) -> bool {
-    index::pool(all, led, terms_list).is_empty()
-}
-
 /// Reads the planning state of the questions of `rf` that are not yet
 /// asked. `all` is every topic file, `terms_list` the terms, `rows` the
 /// reader file's rows.
@@ -444,7 +439,10 @@ pub struct Shared {
     /// The kinds read at a hash by a row of another prompt or model.
     stale: HashMap<Kind, HashSet<String>>,
     current: HashMap<Kind, String>,
-    pool_empty: bool,
+    /// The identifiers of the pool (`index::pool`): every current decision
+    /// and every term that is not retired. Empty when there is nothing to be
+    /// near.
+    pool: HashSet<String>,
 }
 
 impl Shared {
@@ -494,7 +492,10 @@ impl Shared {
             by_hash,
             stale,
             current,
-            pool_empty: pool_is_empty(all, led, terms_list),
+            pool: index::pool(all, led, terms_list)
+                .into_iter()
+                .map(|r| r.id)
+                .collect(),
         }
     }
 }
@@ -603,9 +604,9 @@ fn load_inner(
         by_hash,
         stale,
         current,
-        pool_empty,
+        pool,
     } = shared;
-    let pool_empty = *pool_empty;
+    let pool_empty = pool.is_empty();
     // Borrowed from the shared index: no copy per lookup.
     let rows_at = |hash: &str| by_hash.get(hash).map(|is| is.iter().map(|&i| &rows[i]));
     // Rows of a kind at a hash, none of them current.
@@ -707,14 +708,20 @@ fn load_inner(
             });
             let h_rows = heading_neighbours(&heading_hash, &targets);
             // Each neighbour on record for the heading and still in the pool
-            // has its row at the body hash.
-            let heading_read = h_rows.as_deref().unwrap_or_default().iter().all(|h| {
-                b_rows
-                    .as_deref()
-                    .unwrap_or_default()
-                    .iter()
-                    .any(|b| b.key == h.key)
-            });
+            // has its row at the body hash: the pool `adr plan` reads the
+            // pairs from, so a neighbour it cannot read is never waited on.
+            let heading_read = h_rows
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .filter(|h| pool.contains(&h.key))
+                .all(|h| {
+                    b_rows
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|b| b.key == h.key)
+                });
             let body_done = has_body
                 && !body_stale
                 && heading_read

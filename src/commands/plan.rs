@@ -259,9 +259,9 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
             index::nearest_with_vectors(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         let vecs = &qv[todo.len()..];
         // The text of each record of the pool, by identifier, for the
-        // neighbours recorded for a heading (`nearest` embeds the same pool).
-        let terms = state::load_terms(root).map(|t| t.terms).unwrap_or_default();
-        let pool_text: HashMap<String, String> = index::pool(&e.all, &led, &terms)
+        // neighbours recorded for a heading: the pool the planning waits on
+        // (`plan::Shared`), the texts `nearest` embeds.
+        let pool_text: HashMap<String, String> = index::pool(&e.all, &led, &e.terms)
             .into_iter()
             .map(|r| (r.id, r.text))
             .collect();
