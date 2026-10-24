@@ -704,7 +704,7 @@ fn check_passes_the_words_depends_and_closes_with_a_letter_and_fails_closes_alon
     }
 }
 
-// adr: bd94a89f-7142-4dab-b757-6482a718a0a0
+// adr: 623bb06f-1762-4a25-9f1b-90cb0923dbc8
 // The only test of this binary that touches the environment.
 #[test]
 fn without_the_reader_the_call_stops_with_a_message_and_writes_nothing() {

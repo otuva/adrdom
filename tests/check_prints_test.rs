@@ -206,32 +206,11 @@ fn what_approve_refuses_in_a_draft_check_reports_with_the_same_move() {
                 q("Does the widget hold?", "the widget breaks.")
             ),
         ),
-        (
-            "neighbour on no line",
-            format!(
-                "# Gate\n\n{}",
-                q("Does the widget hold?", "the widget breaks.")
-            ),
-        ),
     ];
     for (case, content) in cases {
-        let dir = if case == "neighbour on no line" {
-            // A second term the question names on no line: a neighbour.
-            let dir = init_repo();
-            assert!(adr(&dir, &["install"], &[], "").status.success());
-            approve_terms_with(&dir, &["widget", "paint"]);
-            dir
-        } else {
-            repo()
-        };
+        let dir = repo();
         let rec = write_record(&dir, REL, &content);
-        if case == "neighbour on no line" {
-            // The reader's rows are written; no neighbour is put on a line.
-            let plan = adr(&dir, &["plan", rec.to_str().unwrap()], &[], "");
-            assert!(stdout(&plan).contains("is on no line"), "{}", stdout(&plan));
-        } else {
-            plan_record(&dir, REL);
-        }
+        plan_record(&dir, REL);
         let out = approve(&dir, &rec);
         assert!(!out.status.success(), "{}: approve refuses", case);
         let (ok, _, _) = check(&dir);

@@ -136,7 +136,8 @@ pub(crate) const GITATTRIBUTES_CONTENT: &str =
 /// `adrdom/cache` stays out of git ("Does git track a file the tool can get
 /// again without the owner?"; the model lives in the user cache directory,
 /// not here), and so does the roles file, which is
-/// untracked (1cec44fc), and the neighbours file (60341be0).
+/// untracked (1cec44fc), and the neighbours file, which `adr plan` brings
+/// again from the headings.
 pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n";
 
 /// `.codex/rules/adrdom.rules`'s content: one `prefix_rule` block per

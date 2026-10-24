@@ -245,8 +245,8 @@ pub(super) fn do_approve_record(
             work_rf.lines[j] = format!("supersedes: {}", ids.join(", "));
         }
     }
-    // The `unrelated:` line holds ids too (per "Does every neighbour get a
-    // line under its heading?"): a decision, a term or a question of the
+    // The `unrelated:` line holds ids too (per "What does a reference in a
+    // topic file carry?"): a decision, a term or a question of the
     // file by its identifier, a dropped question as written.
     for (i, sec) in sections_snapshot.iter().enumerate() {
         if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {

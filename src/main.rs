@@ -75,9 +75,6 @@ enum Command {
         /// Each superseded question, with what replaced it
         #[arg(long, requires = "whole")]
         superseded: bool,
-        /// Each question's unrelated line, marked when changed
-        #[arg(long, requires = "whole")]
-        unrelated: bool,
         /// For a blame file: how many rows each question names, and how many none does
         #[arg(long, requires = "whole")]
         questions: bool,
@@ -148,7 +145,6 @@ fn main() {
             all,
             neighbours,
             dependents,
-            unrelated,
             questions,
             reader,
             superseded,
@@ -159,7 +155,6 @@ fn main() {
             commands::show::Views {
                 neighbours,
                 dependents,
-                unrelated,
                 questions,
                 reader,
                 superseded,

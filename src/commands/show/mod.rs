@@ -8,7 +8,7 @@
 //! holds past its latest approval?", 91f9652a A), then the moves of that
 //! file. What it computes from the records comes under a flag (per
 //! "Does a command print a computed view under a flag?", cdc905a2 A):
-//! `--neighbours`, `--dependents`, `--unrelated` and `--questions`, `--reader`
+//! `--neighbours`, `--dependents`, `--questions`, `--reader`
 //! and `--superseded`. The reference lines of an
 //! answered question are one of them: printed under `--dependents` (per "Does
 //! show print the reference lines of a question that is answered?", d1d6fed2 A).
@@ -63,8 +63,6 @@ pub struct Views {
     pub dependents: bool,
     /// Each superseded question of a topic file, with what replaced it.
     pub superseded: bool,
-    /// The `unrelated:` line of each question, marked when changed.
-    pub unrelated: bool,
     /// For a blame file: how many of its decision rows a question names and
     /// how many none names (per "What does check do with a decision row
     /// that no question names?", ee27fd4c A).
@@ -258,9 +256,6 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
     }
     if views.dependents {
         args.push("--dependents".to_string());
-    }
-    if views.unrelated {
-        args.push("--unrelated".to_string());
     }
     if views.questions {
         args.push("--questions".to_string());

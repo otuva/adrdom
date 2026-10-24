@@ -176,13 +176,11 @@ impl Finding {
     /// Whether this finding keeps the reader from reading the file's bodies:
     /// one the agent clears without the reader (a word over the limit, a
     /// banned word, a depends line over its bounds, a tell), other than the
-    /// planning's own (a step without its record, a neighbour on no line),
-    /// which the reading is there to clear. A finding whose move is the
-    /// owner's or nobody's yet stops nothing: the reading goes on beside it.
+    /// planning's own (a step without its record), which the reading is there
+    /// to clear. A finding whose move is the owner's or nobody's yet stops
+    /// nothing: the reading goes on beside it.
     pub fn blocks_the_reader(&self) -> bool {
-        self.next.is_agents()
-            && self.rule.name != crate::rule::PLAN_STEP_HAS_ITS_RECORD.name
-            && self.rule.name != crate::rule::NEIGHBOUR_IS_ON_A_LINE.name
+        self.next.is_agents() && self.rule.name != crate::rule::PLAN_STEP_HAS_ITS_RECORD.name
     }
     pub fn in_sections(mut self, indexes: Vec<usize>) -> Finding {
         self.sections = indexes;

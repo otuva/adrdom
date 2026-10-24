@@ -197,23 +197,6 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
 
 **Answer:** A
 
-### Does every neighbour get a line under its heading?
-depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=*
-id: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, identifiers=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea
-
-Problem: the agent writes the ties it sees; a neighbour it never ruled on looks the same as one it judged unrelated.
-Standard: every item put in front of a reviewer gets an explicit disposition.
-
-- A) Yes.
-  Why: forgetting is impossible; what is left is a wrong ruling, and that stands under the agent's own line.
-  Costs: an unrelated line joins depends and supersedes under the heading; approval turns its names to identifiers.
-- B) No.
-  Why: only the ties that hold are written; the file stays short.
-  Costs: a neighbour left off a line is unseen by approve, and the reader's word on it meets no ruling.
-
-**Answer:** A
-
 ### What word does the reader give a neighbour of a question with its body?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 46fc51ff-66b9-4841-a953-ae0d4c2fc424
 supersedes: c6e0b7d6-cdec-46da-b2bc-cda218673868, 08a1b488-32fc-4dc7-b4b3-93a6e768725f, 332ff0c7-0769-45ac-8f89-00aeff318467, 62e50382-db1b-4649-9f26-7f44c379d6fe, 902bd279-e6c1-4a21-9637-a3a43f360bae, 908bddc6-5d30-4bcc-be8d-4c470c6bff11, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 3fc35d4f-90f3-4425-9dac-951a89631fdf, bceceda8-133a-4c9b-b439-b5c1a4414a02, c84a4bd9-fc2d-44f0-b333-172978f61544, 8f81dee1-9c19-447d-baa8-d7d0af691db8, a6f41dee-2381-421a-bcc4-b14af243209b, 83190b10-8060-47c1-8194-f6a5c4f0d703, 3dba486c-a399-4ce3-a794-e38c4f733403, 4838baa4-a5df-49e7-929c-ed63b5adaf4e, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef, 90714223-52e3-4bb9-b0b4-2a8b87d74145, abb6faed-96f7-406d-8384-002ee81bb157, bc4291c8-98f1-499d-8e02-46e371035e70
@@ -233,25 +216,6 @@ Standard: classification into a closed set with an explicit none-of-these, so th
 - C) A free sentence on how the two relate, no word.
   Why: nothing is forced into a set; every nuance of a bundled decision survives.
   Costs: nothing in the record can be compared or counted; the agent reads a sentence per neighbour and rules alone.
-
-**Answer:** A
-
-### Does the reader read a neighbour of a heading?
-depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, d10dab89-1d42-4764-9d72-22d6fd6a9260=A|B
-supersedes: 62e50382-db1b-4649-9f26-7f44c379d6fe, 3dba486c-a399-4ce3-a794-e38c4f733403, 4838baa4-a5df-49e7-929c-ed63b5adaf4e
-unrelated: c6451ecc-17a9-447e-a9c9-fe9b35ec789c, 902bd279-e6c1-4a21-9637-a3a43f360bae, 55a8abb2-0f6d-430b-99f9-a378f3f154e5, 332ff0c7-0769-45ac-8f89-00aeff318467, c6e0b7d6-cdec-46da-b2bc-cda218673868, de8ef568-3a8d-42ba-bef7-d7fd467b27be, 43778946-d44c-4acf-a766-0a4915fce199, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, 6108b8b2-911e-443b-abe0-4c6f8b407384, c3127af2-4c96-48d5-a164-bac49a9a09ec, 46fc51ff-66b9-4841-a953-ae0d4c2fc424, e78b8297-fd89-4e09-9c3e-9eeb0fd0f654, bd94a89f-7142-4dab-b757-6482a718a0a0, a8034401-420c-45d7-8f43-60c1b9f3baf9, d984e425-3e88-4756-88fb-18241f9f62a7, 30ca5d13-e68b-465f-aa84-ea4000c9330a, 55a6a2d8-03af-4db9-a4c7-e2790e38357e
-id: 60341be0-fd05-4281-92d7-668584a8539a
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, options=43778946-d44c-4acf-a766-0a4915fce199, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
-
-Problem: at the heading step the new side has no options and no answer; a word given there is copied into the lines the agent writes.
-Standard: a classifier gets only the labels its input can support.
-
-- A) No.
-  Why: the agent reads the ten neighbours itself and writes its lines; the reader reads the question with its body.
-  Costs: a heading a decision settles gets a body before it drops.
-- B) Yes.
-  Why: a heading a decision settles drops before its body is written.
-  Costs: ten reader calls per heading, repeated at the body step, and a word on hierarchy the text cannot support.
 
 **Answer:** A
 
@@ -296,44 +260,6 @@ Standard: advisory checks inform; blocking checks are deterministic.
 
 **Answer:** A
 
-### Does planning stop with no reader on the machine?
-depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 60341be0-fd05-4281-92d7-668584a8539a=*
-supersedes: 3dba486c-a399-4ce3-a794-e38c4f733403
-unrelated: d3be71e4-ce7b-43b0-86a8-e86868521f99, 21cdad59-4f0c-42a5-b4f3-6af946637df3, c3127af2-4c96-48d5-a164-bac49a9a09ec, 1cec44fc-2685-42f8-9742-7facabb52251, 90714223-52e3-4bb9-b0b4-2a8b87d74145, 902bd279-e6c1-4a21-9637-a3a43f360bae, 6c406624-b874-4697-9a44-91941019b7d1, 49a1c3a8-07ea-448a-8926-2362c0617758, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 08a1b488-32fc-4dc7-b4b3-93a6e768725f, 8f81dee1-9c19-447d-baa8-d7d0af691db8, e78b8297-fd89-4e09-9c3e-9eeb0fd0f654, a8034401-420c-45d7-8f43-60c1b9f3baf9, d984e425-3e88-4756-88fb-18241f9f62a7, 30ca5d13-e68b-465f-aa84-ea4000c9330a, 55a6a2d8-03af-4db9-a4c7-e2790e38357e, d10dab89-1d42-4764-9d72-22d6fd6a9260
-id: bd94a89f-7142-4dab-b757-6482a718a0a0
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
-
-Problem: the reader is a program apart from the tool; a machine without it brings neighbours with no word, and a plan with wordless rows is a plan with a hole.
-Standard: a step whose input is missing stops and names it; no degraded mode.
-
-- A) Yes.
-  Why: one shape of row; every neighbour read with a body carries a word.
-  Costs: planning needs the reader on the machine; every other command runs without it.
-- B) No.
-  Why: the agent reads the neighbours itself; the word is a line, not a gate, so its absence stops nothing.
-  Costs: two shapes of row, and the owner sees agent lines with nothing against them.
-
-**Answer:** A
-
-### Does the tool bring a plan's own questions as neighbours of each other?
-depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, daec9ffd-676f-4111-a359-2827bfd4527c, 60341be0-fd05-4281-92d7-668584a8539a=*
-supersedes: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
-unrelated: 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 98d5d389-8315-41da-9970-666e31f3a94d, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef, 010901e0-c02d-49eb-98bc-d584756d7f51, 0e38f001-0226-4927-9a78-2e9fc1ec18d4, de8ef568-3a8d-42ba-bef7-d7fd467b27be, 6c406624-b874-4697-9a44-91941019b7d1, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, c6451ecc-17a9-447e-a9c9-fe9b35ec789c, 23f21671-e34c-44aa-8804-6163d975807f, 62e50382-db1b-4649-9f26-7f44c379d6fe, c6e0b7d6-cdec-46da-b2bc-cda218673868, e78b8297-fd89-4e09-9c3e-9eeb0fd0f654, bd94a89f-7142-4dab-b757-6482a718a0a0, a8034401-420c-45d7-8f43-60c1b9f3baf9, 30ca5d13-e68b-465f-aa84-ea4000c9330a, 55a6a2d8-03af-4db9-a4c7-e2790e38357e, d10dab89-1d42-4764-9d72-22d6fd6a9260, 277a8338-c57a-43cc-8b28-6b42e9347f6a
-id: d984e425-3e88-4756-88fb-18241f9f62a7
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
-
-Problem: two new headings in one plan are never each other's neighbour when the pool is the records; the tie between them is written by hand and forgotten.
-Standard: deduplicate a batch against itself as well as against the store.
-
-- A) Yes.
-  Why: at the body step each question is read against the plan's nearest questions with the heading set.
-  Costs: a few more reader calls per question; two unanswered questions give no consistent or inconsistent.
-- B) No.
-  Why: the pool is the records; the agent wrote both headings and knows their tie.
-  Costs: two headings on one rule in one plan pass; the tier cap is the only net.
-
-**Answer:** A
-
 ### Does the reader's file keep a row whose text left the records?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, 55a6a2d8-03af-4db9-a4c7-e2790e38357e=*
 supersedes: 90714223-52e3-4bb9-b0b4-2a8b87d74145, abb6faed-96f7-406d-8384-002ee81bb157
@@ -372,5 +298,79 @@ Standard: a machine-written cache is verified for shape and against edits; remov
 - C) The shape of each row alone.
   Why: nothing to compare with history.
   Costs: a row edited by hand passes as the reader's word.
+
+**Answer:** A
+
+### Does the agent write an unrelated line?
+depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, daec9ffd-676f-4111-a359-2827bfd4527c, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 46fc51ff-66b9-4841-a953-ae0d4c2fc424
+supersedes: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
+unrelated: b0554224-15e4-4e91-a2bb-9ae5667803f4, bd83aa22-94fc-49ac-b215-a82990ff8c65, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, c3127af2-4c96-48d5-a164-bac49a9a09ec, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, f5eeaacf-1c9f-478b-8a97-2df1aaf39458, 23d53545-c238-48cc-ae5e-21a2c7aab83e, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, ec0b9293-916e-4ced-a3d7-3b862ab7b069, ae63df95-0643-4108-af65-1e7a0009d631, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 60341be0-fd05-4281-92d7-668584a8539a, 6e72f34e-d484-4c63-8332-d284857176fc, 9bf76db8-4821-4257-ac49-4c22c2a0e538, d10dab89-1d42-4764-9d72-22d6fd6a9260, 6108b8b2-911e-443b-abe0-4c6f8b407384, e1cbe055-5638-41ea-853e-13991b945ae1
+id: a065dced-a3b3-467c-b299-17bb70742046
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, move=d904dc0d-231f-4e93-ac74-7babe888107d, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, record=68536615-d17e-4399-ad6c-2a2cf8622b2b, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea
+
+Problem: a line for every neighbour grows to thirty names under a question, no move reads them, and each new neighbour costs a run.
+Standard: a record holds the rulings, not the list of what was looked at.
+
+- A) No.
+  Why: depends and supersedes are the rulings; a neighbour on neither is the reader's to dispute at approval.
+  Costs: the line stays in answered questions, read and judged by nothing; a neighbour never looked at leaves no trace.
+- B) Yes.
+  Why: every neighbour the tool brings meets a written ruling, and a forgotten one is a finding.
+  Costs: thirty names per question, a run for each new neighbour, and a word no move reads.
+
+**Answer:** A
+
+### Does the body step read the neighbours brought for the heading?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, d10dab89-1d42-4764-9d72-22d6fd6a9260
+supersedes: 60341be0-fd05-4281-92d7-668584a8539a, bd94a89f-7142-4dab-b757-6482a718a0a0, d984e425-3e88-4756-88fb-18241f9f62a7
+unrelated: c6451ecc-17a9-447e-a9c9-fe9b35ec789c, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 48c47c42-6720-44ca-b47d-12a61ba8ee9f, f5eeaacf-1c9f-478b-8a97-2df1aaf39458, 6e72f34e-d484-4c63-8332-d284857176fc, de8ef568-3a8d-42ba-bef7-d7fd467b27be, 55a8abb2-0f6d-430b-99f9-a378f3f154e5, f571a454-3e6c-46c1-b754-0822a5d1d667, 6108b8b2-911e-443b-abe0-4c6f8b407384, 46fc51ff-66b9-4841-a953-ae0d4c2fc424, a065dced-a3b3-467c-b299-17bb70742046, d3be71e4-ce7b-43b0-86a8-e86868521f99, 27bd0855-a6c8-4cda-a82b-bf95022a14b0, d904dc0d-231f-4e93-ac74-7babe888107d
+id: e1cbe055-5638-41ea-853e-13991b945ae1
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, options=43778946-d44c-4acf-a766-0a4915fce199, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
+
+Problem: the neighbours brought for a heading get no word from the reader, so a decision among them that the body meets is seen by the agent alone.
+Standard: a reviewer reads every item on the list with the full text in hand.
+
+- A) Yes.
+  Why: the same prompt and word set, options in view; a heading's neighbour the body meets gets its word.
+  Costs: up to ten more pairs per question, each a reader call, most of them unrelated.
+- B) No.
+  Why: the reader reads the ten nearest of the body and the own questions; the heading has the agent.
+  Costs: a decision near the heading and far from the body gets no word.
+
+**Answer:** A
+
+### Does planning stop when the reader is missing?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, e1cbe055-5638-41ea-853e-13991b945ae1=*
+unrelated: d3be71e4-ce7b-43b0-86a8-e86868521f99, e78b8297-fd89-4e09-9c3e-9eeb0fd0f654, da59b448-1afb-4469-b40e-69eda8f253c2, db07a54d-4d80-4035-a9ef-eabcc0c872b3, bd94a89f-7142-4dab-b757-6482a718a0a0, 21cdad59-4f0c-42a5-b4f3-6af946637df3, 1cec44fc-2685-42f8-9742-7facabb52251, 60341be0-fd05-4281-92d7-668584a8539a, 6c406624-b874-4697-9a44-91941019b7d1, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, c3127af2-4c96-48d5-a164-bac49a9a09ec, a8034401-420c-45d7-8f43-60c1b9f3baf9, 30ca5d13-e68b-465f-aa84-ea4000c9330a, 55a6a2d8-03af-4db9-a4c7-e2790e38357e, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, a065dced-a3b3-467c-b299-17bb70742046, aae3f502-1395-4812-96ef-71510a1df4db
+id: 623bb06f-1762-4a25-9f1b-90cb0923dbc8
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
+
+Problem: the reader is a program apart from the tool; a machine without it brings neighbours with no word, and a plan with wordless rows is a plan with a hole.
+Standard: a step whose input is missing stops and names it; no degraded mode.
+
+- A) Yes.
+  Why: one shape of row; every neighbour read with a body carries a word.
+  Costs: planning needs the reader on the machine; every other command runs without it.
+- B) No.
+  Why: the agent reads the neighbours itself; the word is a line, not a gate, so its absence stops nothing.
+  Costs: two shapes of row, and the owner sees agent lines with nothing against them.
+
+**Answer:** A
+
+### Does the body step bring the plan's own questions as neighbours?
+depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, daec9ffd-676f-4111-a359-2827bfd4527c, e1cbe055-5638-41ea-853e-13991b945ae1=*
+unrelated: aac5c313-dedd-466b-a0c3-ead5e99ce913, d3be71e4-ce7b-43b0-86a8-e86868521f99, c6451ecc-17a9-447e-a9c9-fe9b35ec789c, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, f5eeaacf-1c9f-478b-8a97-2df1aaf39458, 60341be0-fd05-4281-92d7-668584a8539a, d984e425-3e88-4756-88fb-18241f9f62a7, 48c47c42-6720-44ca-b47d-12a61ba8ee9f, d10dab89-1d42-4764-9d72-22d6fd6a9260, d904dc0d-231f-4e93-ac74-7babe888107d, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, f571a454-3e6c-46c1-b754-0822a5d1d667, 23f21671-e34c-44aa-8804-6163d975807f, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 46fc51ff-66b9-4841-a953-ae0d4c2fc424, 623bb06f-1762-4a25-9f1b-90cb0923dbc8, a065dced-a3b3-467c-b299-17bb70742046
+id: aae3f502-1395-4812-96ef-71510a1df4db
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, records=68536615-d17e-4399-ad6c-2a2cf8622b2b, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
+
+Problem: two new headings in one plan are never each other's neighbour when the pool is the records; the line between them is written by hand and forgotten.
+Standard: deduplicate a batch against itself as well as against the store.
+
+- A) Yes.
+  Why: at the body step each question is read against the plan's nearest questions with the heading set.
+  Costs: a few more reader calls per question; two unanswered questions give no consistent or inconsistent.
+- B) No.
+  Why: the pool is the records; the agent wrote both headings and knows their line.
+  Costs: two headings on one rule in one plan pass; the tier cap is the only net.
 
 **Answer:** A

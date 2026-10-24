@@ -98,14 +98,6 @@ fn reader_text(dir: &Path) -> String {
     std::fs::read_to_string(dir.join("adrdom/state/reader.tsv")).unwrap_or_default()
 }
 
-/// Writes each neighbour `adr plan` printed as on no line, as an
-/// `unrelated:` entry under its heading.
-fn write_lines(dir: &Path, plan_stdout: &str) -> usize {
-    let wanted = lines_wanted(plan_stdout);
-    write(dir, &add_unrelated(&read(dir), &wanted));
-    wanted.len()
-}
-
 fn ok(out: &Output) -> String {
     assert!(
         out.status.success(),
@@ -147,27 +139,11 @@ fn sha(text: &str) -> String {
 }
 
 /// The file written again with these sections, each `(heading, body)`, in
-/// order: a heading keeps the `unrelated:` line it has in the file now.
+/// order.
 fn rewrite(dir: &Path, sections: &[(&str, String)]) {
-    let now = read(dir);
     let mut out = String::from("# Topic\n");
     for (heading, body) in sections {
-        let at = now.find(&format!("### {}\n", heading));
-        let line = at
-            .and_then(|i| {
-                let rest = &now[i..];
-                let end = rest[1..].find("\n### ").map_or(rest.len(), |j| j + 1);
-                rest[..end]
-                    .lines()
-                    .find(|l| l.starts_with("unrelated: "))
-                    .map(String::from)
-            })
-            .map(|l| format!("{}\n", l))
-            .unwrap_or_default();
-        out.push_str(&format!(
-            "\n### {}\ndepends: widget\n{}{}",
-            heading, line, body
-        ));
+        out.push_str(&format!("\n### {}\ndepends: widget\n{}", heading, body));
     }
     write(dir, &out);
 }
@@ -207,27 +183,16 @@ fn the_steps_in_order_from_headings_to_approval() {
         out
     );
     assert!(
-        lines_wanted(&out).contains(&(H1.to_string(), BASE_Q.to_string())),
+        out.contains("  term \"paint\": heading; no line"),
         "{}",
         out
     );
-    assert!(
-        lines_wanted(&out).contains(&(H1.to_string(), "paint".to_string())),
-        "{}",
-        out
-    );
-    // Each neighbour on no line is a finding that carries the move.
-    for h in [H1, H2] {
-        assert!(
-            out.lines()
-                .any(|l| l.ends_with(&format!("; agent writes the lines of \"{}\"", h))),
-            "{}",
-            out
-        );
-    }
+    // A neighbour on no line is no finding and no move.
+    assert!(!out.contains("is on no line"), "{}", out);
+    assert!(!out.contains("writes the lines"), "{}", out);
     assert!(
         !out.contains("heading with its body"),
-        "step 5 waits for the lines and the bodies: {}",
+        "step 5 waits for the bodies: {}",
         out
     );
     assert!(
@@ -239,16 +204,12 @@ fn the_steps_in_order_from_headings_to_approval() {
     // Approve refuses what is still missing, and names the move.
     let err = refused(&approve(&dir));
     assert!(
-        err.contains(&format!(
-            "is on no line; agent writes the lines of \"{}\"",
-            H1
-        )),
+        err.contains(&format!("agent writes the body of \"{}\"", H1)),
         "{}",
         err
     );
 
-    // Step 3: the lines. Step 4 has not come: no heading has a body.
-    assert_eq!(write_lines(&dir, &out), 4);
+    // Step 3: the bodies. No heading has a body.
     let out = ok(&plan(&dir));
     for h in [H1, H2] {
         assert!(
@@ -286,12 +247,6 @@ fn the_steps_in_order_from_headings_to_approval() {
         "{}",
         out
     );
-    assert!(
-        lines_wanted(&out).contains(&(H1.to_string(), H2.to_string())),
-        "{}",
-        out
-    );
-    assert_eq!(write_lines(&dir, &out), 2);
 
     // Step 6: nothing is missing, and the owner approves. Approve needs
     // neither the model nor the reader.
@@ -308,9 +263,9 @@ fn the_steps_in_order_from_headings_to_approval() {
     ok(&out);
 }
 
-// adr: 60341be0-fd05-4281-92d7-668584a8539a
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
 #[test]
-fn the_reader_reads_no_neighbour_of_a_heading() {
+fn the_heading_step_reads_no_neighbour_and_the_body_step_reads_those_of_the_heading() {
     let dir = repo();
     let before = reader_text(&dir);
     let held_n = neighbour_rows(&dir).len();
@@ -343,6 +298,35 @@ fn the_reader_reads_no_neighbour_of_a_heading() {
         "no word at the heading step: {}",
         out
     );
+    // The body step reads the neighbours recorded for each heading.
+    let recorded = neighbour_rows(&dir);
+    write(
+        &dir,
+        &format!(
+            "# Topic\n{}{}",
+            section(H1, &body("one")),
+            section(H2, &body("two"))
+        ),
+    );
+    let out = ok(&plan(&dir));
+    let rf = record::load(&dir.join(REL)).unwrap();
+    for (i, h) in [H1, H2].iter().enumerate() {
+        let hash = sha(&record::body_text(&rf, &rf.sections[i]));
+        for (_, id) in recorded
+            .iter()
+            .filter(|(hh, _)| *hh == record::heading_hash(&rf.sections[i]))
+        {
+            assert!(
+                rows(&dir)
+                    .iter()
+                    .any(|r| r.text_hash == hash && r.neighbour == *id),
+                "{} has a row for {}: {}",
+                h,
+                id,
+                out
+            );
+        }
+    }
     // The model is still needed for it.
     let dir = repo();
     two_headings(&dir);
@@ -363,12 +347,12 @@ fn the_reader_reads_no_neighbour_of_a_heading() {
     assert_eq!(neighbour_rows(&dir).len(), held_n, "nothing was written");
 }
 
-// adr: 60341be0-fd05-4281-92d7-668584a8539a
+// adr: 0d977e39-a657-4596-8eca-8ceb335f3081
 #[test]
 fn the_neighbours_file_is_not_tracked_and_a_second_run_writes_neither_file() {
     let dir = repo();
     two_headings(&dir);
-    let out = ok(&plan(&dir));
+    ok(&plan(&dir));
     assert!(dir.join(repo::NEIGHBOURS_PATH).is_file());
     let status = std::process::Command::new("git")
         .args(["status", "--porcelain", "--untracked-files=all"])
@@ -378,7 +362,6 @@ fn the_neighbours_file_is_not_tracked_and_a_second_run_writes_neither_file() {
     let status = String::from_utf8_lossy(&status.stdout).to_string();
     assert!(!status.contains("neighbours.tsv"), "{}", status);
     // Nothing changed: a second run writes to neither file.
-    write_lines(&dir, &out);
     ok(&plan(&dir));
     let (n, r) = (neighbours_text(&dir), reader_text(&dir));
     ok(&plan(&dir));
@@ -411,8 +394,7 @@ fn planned(dir: &Path) {
         ),
     );
     for _ in 0..3 {
-        let out = ok(&plan(dir));
-        write_lines(dir, &out);
+        ok(&plan(dir));
     }
     assert!(has_line(
         &ok(&plan(dir)),
@@ -530,23 +512,12 @@ fn a_step_needs_the_record_of_the_step_before() {
         err
     );
 
-    // A step-2 neighbour on no line stops step 5: the neighbours are
-    // recorded, the body rows are not made.
+    // The heading neighbours are recorded, and the body rows are read in the
+    // same run: a neighbour on no line stops nothing.
     let before = rows(&dir).len();
     let held_n = neighbour_rows(&dir).len();
     let out = ok(&plan(&dir));
     assert_eq!(neighbour_rows(&dir).len() - held_n, 6, "{}", out);
-    assert_eq!(rows(&dir).len(), before, "{}", out);
-    assert!(!lines_wanted(&out).is_empty(), "{}", out);
-    assert!(!out.contains("heading with its body"), "{}", out);
-
-    // Approve names the missing line.
-    let err = refused(&approve(&dir));
-    assert!(err.contains("is on no line"), "{}", err);
-
-    // Once the lines are there, step 5 runs.
-    write_lines(&dir, &out);
-    let out = ok(&plan(&dir));
     assert!(
         has_line_starting(&out, &format!("\"{}\": heading with its body", H1)),
         "{}",
@@ -568,12 +539,7 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
         ),
     );
     // Plan to the end.
-    for _ in 0..4 {
-        let out = ok(&plan(&dir));
-        if write_lines(&dir, &out) == 0 {
-            break;
-        }
-    }
+    ok(&plan(&dir));
     let out = ok(&plan(&dir));
     assert!(
         has_line(&out, &format!("owner runs: adr approve {}", REL)),
@@ -598,18 +564,10 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     assert_eq!(rows(&dir).len(), settled, "no body was read: {}", out);
     assert!(has_line(&out, &format!("\"{}\": heading", h3)), "{}", out);
     assert!(!has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
-    assert!(lines_wanted(&out).iter().any(|(h, _)| h == h3), "{}", out);
-    assert!(
-        out.lines()
-            .any(|l| l.ends_with(&format!("; agent writes the lines of \"{}\"", h3))),
-        "{}",
-        out
-    );
     // Approve refuses it too.
     assert!(refused(&approve(&dir)).contains(h3));
 
-    // Then the lines, then the move for the missing body.
-    write_lines(&dir, &out);
+    // Then the move for the missing body.
     let out = ok(&plan(&dir));
     assert!(
         names_move(&out, &format!("agent writes the body of \"{}\"", h3)),
@@ -643,8 +601,7 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
         out
     );
     for _ in 0..3 {
-        let out = ok(&plan(&dir));
-        write_lines(&dir, &out);
+        ok(&plan(&dir));
     }
     let out = ok(&plan(&dir));
     assert!(
@@ -654,7 +611,7 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     );
 }
 
-// adr: d984e425-3e88-4756-88fb-18241f9f62a7
+// adr: aae3f502-1395-4812-96ef-71510a1df4db
 #[test]
 fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
     let dir = repo();
@@ -669,8 +626,6 @@ fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
             section(H2, &body("two"))
         ),
     );
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
     let out = ok(&plan(&dir));
     assert!(
         out.contains(&format!("  question \"{}\": body same; no line", H2)),
@@ -705,7 +660,6 @@ fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
         .all(|r| r.prompt_hash == Kind::Body.prompt_hash()));
     // A line for the other question settles it; its body changing leaves the
     // old key naming no question, and no line is wanted for it.
-    write_lines(&dir, &out);
     assert!(has_line(
         &ok(&plan(&dir)),
         &format!("owner runs: adr approve {}", REL)
@@ -727,9 +681,9 @@ fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
     );
 }
 
-// adr: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
+// adr: a065dced-a3b3-467c-b299-17bb70742046
 #[test]
-fn approve_refuses_a_neighbour_on_no_line_and_turns_the_names_into_identifiers() {
+fn a_neighbour_on_no_line_is_no_finding_and_no_move_and_approve_passes() {
     let dir = repo();
     write(
         &dir,
@@ -739,26 +693,52 @@ fn approve_refuses_a_neighbour_on_no_line_and_turns_the_names_into_identifiers()
             section(H2, &body("two"))
         ),
     );
+    // Plan reads the bodies with its neighbours on no line, and says no
+    // line was missing.
     let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
-    let out = ok(&plan(&dir));
-    // One neighbour of the body step stays without a line.
-    let wanted = lines_wanted(&out);
-    assert_eq!(wanted.len(), 2);
-    write(&dir, &add_unrelated(&read(&dir), &wanted[1..]));
-    let err = refused(&approve(&dir));
+    let out2 = ok(&plan(&dir));
+    for o in [&out, &out2] {
+        assert!(!o.contains("is on no line"), "{}", o);
+        assert!(!o.contains("writes the lines"), "{}", o);
+    }
     assert!(
-        err.contains(&format!(
-            "\"{}\" is a neighbour of \"{}\" and is on no line; agent writes the lines of \"{}\"",
-            wanted[0].1, wanted[0].0, wanted[0].0
-        )),
+        has_line(&out2, &format!("owner runs: adr approve {}", REL)),
         "{}",
-        err
+        out2
     );
-    assert!(!err.contains("no reader rows"), "{}", err);
-    // The refusal changed nothing.
-    let held = read(&dir);
-    write(&dir, &add_unrelated(&held, &wanted[..1]));
+    assert!(!read(&dir).contains("unrelated:"));
+    let shown = adr(&dir, &["show", dir.join(REL).to_str().unwrap()], &[], "");
+    let shown = stdout(&shown);
+    assert!(!shown.contains("writes the lines"), "{}", shown);
+    let checked = adr(&dir, &["check"], &[], "");
+    let checked = format!("{}{}", stdout(&checked), stderr(&checked));
+    assert!(!checked.contains("is on no line"), "{}", checked);
+    ok(&approve(&dir));
+}
+
+// adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
+#[test]
+fn approve_turns_the_names_on_an_unrelated_line_into_identifiers() {
+    let dir = repo();
+    write(
+        &dir,
+        &format!(
+            "# Topic\n{}{}",
+            section(H1, &body("one")),
+            section(H2, &body("two"))
+        ),
+    );
+    ok(&plan(&dir));
+    ok(&plan(&dir));
+    let unrelated = format!("depends: widget\nunrelated: paint, {}, {{}}\n", BASE_Q);
+    let text = read(&dir)
+        .replacen("depends: widget\n", &unrelated.replace("{}", H2), 1)
+        .replacen(
+            &format!("### {}\ndepends: widget\n", H2),
+            &format!("### {}\n{}", H2, unrelated.replace("{}", H1)),
+            1,
+        );
+    write(&dir, &text);
     ok(&approve(&dir));
 
     // The names became identifiers: a term by its id, a question of the file
@@ -793,17 +773,18 @@ fn approve_refuses_a_neighbour_on_no_line_and_turns_the_names_into_identifiers()
     );
 }
 
-// adr: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
+// adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
 #[test]
 fn an_unrelated_entry_that_names_nothing_is_refused_and_a_dropped_id_passes() {
     let dir = repo();
     write(&dir, &format!("# Topic\n{}", section(H1, &body("one"))));
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
     ok(&plan(&dir));
-    let settled = read(&dir);
+    ok(&plan(&dir));
+    let settled = read(&dir).replacen(
+        "depends: widget\n",
+        "depends: widget\nunrelated: paint\n",
+        1,
+    );
 
     write(
         &dir,
@@ -842,10 +823,7 @@ fn an_unrelated_entry_that_names_nothing_is_refused_and_a_dropped_id_passes() {
         ),
     );
     append_ledger_row(&dir, "dropped", dropped, &sha("gone"), "x y");
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
+    ok(&plan(&dir));
     let err = refused(&approve(&dir));
     assert!(err.contains("which is not a current decision"), "{}", err);
 }
@@ -872,21 +850,16 @@ fn the_readers_word_never_stops_a_command() {
         "{}",
         out
     );
-    write_lines(&dir, &out);
-    let out = ok(&plan(&dir));
     assert!(out.contains(": body inconsistent;"), "{}", out);
     assert!(out.contains(": body same;"), "{}", out);
     assert!(out.contains(": body closes B;"), "{}", out);
-    write_lines(&dir, &out);
     let out = ok(&plan(&dir));
     assert!(
         has_line(&out, &format!("owner runs: adr approve {}", REL)),
         "{}",
         out
     );
-    let text = read(&dir);
-    assert!(text.contains("unrelated: "), "{}", text);
-    // The words never stop approve: the lines are the ruling.
+    // The words never stop approve: the agent's lines are the ruling.
     ok(&approve(&dir));
 }
 
@@ -904,8 +877,6 @@ fn a_pair_the_reader_gives_no_word_for_is_a_finding_and_the_other_questions_are_
         &dir,
         &format!("# Topic\n{}{}", section(H1, &b1), section(H2, &body("two"))),
     );
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
     let before = rows(&dir).len();
     // The run ends well: the pair is a finding whose move is plan again,
     // the first question keeps no row, the second is read.
@@ -972,8 +943,7 @@ fn a_finding_the_agent_clears_is_printed_before_the_reader_reads() {
             section(H2, &body("two"))
         ),
     );
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
+    ok(&plan(&dir));
     let before = rows(&dir).len();
     // The run prints the finding and reads no body: the rows wait on it.
     let out = ok(&plan(&dir));
@@ -1025,21 +995,14 @@ fn planning_stops_without_the_model() {
     assert_eq!(rows(&dir).len(), before, "nothing was read");
 }
 
-// adr: bd94a89f-7142-4dab-b757-6482a718a0a0
+// adr: 623bb06f-1762-4a25-9f1b-90cb0923dbc8
 #[test]
 fn planning_stops_without_the_reader() {
     let dir = repo();
-    write(
-        &dir,
-        &format!(
-            "# Topic\n{}{}",
-            section(H1, &body("one")),
-            section(H2, &body("two"))
-        ),
-    );
+    two_headings(&dir);
     // The heading step needs no reader; the body step is the first that does.
-    let out = ok(&plan_with(&dir, &[("ADR_NO_READER", "1")]));
-    write_lines(&dir, &out);
+    ok(&plan_with(&dir, &[("ADR_NO_READER", "1")]));
+    rewrite(&dir, &[(H1, body("one")), (H2, body("two"))]);
     let (before, held) = (rows(&dir).len(), reader_text(&dir));
     let err = refused(&plan_with(&dir, &[("ADR_NO_READER", "1")]));
     // The repository is installed for no agent: there is no program to name.
@@ -1066,7 +1029,7 @@ fn plan_shows_a_set_letter_the_target_lacks_and_does_not_say_ready() {
         &format!("# Topic\n{}{}", section(H1, &body("one")), second),
     );
     let mut last = String::new();
-    for _ in 0..4 {
+    for _ in 0..2 {
         last = ok(&plan(&dir));
         assert!(
             last.contains("under an answer set naming option D, which it does not have"),
@@ -1074,11 +1037,6 @@ fn plan_shows_a_set_letter_the_target_lacks_and_does_not_say_ready() {
             last
         );
         assert!(!last.contains("owner runs: adr approve"), "{}", last);
-        let wanted = lines_wanted(&last);
-        if wanted.is_empty() {
-            break;
-        }
-        write_lines(&dir, &last);
     }
     assert!(!last.contains("owner runs: adr approve"), "{}", last);
 }
@@ -1093,8 +1051,6 @@ fn the_body_step_records_closes_and_a_letter_and_finds_no_word_outside_the_set()
         &format!("problem one [word:closes B@{}]", id),
     );
     write(&dir, &format!("# Topic\n{}", section(H1, &b)));
-    let out = ok(&plan(&dir));
-    write_lines(&dir, &out);
     let out = ok(&plan(&dir));
     assert!(
         out.contains(&format!("  decision \"{}\": body closes B; ", BASE_Q)),
@@ -1116,8 +1072,7 @@ fn the_body_step_records_closes_and_a_letter_and_finds_no_word_outside_the_set()
         let dir = repo();
         let b = body("one").replace("problem one", &format!("problem one {}", marker));
         write(&dir, &format!("# Topic\n{}", section(H1, &b)));
-        let out = ok(&plan(&dir));
-        write_lines(&dir, &out);
+        ok(&plan(&dir));
         let before = reader_text(&dir);
         let out = ok(&plan(&dir));
         assert!(
@@ -1134,7 +1089,7 @@ fn the_body_step_records_closes_and_a_letter_and_finds_no_word_outside_the_set()
     }
 }
 
-// adr: 60341be0-fd05-4281-92d7-668584a8539a
+// adr: d3be71e4-ce7b-43b0-86a8-e86868521f99
 #[test]
 fn the_neighbours_file_deleted_brings_back_the_heading_step_only_where_a_body_is_missing() {
     let dir = repo();
@@ -1147,8 +1102,7 @@ fn the_neighbours_file_deleted_brings_back_the_heading_step_only_where_a_body_is
         ),
     );
     for _ in 0..4 {
-        let out = ok(&plan(&dir));
-        write_lines(&dir, &out);
+        ok(&plan(&dir));
     }
     let out = ok(&plan(&dir));
     assert!(
@@ -1188,5 +1142,143 @@ fn the_neighbours_file_deleted_brings_back_the_heading_step_only_where_a_body_is
         )) && l.ends_with(&format!("agent runs: adr plan {}", REL))),
         "{}",
         shown
+    );
+}
+
+/// A repository whose pool holds more than ten records: the term `zebra`,
+/// which only a heading with that word is near, and eleven terms that the
+/// words of any body are near.
+fn wide_repo() -> PathBuf {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let mut content = String::from(
+        "# Terms\n\n## widget\nid: aaaaaaa0-9999-9999-9999-999999999999\ndefinition: widget\naliases: \n\n## zebra\nid: aaaaaaaf-9999-9999-9999-999999999999\ndefinition: zebra\naliases: \n",
+    );
+    for i in 1..=11 {
+        content.push_str(&format!(
+            "\n## t{i}\nid: aaaaaaa{i:x}-9999-9999-9999-999999999999\ndefinition: problem standard widget glow does the yes no\naliases: \n"
+        ));
+    }
+    approve_terms_via_ledger(&dir, &content);
+    dir
+}
+
+const ZEBRA_ID: &str = "aaaaaaaf-9999-9999-9999-999999999999";
+const HZ: &str = "Does the zebra glow?";
+
+/// The wide repository with one planned question about the zebra, and the
+/// hash of its body.
+fn zebra_planned() -> (PathBuf, String) {
+    let dir = wide_repo();
+    write(&dir, &format!("# Topic\n{}", section(HZ, &body("one"))));
+    for _ in 0..3 {
+        ok(&plan(&dir));
+    }
+    let rf = record::load(&dir.join(REL)).unwrap();
+    let hash = sha(&record::body_text(&rf, &rf.sections[0]));
+    (dir, hash)
+}
+
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
+#[test]
+fn a_neighbour_of_the_heading_outside_the_bodys_ten_is_read_once_at_the_body_step() {
+    let dir = wide_repo();
+    write(&dir, &format!("# Topic\n{}", section(HZ, "")));
+    let out = ok(&plan(&dir));
+    let recorded = neighbour_rows(&dir);
+    assert!(recorded.iter().any(|(_, id)| id == ZEBRA_ID), "{}", out);
+    assert!(rows(&dir).is_empty(), "the heading step read nothing");
+    write(&dir, &format!("# Topic\n{}", section(HZ, &body("one"))));
+    let out = ok(&plan(&dir));
+    let rf = record::load(&dir.join(REL)).unwrap();
+    let hash = sha(&record::body_text(&rf, &rf.sections[0]));
+    let at_body: Vec<reader::Row> = rows(&dir)
+        .into_iter()
+        .filter(|r| r.text_hash == hash)
+        .collect();
+    let zebra: Vec<&reader::Row> = at_body.iter().filter(|r| r.neighbour == ZEBRA_ID).collect();
+    assert_eq!(zebra.len(), 1, "{:?}", at_body);
+    assert!(!zebra[0].word.is_empty());
+    assert_eq!(zebra[0].prompt_hash, Kind::Body.prompt_hash());
+    // The body's ten are the other terms: the zebra is read in addition.
+    assert_eq!(at_body.len(), 10 + 1, "{:?}", at_body);
+    assert_eq!(
+        out.lines()
+            .filter(|l| l.starts_with("  term \"zebra\": body "))
+            .count(),
+        1,
+        "{}",
+        out
+    );
+}
+
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
+#[test]
+fn a_neighbour_in_the_headings_ten_and_the_bodys_ten_gets_one_row() {
+    let (dir, hash) = zebra_planned();
+    let recorded: Vec<String> = neighbour_rows(&dir).into_iter().map(|(_, id)| id).collect();
+    let at_body: Vec<String> = rows(&dir)
+        .into_iter()
+        .filter(|r| r.text_hash == hash)
+        .map(|r| r.neighbour)
+        .collect();
+    let mut once = at_body.clone();
+    once.sort();
+    once.dedup();
+    assert_eq!(
+        once.len(),
+        at_body.len(),
+        "no neighbour twice: {:?}",
+        at_body
+    );
+    let both = recorded
+        .iter()
+        .filter(|id| at_body.iter().any(|n| n == *id));
+    assert!(both.count() > 1, "{:?} {:?}", recorded, at_body);
+    for id in &recorded {
+        assert_eq!(at_body.iter().filter(|n| *n == id).count(), 1, "{}", id);
+    }
+}
+
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
+#[test]
+fn a_question_lacking_the_row_of_a_heading_neighbour_has_rows_missing_and_plan_reads_only_that_pair(
+) {
+    let (dir, hash) = zebra_planned();
+    let full = rows(&dir).len();
+    let rel = dir.join(REL);
+    let shown = |dir: &Path| stdout(&adr(dir, &["show", rel.to_str().unwrap()], &[], ""));
+    assert!(
+        !shown(&dir).contains("has no reader rows for its heading with its body"),
+        "{}",
+        shown(&dir)
+    );
+    // The rows as an earlier build wrote them: no row for the zebra.
+    let mut text = String::new();
+    for r in rows(&dir) {
+        if !(r.text_hash == hash && r.neighbour == ZEBRA_ID) {
+            text.push_str(&reader::row_line(&r));
+            text.push('\n');
+        }
+    }
+    std::fs::write(dir.join("adrdom/state/reader.tsv"), text).unwrap();
+    assert_eq!(rows(&dir).len(), full - 1);
+    let out = shown(&dir);
+    assert!(
+        out.contains(&format!(
+            "{}: \"{}\" has no reader rows for its heading with its body",
+            REL, HZ
+        )),
+        "{}",
+        out
+    );
+    let out = ok(&plan(&dir));
+    let now = rows(&dir);
+    assert_eq!(now.len(), full, "{}", out);
+    assert_eq!(now.last().unwrap().neighbour, ZEBRA_ID);
+    assert!(
+        !shown(&dir).contains("has no reader rows"),
+        "{}",
+        shown(&dir)
     );
 }

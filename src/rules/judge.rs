@@ -43,7 +43,7 @@ pub struct TopicFileJudge<'a> {
 }
 
 /// Whether the rules of the planning steps (a question with no body, the
-/// reader's rows, every neighbour on a line) judge a topic file: while it
+/// reader's rows) judge a topic file: while it
 /// awaits approval, its plan on the way to the owner. An approved file is
 /// judged by the rules of its record alone, so a heading approved before
 /// those rules is no finding. The one scope `approve` and `check` both read
@@ -59,8 +59,7 @@ pub fn planning_rules_apply(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
 /// headings, a heading in another topic file, an answer-set letter its
 /// target has no option for, and, while `planning_rules_apply`, a question
 /// not yet asked with no body and the planning records of a question not
-/// yet asked (the record of each step and every neighbour on a
-/// line). The one judgement `approve` refuses
+/// yet asked (the record of each step). The one judgement `approve` refuses
 /// on (per "Does a command refuse what check passes?", fe14991d A).
 pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
     let (rel, rf, led) = (j.rel, j.rf, j.led);
@@ -269,7 +268,6 @@ fn planning_steps(
             Vec::new()
         }
         crate::plan::NextMove::Plan => planning.rows_missing_at_step(),
-        crate::plan::NextMove::WriteLines => planning.line_refusals(),
         crate::plan::NextMove::WriteBodies(_) => no_body_refusals(rel, rf, led),
         crate::plan::NextMove::Ready => Vec::new(),
     }

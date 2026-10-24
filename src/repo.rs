@@ -22,8 +22,9 @@ pub const ROLES_PATH: &str = "adrdom/state/roles.tsv";
 pub const READER_PATH: &str = "adrdom/state/reader.tsv";
 /// The neighbours file: an untracked file holding one row for each neighbour
 /// the tool brought for a heading, the heading hash and the neighbour's
-/// identifier. The reader reads none of them ("Does the reader read a
-/// neighbour of a heading?", 60341be0: no), so the row holds no word.
+/// identifier. The row holds no word: the body step reads each neighbour
+/// ("Does the body step read the neighbours brought for the heading?",
+/// e1cbe055).
 /// `install`'s gitignore keeps it out of git.
 pub const NEIGHBOURS_PATH: &str = "adrdom/state/neighbours.tsv";
 /// The repo's own terms file.

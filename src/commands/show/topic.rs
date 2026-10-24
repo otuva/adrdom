@@ -34,7 +34,7 @@ pub(super) fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Ve
             Status::File(prose.status),
             Some(prose),
         ));
-        lines.extend(change_lines(prose, None, &r.names, true));
+        lines.extend(change_lines(prose, None, &r.names));
     }
     let shown = (views.neighbours)
         .then(|| plan::load_shown_with(rf, &r.terms_list, led, &r.index().planning));
@@ -67,13 +67,11 @@ pub(super) fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Ve
                 change,
                 Some(&format!("### {}", sec.heading_text)),
                 &r.names,
-                views.unrelated,
             )),
             None => lines.extend(reference_and_body_lines(
                 &approval::question_lines(rf, sec),
                 st,
                 &r.names,
-                views.unrelated,
                 views.dependents || !is_answered(st),
             )),
         }
@@ -128,7 +126,6 @@ pub(super) fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Ve
             change,
             Some(&format!("### {}", heading)),
             &r.names,
-            views.unrelated,
         ));
     }
     lines
@@ -167,13 +164,12 @@ fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
 /// question approved as it stands.
 /// `show_refs` is whether the reference lines print: those of an answered
 /// question do not, unless `--dependents` asks (per "Does show print the
-/// reference lines of a question that is answered?", d1d6fed2 A). `--unrelated`
-/// prints the `unrelated:` line of every question, answered or not.
+/// reference lines of a question that is answered?", d1d6fed2 A); the
+/// `unrelated:` line is one of them.
 pub(super) fn reference_and_body_lines(
     qlines: &[String],
     st: QuestionStatus,
     names: &HashMap<String, String>,
-    unrelated: bool,
     show_refs: bool,
 ) -> Vec<Line> {
     // The `id:` line is printed only as part of a change (what approve signs
@@ -184,16 +180,7 @@ pub(super) fn reference_and_body_lines(
         .cloned()
         .collect();
     let (refs, body) = reference_and_body(&qlines);
-    let refs: Vec<String> = refs
-        .into_iter()
-        .filter(|l| {
-            if l.starts_with("unrelated:") {
-                unrelated
-            } else {
-                show_refs
-            }
-        })
-        .collect();
+    let refs: Vec<String> = if show_refs { refs } else { Vec::new() };
     let body = if st == QuestionStatus::Asked {
         body
     } else {
@@ -355,7 +342,6 @@ fn struck_superseded_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Li
                     &approval::question_lines(old, sec),
                     QuestionStatus::Superseded,
                     &r.names,
-                    views.unrelated,
                     true,
                 ));
             }

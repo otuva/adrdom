@@ -147,12 +147,6 @@ pub const QUESTION_HAS_BODY: Rule = Rule {
     decisions: &["f5eeaacf-1c9f-478b-8a97-2df1aaf39458"],
 };
 
-/// Decision: Does every neighbour get a line under its heading?
-pub const NEIGHBOUR_IS_ON_A_LINE: Rule = Rule {
-    name: "neighbour_is_on_a_line",
-    decisions: &["c6451ecc-17a9-447e-a9c9-fe9b35ec789c"],
-};
-
 /// Decision: What does a reference in a topic file carry?
 pub const UNRELATED_ENTRY_NAMES_ONE_DECISION: Rule = Rule {
     name: "unrelated_entry_names_one_decision",
@@ -1030,7 +1024,6 @@ pub const ALL: &[&Rule] = &[
     &STAND_QUESTION_LIMIT,
     &DEPENDS_LINE_QUESTION_LIMIT,
     &QUESTION_HAS_BODY,
-    &NEIGHBOUR_IS_ON_A_LINE,
     &UNRELATED_ENTRY_NAMES_ONE_DECISION,
     &SUPERSEDES_TARGET_IS_CURRENT,
     &SUPERSEDES_NAMES_DEPENDENTS,

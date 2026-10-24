@@ -403,7 +403,7 @@ pub fn record_refusals(
         None,
     ));
 
-    // Per "Does every neighbour get a line under its heading?": an
+    // Per "What does a reference in a topic file carry?": an
     // `unrelated:` entry names a current decision, a term, another question
     // of the file or a dropped question.
     for said in crate::plan::unrelated_refusals(rel, rf, terms_list, cross_file_headings, led) {

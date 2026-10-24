@@ -1,25 +1,29 @@
 //! Planning a topic file: the neighbours of each question not yet asked,
 //! what the reader said about those of its body, which neighbour is on a
-//! line, and what is missing. `adr plan`, `adr approve` and show all read it.
+//! `depends:` or `supersedes:` line, and what is missing. `adr plan`,
+//! `adr approve` and show all read it.
 //!
 //! "What does the agent do to plan a topic file?"
 //! (46fc51ff-66b9-4841-a953-ae0d4c2fc424 A): write headings; get neighbours;
-//! write lines; write bodies; get neighbours of the full questions; ask
+//! write bodies; get neighbours of the full questions; ask
 //! approval. "Does a planning step run without the record of the step
 //! before?" (d3be71e4-ce7b-43b0-86a8-e86868521f99 A): no; the records are
 //! the neighbours file, the reader file's rows and the lines the agent wrote.
+//! "Does the agent write an unrelated line?"
+//! (a065dced-a3b3-467c-b299-17bb70742046 A): no; a line is a `depends:` or
+//! `supersedes:` entry, and a neighbour on neither needs none.
 //!
 //! The records of a question are two. The neighbours file holds, at the
 //! heading hash (`record::heading_hash`), the current decisions and terms
-//! brought for the heading, with no word ("Does the reader read a neighbour
-//! of a heading?", 60341be0-fd05-4281-92d7-668584a8539a A: no). The reader
-//! file's rows at the body hash (`record::body_hash`) hold the neighbours of
-//! the heading with its body: current decisions and terms, and the other
-//! questions of the file, whose key is `text:` and their own body hash. A
+//! brought for the heading, with no word. The reader file's rows at the
+//! body hash (`record::body_hash`) hold the neighbours of the heading with
+//! its body: current decisions and terms, among them each neighbour of the
+//! heading still in the pool ("Does the body step read the neighbours
+//! brought for the heading?", e1cbe055-5638-41ea-853e-13991b945ae1 A: yes),
+//! and the other questions of the file, whose key is `text:` and their own
+//! body hash. The body step is not done until each has its row. A
 //! question whose body rows are on record has its heading step done, whether
-//! or not the neighbours file holds its heading. A line is a `depends:`,
-//! `supersedes:` or `unrelated:` entry ("Does every neighbour get a line under its
-//! heading?", c6451ecc-17a9-447e-a9c9-fe9b35ec789c A). The reader's word
+//! or not the neighbours file holds its heading. The reader's word
 //! never stops anything ("Does a reader's word stop a command?",
 //! e78b8297-fd89-4e09-9c3e-9eeb0fd0f654 A).
 //!
@@ -71,7 +75,6 @@ pub enum Step {
 pub enum LineKind {
     Depends,
     Supersedes,
-    Unrelated,
 }
 
 impl LineKind {
@@ -79,7 +82,6 @@ impl LineKind {
         match self {
             LineKind::Depends => "depends",
             LineKind::Supersedes => "supersedes",
-            LineKind::Unrelated => "unrelated",
         }
     }
 }
@@ -90,12 +92,14 @@ pub struct Neighbour {
     pub kind: NKind,
     /// The decision's heading, the term's name, or the question's heading.
     pub name: String,
-    /// The reader's word, `None` for a neighbour of a heading: the reader
-    /// does not read it.
+    /// The neighbour's key in the rows: the pool identifier, or `text:` and
+    /// the body hash of a question of the file.
+    pub key: String,
+    /// The reader's word, `None` for a neighbour of a heading: it has none
+    /// until the body step reads it.
     pub word: Option<String>,
     /// The reader's sentence of reason, `None` with no word.
     pub reason: Option<String>,
-    pub on_line: bool,
     /// The line the neighbour is on, `None` when it is on no line.
     pub line: Option<LineKind>,
 }
@@ -131,8 +135,6 @@ pub struct Planning {
 pub enum NextMove {
     /// Some question has no record at a step: `adr plan`.
     Plan,
-    /// Some neighbour is on no line: the agent writes the lines.
-    WriteLines,
     /// Some headings have no body: the agent writes them (their headings).
     WriteBodies(Vec<String>),
     /// Every record is there: the owner approves.
@@ -301,8 +303,8 @@ pub fn unrelated_refusals(
     out
 }
 
-/// What every line of question `idx` names, from its `depends:`,
-/// `supersedes:` and `unrelated:` lines.
+/// What every line of question `idx` names, from its `depends:` and
+/// `supersedes:` lines.
 fn line_targets(
     idx: usize,
     rf: &RecordFile,
@@ -328,11 +330,6 @@ fn line_targets(
         if let Ok(id) = depends::resolve_supersedes(&e, cross, led) {
             out.entry(Target::Decision(id))
                 .or_insert(LineKind::Supersedes);
-        }
-    }
-    for e in section_unrelated_entries(idx, rf, terms_list, cross, led) {
-        if let Ok(t) = resolve_ref(&e, rf, idx, terms_list, cross, led) {
-            out.entry(t).or_insert(LineKind::Unrelated);
         }
     }
     out
@@ -379,11 +376,6 @@ fn describe(
         .cloned()
         .unwrap_or_else(|| key.to_string());
     Some((NKind::Decision, name, Target::Decision(key.to_string())))
-}
-
-/// The pool is empty: no current decision and no term that is not retired.
-fn pool_is_empty(all: &[RecordFile], led: &Ledger, terms_list: &[Term]) -> bool {
-    index::pool(all, led, terms_list).is_empty()
 }
 
 /// Reads the planning state of the questions of `rf` that are not yet
@@ -447,7 +439,10 @@ pub struct Shared {
     /// The kinds read at a hash by a row of another prompt or model.
     stale: HashMap<Kind, HashSet<String>>,
     current: HashMap<Kind, String>,
-    pool_empty: bool,
+    /// The identifiers of the pool (`index::pool`): every current decision
+    /// and every term that is not retired. Empty when there is nothing to be
+    /// near.
+    pool: HashSet<String>,
 }
 
 impl Shared {
@@ -497,7 +492,10 @@ impl Shared {
             by_hash,
             stale,
             current,
-            pool_empty: pool_is_empty(all, led, terms_list),
+            pool: index::pool(all, led, terms_list)
+                .into_iter()
+                .map(|r| r.id)
+                .collect(),
         }
     }
 }
@@ -606,9 +604,9 @@ fn load_inner(
         by_hash,
         stale,
         current,
-        pool_empty,
+        pool,
     } = shared;
-    let pool_empty = *pool_empty;
+    let pool_empty = pool.is_empty();
     // Borrowed from the shared index: no copy per lookup.
     let rows_at = |hash: &str| by_hash.get(hash).map(|is| is.iter().map(|&i| &rows[i]));
     // Rows of a kind at a hash, none of them current.
@@ -658,9 +656,9 @@ fn load_inner(
                     out.push(Neighbour {
                         kind,
                         name,
+                        key: key.to_string(),
                         word: Some(r.word.clone()),
                         reason: Some(r.reason.clone()),
-                        on_line: targets.contains_key(&target),
                         line: targets.get(&target).copied(),
                     });
                 }
@@ -685,9 +683,9 @@ fn load_inner(
                     out.push(Neighbour {
                         kind,
                         name,
+                        key: key.clone(),
                         word: None,
                         reason: None,
-                        on_line: targets.contains_key(&target),
                         line: targets.get(&target).copied(),
                     });
                 }
@@ -708,11 +706,28 @@ fn load_inner(
             let body_stale = body_hash.as_deref().is_some_and(|h| {
                 (!pool_empty && is_stale(h, Kind::Body)) || (others > 0 && is_stale(h, Kind::Plan))
             });
-            let body_done =
-                has_body && !body_stale && (b_rows.is_some() || (pool_empty && others == 0));
+            let h_rows = heading_neighbours(&heading_hash, &targets);
+            // Each neighbour on record for the heading and still in the pool
+            // has its row at the body hash: the pool `adr plan` reads the
+            // pairs from, so a neighbour it cannot read is never waited on.
+            let heading_read = h_rows
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .filter(|h| pool.contains(&h.key))
+                .all(|h| {
+                    b_rows
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|b| b.key == h.key)
+                });
+            let body_done = has_body
+                && !body_stale
+                && heading_read
+                && (b_rows.is_some() || (pool_empty && others == 0));
             // A question whose body step is done has its heading step done, with
             // no neighbours of its own when none is on record.
-            let h_rows = heading_neighbours(&heading_hash, &targets);
             let heading_done = h_rows.is_some() || pool_empty || body_done;
             questions.push(Question {
                 idx: i,
@@ -754,26 +769,10 @@ impl Planning {
         self.questions.iter().filter(|q| !q.has_body).collect()
     }
 
-    /// Every neighbour of `step` that is on no line, with its question.
-    pub fn lines_missing(&self, step: Step) -> Vec<(&Question, &Neighbour)> {
-        let mut out = Vec::new();
-        for q in &self.questions {
-            let ns = match step {
-                Step::Heading => &q.heading_neighbours,
-                Step::Body => &q.body_neighbours,
-            };
-            out.extend(ns.iter().filter(|n| !n.on_line).map(|n| (q, n)));
-        }
-        out
-    }
-
     /// The next move, in the order of the steps.
     pub fn next(&self) -> NextMove {
         if !self.missing_heading().is_empty() {
             return NextMove::Plan;
-        }
-        if !self.lines_missing(Step::Heading).is_empty() {
-            return NextMove::WriteLines;
         }
         let bare = self.without_body();
         if !bare.is_empty() {
@@ -782,37 +781,7 @@ impl Planning {
         if !self.missing_body().is_empty() {
             return NextMove::Plan;
         }
-        if !self.lines_missing(Step::Body).is_empty() {
-            return NextMove::WriteLines;
-        }
         NextMove::Ready
-    }
-
-    /// What approve refuses at the step of writing lines: each neighbour on
-    /// no line. Needs neither the model nor the reader.
-    pub fn line_refusals(&self) -> Vec<msg::Said> {
-        self.questions
-            .iter()
-            .flat_map(|q| self.lines_missing_of(q))
-            .collect()
-    }
-
-    /// One finding per neighbour on no line: a neighbour read at both steps
-    /// is named once.
-    fn lines_missing_of(&self, q: &Question) -> Vec<msg::Said> {
-        let mut out: Vec<msg::Said> = Vec::new();
-        for n in q
-            .heading_neighbours
-            .iter()
-            .chain(&q.body_neighbours)
-            .filter(|n| !n.on_line)
-        {
-            let m = msg::plan_line_missing(&self.rel, &q.heading, n.kind.label(), &n.name);
-            if !out.iter().any(|o| o.found == m.found) {
-                out.push(m);
-            }
-        }
-        out
     }
 
     /// The records missing at the step `adr plan` takes next: every heading's
@@ -888,24 +857,25 @@ fn row_kind(neighbour: &str) -> Kind {
 }
 
 /// The reader's pairs for the question at `idx` with its body: each
-/// neighbour of the pool (`near`), then each of the other questions of the
-/// file given in `own` as (index, text) nearest first. A pair carries the
-/// letters of the question's options.
+/// neighbour of the pool (`near`, identifier and text, the body's nearest
+/// then the heading's), then each of the other questions of the file given
+/// in `own` nearest first. A pair carries the letters of the question's
+/// options.
 pub fn body_pairs(
     rf: &RecordFile,
     idx: usize,
-    near: &[index::Neighbour],
+    near: &[(String, String)],
     own: &[usize],
 ) -> Vec<Pair> {
     let new_text = record::body_text(rf, &rf.sections[idx]);
     let letters: Vec<char> = rf.sections[idx].options.iter().map(|o| o.letter).collect();
     let mut out: Vec<Pair> = near
         .iter()
-        .map(|n| Pair {
+        .map(|(id, text)| Pair {
             kind: Kind::Body,
             new_text: new_text.clone(),
-            neighbour: n.id.clone(),
-            neighbour_text: n.text.clone(),
+            neighbour: id.clone(),
+            neighbour_text: text.clone(),
             letters: letters.clone(),
         })
         .collect();

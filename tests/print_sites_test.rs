@@ -195,31 +195,11 @@ fn every_command_names_the_move_approve_refuses_with() {
                 gate_question("Does the widget hold?", "the widget breaks.")
             ),
         ),
-        (
-            "neighbour on no line",
-            format!(
-                "# Gate\n\n{}",
-                gate_question("Does the widget hold?", "the widget breaks.")
-            ),
-        ),
     ];
     for (case, content) in cases {
-        let dir = if case == "neighbour on no line" {
-            let dir = init_repo();
-            assert!(adr(&dir, &["install"], &[], "").status.success());
-            approve_terms_with(&dir, &["widget", "paint"]);
-            dir
-        } else {
-            widget_repo()
-        };
+        let dir = widget_repo();
         let rec = write_record(&dir, REL, &content);
-        if case == "neighbour on no line" {
-            assert!(adr(&dir, &["plan", rec.to_str().unwrap()], &[], "")
-                .status
-                .success());
-        } else {
-            plan_record(&dir, REL);
-        }
+        plan_record(&dir, REL);
         let out = approve_unplanned(&dir, &rec);
         assert!(!out.status.success(), "{}: approve refuses", case);
         assert_every_command_names(&dir, &rec, &refusal_lines(&out, "approve: "), case, true);
@@ -549,22 +529,6 @@ fn every_planning_stage_prints_one_report_in_every_command() {
     let out = plan(&dir);
     assert!(!assert_one_report(&dir, Some(&out), "headings planned").is_empty());
     assert!(
-        report_of(&out).iter().any(|l| l.contains("is on no line")),
-        "{}",
-        out
-    );
-
-    std::fs::write(
-        &path,
-        add_unrelated(
-            &std::fs::read_to_string(&path).unwrap(),
-            &lines_wanted(&out),
-        ),
-    )
-    .unwrap();
-    let out = plan(&dir);
-    assert!(!assert_one_report(&dir, Some(&out), "lines written").is_empty());
-    assert!(
         report_of(&out).iter().any(|l| l.contains("[no body]")),
         "{}",
         out
@@ -591,21 +555,6 @@ fn every_planning_stage_prints_one_report_in_every_command() {
         &format!("\nStandard: plain words.\n\n{}", GATE_OPTIONS),
     );
     std::fs::write(&path, text).unwrap();
-    let out = plan(&dir);
-    assert!(
-        !assert_one_report(&dir, Some(&out), "bodies written").is_empty(),
-        "{}",
-        out
-    );
-
-    std::fs::write(
-        &path,
-        add_unrelated(
-            &std::fs::read_to_string(&path).unwrap(),
-            &lines_wanted(&out),
-        ),
-    )
-    .unwrap();
     let out = plan(&dir);
     assert!(
         assert_one_report(&dir, Some(&out), "ready").is_empty(),
@@ -662,19 +611,7 @@ fn every_judged_state_prints_one_report_in_every_command() {
         &format!("# Gate\n\n### Does the widget hold?\ndepends: widget, Widget\n\nProblem: the widget holds.\n\nStandard: plain words.\n\n{}", GATE_OPTIONS),
     );
     let plan = |dir: &Path| stdout(&adr(dir, &["plan", path.to_str().unwrap()], &[], ""));
-    let mut out = plan(&dir);
-    for _ in 0..4 {
-        let wanted = lines_wanted(&out);
-        if wanted.is_empty() {
-            break;
-        }
-        std::fs::write(
-            &path,
-            add_unrelated(&std::fs::read_to_string(&path).unwrap(), &wanted),
-        )
-        .unwrap();
-        out = plan(&dir);
-    }
+    let out = plan(&dir);
     let findings = assert_one_report(&dir, Some(&out), "a depends line naming one term twice");
     assert!(
         findings
