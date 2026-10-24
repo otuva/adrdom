@@ -164,8 +164,7 @@ fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
 /// question approved as it stands.
 /// `show_refs` is whether the reference lines print: those of an answered
 /// question do not, unless `--dependents` asks (per "Does show print the
-/// reference lines of a question that is answered?", d1d6fed2 A); the
-/// `unrelated:` line is one of them.
+/// reference lines of a question that is answered?", d1d6fed2 A).
 pub(super) fn reference_and_body_lines(
     qlines: &[String],
     st: QuestionStatus,

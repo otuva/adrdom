@@ -513,11 +513,7 @@ fn a_heading_struck_by_a_committed_plan_change_does_not_hold_a_committed_deletio
     let text = std::fs::read_to_string(&record).unwrap();
     let kept = text[..text.find("### 1.2").unwrap()].trim_end().to_string() + "\n";
     // The entry naming the struck heading goes with it.
-    let kept: String = kept
-        .lines()
-        .filter(|l| !l.starts_with("unrelated:"))
-        .map(|l| format!("{}\n", l))
-        .collect();
+    let kept: String = kept.lines().map(|l| format!("{}\n", l)).collect();
     std::fs::write(&record, &kept).unwrap();
     approve_record(&dir, REL);
     commit(&dir);
@@ -591,11 +587,7 @@ fn an_uncommitted_approval_of_a_strike_falls_back_to_the_newest_committed_plan()
     commit(&dir);
     let text = std::fs::read_to_string(&record).unwrap();
     let kept = text[..text.find("### 1.2").unwrap()].trim_end().to_string() + "\n";
-    let kept: String = kept
-        .lines()
-        .filter(|l| !l.starts_with("unrelated:"))
-        .map(|l| format!("{}\n", l))
-        .collect();
+    let kept: String = kept.lines().map(|l| format!("{}\n", l)).collect();
     std::fs::write(&record, &kept).unwrap();
     approve_record(&dir, REL);
     // Not committed: no committed version matches the latest approval, so the

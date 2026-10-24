@@ -94,6 +94,11 @@ pub const ID_PREFIX: &str = "id: ";
 pub const TERMS_PREFIX: &str = "terms: ";
 pub const DEPENDS_PREFIX: &str = "depends: ";
 pub const SUPERSEDES_PREFIX: &str = "supersedes: ";
+/// A line of an earlier record form, which no question carries any more
+/// (per "Does the agent write an unrelated line?"). Under an answered
+/// question it is left where it stands: in the section and question hashes
+/// as any line of the text, read for nothing, never printed. Under any other
+/// question it is a stray line.
 pub const UNRELATED_PREFIX: &str = "unrelated: ";
 /// A blame file's name is no word of the question: no tell and no word
 /// count reads a `blame:` line (per "What does a question carry of the blame

@@ -297,12 +297,13 @@ fn do_approve_blame(
 }
 
 /// Inserts a freshly minted id directly after each skeleton section's
-/// `depends:` line (or its `supersedes:`, `unrelated:` or `blame:` line,
-/// directly under it) (per "What does a reference in a topic file carry?"; no blank padding, the
-/// same bare single-line insert `approve` uses for `terms:` after `id:`). Every section here has
-/// already passed `record_refusals`'s "has no depends line" check, so the search below should never
-/// fail -- but that invariant lives in a different function now, so a future reorder of the two
-/// reports an error instead of panicking.
+/// `depends:` line (or its `supersedes:` or `blame:` line, directly under it)
+/// (per "What does a reference in a topic file carry?"; no blank padding, the
+/// same bare single-line insert `approve` uses for `terms:` after `id:`).
+/// Every section here has already passed `record_refusals`'s "has no depends
+/// line" check, so the search below should never fail -- but that invariant
+/// lives in a different function now, so a future reorder of the two reports
+/// an error instead of panicking.
 pub(super) fn insert_missing_ids(
     rf: &RecordFile,
     mut work_lines: Vec<String>,
@@ -317,14 +318,13 @@ pub(super) fn insert_missing_ids(
                     finding(Class::Plan, msg::no_depends_line_bare(&sec.heading_text))
                 })?;
             // The plan lines come first, then the id: after the
-            // `supersedes:`, `unrelated:` and `blame:` lines when the heading
-            // has them (directly under `depends:`), else after `depends:`.
+            // `supersedes:` and `blame:` lines when the heading has them
+            // (directly under `depends:`), else after `depends:`.
             let mut after = depends_idx;
-            while work_lines.get(after + 1).is_some_and(|l| {
-                l.starts_with("supersedes: ")
-                    || l.starts_with("unrelated: ")
-                    || l.starts_with("blame: ")
-            }) {
+            while work_lines
+                .get(after + 1)
+                .is_some_and(|l| l.starts_with("supersedes: ") || l.starts_with("blame: "))
+            {
                 after += 1;
             }
             let new_id = Uuid::new_v4().to_string();

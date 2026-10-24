@@ -11,12 +11,11 @@ pub(super) struct BodyScan {
     pub(super) id: Option<String>,
     pub(super) id_count: usize,
     pub(super) supersedes: Vec<String>,
-    pub(super) unrelated: Vec<String>,
     pub(super) blame: Vec<BlameEntry>,
     pub(super) depends: Vec<Dep>,
     pub(super) depends_errors: Vec<String>,
-    /// "supersedes: second supersedes line, line N" / "unrelated: second
-    /// unrelated line, line N" / "blame: second blame line, line N":
+    /// "supersedes: second supersedes line, line N" / "blame: second blame
+    /// line, line N":
     /// a82db5b7 holds every reference list on one line, so a second line of
     /// any is refused, the same as a second depends line, rather than
     /// silently ignored.
@@ -56,8 +55,10 @@ pub(super) fn scan_body(
     let mut reference_line_errors: Vec<String> = Vec::new();
     let mut terms_errors: Vec<String> = Vec::new();
     let mut supersedes_line_seen = false;
-    let mut unrelated: Vec<String> = Vec::new();
-    let mut unrelated_line_seen = false;
+    // An `unrelated:` line of an earlier record form (`tells::UNRELATED_PREFIX`):
+    // left where it stands under an answered question, a stray line under any
+    // other. Judged once the answer line is known.
+    let mut unrelated_lines: Vec<usize> = Vec::new();
     let mut blame: Vec<BlameEntry> = Vec::new();
     let mut blame_line_seen = false;
     let mut terms_line = None;
@@ -140,18 +141,8 @@ pub(super) fn scan_body(
                 .collect();
             continue;
         }
-        if let Some(v) = kv(line, "unrelated") {
-            if unrelated_line_seen {
-                reference_line_errors
-                    .push(format!("unrelated: second unrelated line, line {}", j + 1));
-                continue;
-            }
-            unrelated_line_seen = true;
-            unrelated = v
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
+        if line.starts_with(crate::tells::UNRELATED_PREFIX) {
+            unrelated_lines.push(j);
             continue;
         }
         if let Some(v) = kv(line, "blame") {
@@ -240,6 +231,19 @@ pub(super) fn scan_body(
         stray_errors.push(format!("stray line {}", j + 1));
     }
 
+    if answer_line.is_none() {
+        for j in unrelated_lines {
+            stray_errors.push(format!("stray line {}", j + 1));
+        }
+        // In line order, as the loop above reports them.
+        stray_errors.sort_by_key(|e| {
+            e.rsplit(' ')
+                .next()
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(0)
+        });
+    }
+
     // A fourth option is a shape error; the minimum (two, unless the
     // heading is a skeleton) is enforced by the caller, which alone knows
     // whether the body is a skeleton.
@@ -267,7 +271,6 @@ pub(super) fn scan_body(
         id,
         id_count,
         supersedes,
-        unrelated,
         blame,
         depends,
         depends_errors,
@@ -288,12 +291,13 @@ pub(super) fn scan_body(
 
 /// A heading whose body holds only blank lines, `depends:` lines, a
 /// `supersedes:` line (part of the plan, per "Does approve turn the
-/// supersedes line into identifiers?"), an `unrelated:` line, a `blame:`
-/// line (per "What does a question carry of the blame file it came from?"),
-/// and an `id:` line (per "What stops a question that has no depends line?" and "What does a
-/// reference in a topic file carry?"): needs no id of its own to stay a skeleton, but `approve`
-/// gives every heading an id, skeletons included, so a skeleton must stay a skeleton once it has
-/// one. A `depends:` line with nothing after it, indented or not.
+/// supersedes line into identifiers?"), a `blame:` line (per "What does a
+/// question carry of the blame file it came from?"), and an `id:` line (per
+/// "What stops a question that has no depends line?" and "What does a
+/// reference in a topic file carry?"): needs no id of its own to stay a
+/// skeleton, but `approve` gives every heading an id, skeletons included, so
+/// a skeleton must stay a skeleton once it has one. A `depends:` line with
+/// nothing after it, indented or not.
 fn is_bare_depends_line(line: &str) -> bool {
     line.trim() == "depends:"
 }
@@ -309,7 +313,6 @@ pub(super) fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> b
             || t.starts_with("depends: ")
             || is_bare_depends_line(t)
             || t.starts_with("supersedes: ")
-            || t.starts_with("unrelated: ")
             || t.starts_with("blame: ")
             || t.starts_with("id: ")
     })

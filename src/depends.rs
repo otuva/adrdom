@@ -170,8 +170,8 @@ pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&
 /// happen to carry the exact same one, in different files -- `check`'s
 /// cross-file duplicate-heading check flags that separately). Built once
 /// per command run and passed to its callers, rather than rebuilt per
-/// entry or per file. It serves the `supersedes:` and `unrelated:` lines
-/// (an entry may name a current decision of another file by its heading)
+/// entry or per file. It serves the `supersedes:` line (an entry may name a
+/// current decision of another file by its heading)
 /// and the depends finding in `rules::derive_finding`, which uses it to
 /// tell a heading entry that names a decision of another file from one
 /// that names nothing. A `depends:` entry is resolved against the file and

@@ -74,31 +74,3 @@ pub fn question_without_body(rel: &str, heading: &str) -> Said {
         Next::agent(Act::Writes(Part::Body(vec![heading.to_string()]))),
     )
 }
-
-/// An `unrelated:` entry names no current decision, no term, no other
-/// question of the file and no dropped question.
-pub fn unrelated_names_nothing(rel: &str, heading: &str, entry: &str) -> Said {
-    said(
-        &rule::UNRELATED_ENTRY_NAMES_SOMETHING,
-        format!(
-            "{}: \"{}\": the unrelated entry \"{}\" names no current decision, term or question of this file",
-            rel, heading, entry
-        ),
-        Next::agent(Act::Rewrites(Part::Entry)),
-    )
-}
-
-/// An `unrelated:` entry is the heading of current decisions in several files.
-pub fn unrelated_ambiguous(rel: &str, heading: &str, entry: &str, files: &[String]) -> Said {
-    said(
-        &rule::UNRELATED_ENTRY_NAMES_ONE_DECISION,
-        format!(
-            "{}: \"{}\": the unrelated entry \"{}\" is the heading of current decisions in {}",
-            rel,
-            heading,
-            entry,
-            files.join(", ")
-        ),
-        ambiguous_heading_next(),
-    )
-}

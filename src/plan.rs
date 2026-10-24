@@ -11,7 +11,8 @@
 //! the neighbours file, the reader file's rows and the lines the agent wrote.
 //! "Does the agent write an unrelated line?"
 //! (a065dced-a3b3-467c-b299-17bb70742046 A): no; a line is a `depends:` or
-//! `supersedes:` entry, and a neighbour on neither needs none.
+//! `supersedes:` entry, and a neighbour on neither needs none. An
+//! `unrelated:` line of an earlier record form is `tells::UNRELATED_PREFIX`.
 //!
 //! The records of a question are two. The neighbours file holds, at the
 //! heading hash (`record::heading_hash`), the current decisions and terms
@@ -152,13 +153,6 @@ pub enum Target {
     Dropped(String),
 }
 
-/// Why an `unrelated:` entry names nothing.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RefError {
-    NoName,
-    Ambiguous(Vec<String>),
-}
-
 /// What a line holds for question `i` of the file: a question of the plan,
 /// or the decision it is once it is current.
 fn question_target(rf: &RecordFile, i: usize, led: &Ledger) -> Target {
@@ -166,141 +160,6 @@ fn question_target(rf: &RecordFile, i: usize, led: &Ledger) -> Target {
         Some(id) if state::is_current(led, id) => Target::Decision(id.clone()),
         _ => Target::Question(i),
     }
-}
-
-/// What an `unrelated:` entry names: a question of `rf` by heading or id
-/// (never `self_idx`, the question the line is under), a current decision
-/// by id or by heading, a term by id, name or alias (a retired one too: the line says it is
-/// unrelated, and that stays true), or
-/// the identifier of a dropped or superseded question.
-pub fn resolve_ref(
-    entry: &str,
-    rf: &RecordFile,
-    self_idx: usize,
-    terms_list: &[Term],
-    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
-    led: &Ledger,
-) -> Result<Target, RefError> {
-    let entry = entry.trim();
-    if let Some(i) = rf
-        .sections
-        .iter()
-        .position(|s| s.id.as_deref() == Some(entry) || s.heading_text.trim() == entry)
-    {
-        return if i == self_idx {
-            Err(RefError::NoName)
-        } else {
-            Ok(question_target(rf, i, led))
-        };
-    }
-    if state::is_current(led, entry) {
-        return Ok(Target::Decision(entry.to_string()));
-    }
-    let lower = entry.to_lowercase();
-    for t in terms_list {
-        let key = t.id.clone().unwrap_or_else(|| t.name.clone());
-        if key == entry
-            || t.name.trim().to_lowercase() == lower
-            || t.aliases.iter().any(|a| a.trim().to_lowercase() == lower)
-        {
-            return Ok(Target::Term(key));
-        }
-    }
-    // A superseded question's section is struck from every file (adr-code:
-    // b5ca161f-c88c-4f02-a9d9-1d406cf3a252): the ledger alone holds it, as
-    // it holds a dropped one.
-    if state::is_dropped(led, entry) || state::is_superseded(led, entry) {
-        return Ok(Target::Dropped(entry.to_string()));
-    }
-    match cross_file_headings
-        .get(entry)
-        .map(|v| v.as_slice())
-        .unwrap_or(&[])
-    {
-        [] => Err(RefError::NoName),
-        [(_, id)] => Ok(Target::Decision(id.clone())),
-        many => {
-            let mut files: Vec<String> = many.iter().map(|(rel, _)| rel.clone()).collect();
-            files.sort();
-            files.dedup();
-            Err(RefError::Ambiguous(files))
-        }
-    }
-}
-
-/// The entries of an `unrelated:` line from the pieces a split at every
-/// comma gave: a heading may hold a comma, so pieces are joined again, the
-/// longest run first, while the joined text names something.
-pub fn unrelated_entries(pieces: &[String], names_something: impl Fn(&str) -> bool) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < pieces.len() {
-        let mut chosen = i + 1;
-        // An identifier holds no comma: it is an entry of its own, and no
-        // longer join is tried (a line approve wrote holds identifiers
-        // alone, so it costs one look per entry, not one per pair).
-        if record::is_uuid(pieces[i].trim()) {
-            out.push(pieces[i].clone());
-            i = chosen;
-            continue;
-        }
-        for j in (i + 2..=pieces.len()).rev() {
-            if names_something(&pieces[i..j].join(", ")) {
-                chosen = j;
-                break;
-            }
-        }
-        out.push(pieces[i..chosen].join(", "));
-        i = chosen;
-    }
-    out
-}
-
-/// The entries of `sec`'s `unrelated:` line, joined.
-pub fn section_unrelated_entries(
-    idx: usize,
-    rf: &RecordFile,
-    terms_list: &[Term],
-    cross: &HashMap<String, Vec<(String, String)>>,
-    led: &Ledger,
-) -> Vec<String> {
-    unrelated_entries(&rf.sections[idx].unrelated, |s| {
-        !matches!(
-            resolve_ref(s, rf, idx, terms_list, cross, led),
-            Err(RefError::NoName)
-        )
-    })
-}
-
-/// Every refusal the `unrelated:` lines of `rf` earn: an entry that names
-/// no current decision, no term, no other question of the file and no
-/// dropped question, or whose heading is the heading of several current
-/// decisions. Judged for each question not yet asked.
-pub fn unrelated_refusals(
-    rel: &str,
-    rf: &RecordFile,
-    terms_list: &[Term],
-    cross: &HashMap<String, Vec<(String, String)>>,
-    led: &Ledger,
-) -> Vec<msg::Said> {
-    let mut out = Vec::new();
-    for (i, sec) in rf.sections.iter().enumerate() {
-        if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {
-            continue;
-        }
-        for e in section_unrelated_entries(i, rf, terms_list, cross, led) {
-            match resolve_ref(&e, rf, i, terms_list, cross, led) {
-                Ok(_) => {}
-                Err(RefError::NoName) => {
-                    out.push(msg::unrelated_names_nothing(rel, &sec.heading_text, &e))
-                }
-                Err(RefError::Ambiguous(files)) => {
-                    out.push(msg::unrelated_ambiguous(rel, &sec.heading_text, &e, &files))
-                }
-            }
-        }
-    }
-    out
 }
 
 /// What every line of question `idx` names, from its `depends:` and

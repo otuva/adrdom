@@ -730,14 +730,6 @@ mod tests {
             reader_missing("claude"),
             reader_missing("codex"),
             reader_no_agent(),
-            unrelated_names_nothing("x.md", "Does X?", "Y").text(),
-            unrelated_ambiguous(
-                "x.md",
-                "Does X?",
-                "Y",
-                &["a.md".to_string(), "b.md".to_string()],
-            )
-            .text(),
             blame_entry_without_range("x.md", "Does X?", "notes").text(),
             blame_names_no_file("x.md", "Does X?", "notes").text(),
             blame_range_of_no_row("x.md", "Does X?", "adrdom/blame/notes.md", 3, 4).text(),

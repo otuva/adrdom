@@ -158,7 +158,6 @@ mod tests {
             heading_text: heading.to_string(),
             id: Some(id.to_string()),
             supersedes: Vec::new(),
-            unrelated: Vec::new(),
             blame: Vec::new(),
             depends: Vec::new(),
             options: Vec::new(),

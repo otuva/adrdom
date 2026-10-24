@@ -7,8 +7,9 @@ use super::*;
 
 /// sha256 of one question's own text (per "Does approve hash each question
 /// on its own?"): its heading line, its `depends:` line with the answer sets
-/// as written, its `supersedes:` line, an `unrelated:` line, a `blame:` line,
-/// and its body (Problem, Standard, options, Why, Costs), each line trimmed
+/// as written, its `supersedes:` line, a `blame:` line, an `unrelated:` line
+/// of an earlier form (`tells::UNRELATED_PREFIX`) where one stands, and its
+/// body (Problem, Standard, options, Why, Costs), each line trimmed
 /// at its end, joined with `\n`. The `id:` line is part of it (swapping ids
 /// would re-point every depends entry naming them); the lines the tool writes
 /// after that (`terms:`, the `**Answer:**` line) and blank lines are left
@@ -43,9 +44,10 @@ pub fn heading_hash(sec: &Section) -> String {
 /// A question's heading and its body, as the reader is given them: the
 /// heading text, then the Problem, Standard, options, Why and Costs lines,
 /// each trimmed at its end, joined with `\n`. The `depends:`,
-/// `supersedes:`, `unrelated:`, `blame:`, `id:` and `terms:` lines, the
-/// `**Answer:**` line and blank lines are left out, so a line the agent
-/// writes after the reader ran never moves it.
+/// `supersedes:`, `blame:`, `id:` and `terms:` lines, an `unrelated:` line
+/// of an earlier form (`tells::UNRELATED_PREFIX`), the `**Answer:**` line
+/// and blank lines are left out, so a line the agent writes after the
+/// reader ran never moves it.
 pub fn body_text(rf: &RecordFile, sec: &Section) -> String {
     let (s, e) = hash_range(&rf.lines, sec);
     let mut parts: Vec<&str> = vec![sec.heading_text.as_str()];
@@ -55,7 +57,7 @@ pub fn body_text(rf: &RecordFile, sec: &Section) -> String {
             || t.starts_with("depends: ")
             || t.trim() == "depends:"
             || t.starts_with("supersedes: ")
-            || t.starts_with("unrelated: ")
+            || t.starts_with(crate::tells::UNRELATED_PREFIX)
             || t.starts_with("blame: ")
             || t.starts_with("id: ")
             || t.starts_with("terms: ")
@@ -313,33 +315,44 @@ mod tests {
         );
     }
 
+    // adr: a065dced-a3b3-467c-b299-17bb70742046
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // An `unrelated:` line of an earlier record form under an answered
+    // question is left where it stands: in the section and question hashes,
+    // out of the body text. Under a question not answered it is a stray line.
     #[test]
-    fn unrelated_line_parses_is_in_the_question_hash_and_not_in_the_body_hash() {
-        let text = "# Topic\n\n### Q?\ndepends: widget\nunrelated: a, b\nid: new-id\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-        let rf = rf_from(text);
-        assert_eq!(
-            rf.sections[0].unrelated,
-            vec!["a".to_string(), "b".to_string()]
+    fn an_old_unrelated_line_stays_in_the_hashes_of_an_answered_question_and_is_stray_elsewhere() {
+        let body = "\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        let answered = format!(
+            "# Topic\n\n### Q?\ndepends: widget\nunrelated: a, b\nid: new-id\n{}\n**Answer:** A\n",
+            body
         );
+        let rf = rf_from(&answered);
         assert!(rf.shape_errors.is_empty() && rf.sections[0].shape_errors.is_empty());
-        let other = rf_from(&text.replace("unrelated: a, b", "unrelated: a, c"));
+        let other = rf_from(&answered.replace("unrelated: a, b", "unrelated: a, c"));
         assert_ne!(
             question_hash(&rf, &rf.sections[0]),
             question_hash(&other, &other.sections[0])
+        );
+        assert_ne!(
+            section_hash(&rf.lines, &rf.sections[0]),
+            section_hash(&other.lines, &other.sections[0])
         );
         assert_eq!(
             body_hash(&rf, &rf.sections[0]),
             body_hash(&other, &other.sections[0])
         );
-        assert_eq!(heading_hash(&rf.sections[0]), sha256_hex("Q?"));
         assert!(
             body_text(&rf, &rf.sections[0]).starts_with("Q?\nProblem: p.\nStandard: s.\n- A) x.")
         );
-        let twice = rf_from(&text.replace("id: new-id", "unrelated: c\nid: new-id"));
-        assert!(twice.sections[0]
-            .shape_errors
-            .iter()
-            .any(|e| e.contains("second unrelated line")));
+        assert!(!body_text(&rf, &rf.sections[0]).contains("unrelated"));
+
+        let open = answered.replace("**Answer:** A\n", "");
+        let rf = rf_from(&open);
+        assert_eq!(
+            rf.sections[0].shape_errors,
+            vec!["stray line 5".to_string()]
+        );
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432

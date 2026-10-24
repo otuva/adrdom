@@ -58,7 +58,7 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
             Next::agent(Act::Removes(Part::Line)),
         );
     }
-    for kind in ["depends", "supersedes", "unrelated", "blame", "terms"] {
+    for kind in ["depends", "supersedes", "blame", "terms"] {
         let Some(rest) = e.strip_prefix(&format!("{}: ", kind)) else {
             continue;
         };
@@ -473,7 +473,6 @@ fn line_kind(word: &str) -> LineKind {
     match word {
         "depends" => LineKind::Depends,
         "supersedes" => LineKind::Supersedes,
-        "unrelated" => LineKind::Unrelated,
         "blame" => LineKind::Blame,
         _ => LineKind::Terms,
     }

@@ -348,14 +348,10 @@ fn retire_succeeds_once_the_question_naming_the_term_only_by_depends_is_struck()
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_CHOICE);
     std::fs::write(&terms, TERMS_TWO_ENTRIES).unwrap();
-    let choice_id = id_of(&record, H_CHOICE);
     let c = std::fs::read_to_string(&record).unwrap();
     let start = c.find(&format!("### {}", H_CHOICE)).unwrap();
     let end = c.find(&format!("### {}", H_VERDICT)).unwrap();
-    // The surviving heading's unrelated line names the struck one; the
-    // entry goes with it.
-    let rest = c[end..].replace(&format!(", {}", choice_id), "");
-    std::fs::write(&record, format!("{}{}", &c[..start], rest)).unwrap();
+    std::fs::write(&record, format!("{}{}", &c[..start], &c[end..])).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out.status.success(),
