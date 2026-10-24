@@ -93,17 +93,22 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
         in_sections(Class::Plan, letter_found(rel, rf, led)),
         rel,
     ));
-    if j.planning {
-        out.extend(found(
-            Class::Plan,
-            rel,
-            planning_steps(j.root, rel, rf, j.all, j.terms_list, led, j.shared),
-        ));
-    }
     out.extend(about_topic_file(
         banned_in_questions(j.root, rel, rf, j.terms_list, led),
         rel,
     ));
+    if j.planning {
+        // The reader's rows wait on every other finding the agent clears
+        // (`Finding::blocks_the_reader`), as `adr plan` reads none while
+        // one stands: while one does, the rows missing are no finding of
+        // their own.
+        let blocked = out.iter().any(Finding::blocks_the_reader);
+        out.extend(found(
+            Class::Plan,
+            rel,
+            planning_steps(j.root, rel, rf, j.all, j.terms_list, led, j.shared, blocked),
+        ));
+    }
     out
 }
 
@@ -237,7 +242,9 @@ pub fn stale_files<'a>(all: &'a [RecordFile], led: &Ledger) -> Vec<&'a str> {
 /// questions not yet asked: per "What does the agent do to plan a topic
 /// file?" and "Does a planning step run without the record of the step
 /// before?", the rows are read as they stand; neither the model nor the
-/// reader is needed.
+/// reader is needed. `blocked`: a finding the agent clears without the
+/// reader stands on the file, so the body rows wait and are no finding.
+#[allow(clippy::too_many_arguments)]
 fn planning_steps(
     root: &Path,
     rel: &str,
@@ -246,6 +253,7 @@ fn planning_steps(
     terms_list: &[terms::Term],
     led: &Ledger,
     shared: Option<&crate::plan::Shared>,
+    blocked: bool,
 ) -> Vec<msg::Said> {
     let mut planning = match shared {
         Some(shared) => crate::plan::load_with(rf, terms_list, led, shared),
@@ -257,6 +265,9 @@ fn planning_steps(
     // step's records are missing only because this one is not done (per
     // "Does a command compute a move of its own?", aac5c313 A).
     match planning.next() {
+        crate::plan::NextMove::Plan if blocked && planning.missing_heading().is_empty() => {
+            Vec::new()
+        }
         crate::plan::NextMove::Plan => planning.rows_missing_at_step(),
         crate::plan::NextMove::WriteLines => planning.line_refusals(),
         crate::plan::NextMove::WriteBodies(_) => no_body_refusals(rel, rf, led),

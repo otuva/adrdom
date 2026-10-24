@@ -890,6 +890,123 @@ fn the_readers_word_never_stops_a_command() {
     ok(&approve(&dir));
 }
 
+// adr: d10dab89-1d42-4764-9d72-22d6fd6a9260
+#[test]
+fn a_pair_the_reader_gives_no_word_for_is_a_finding_and_the_other_questions_are_read() {
+    let dir = repo();
+    // The fake reader answers "maybe" for the term paint under the first
+    // question: no word of the set, twice.
+    let b1 = body("one").replace(
+        "problem one",
+        &format!("problem one [word:maybe@{}]", PAINT_ID),
+    );
+    write(
+        &dir,
+        &format!("# Topic\n{}{}", section(H1, &b1), section(H2, &body("two"))),
+    );
+    let out = ok(&plan(&dir));
+    write_lines(&dir, &out);
+    let before = rows(&dir).len();
+    // The run ends well: the pair is a finding whose move is plan again,
+    // the first question keeps no row, the second is read.
+    let out = ok(&plan(&dir));
+    assert!(
+        out.contains(&format!(
+            "{}: \"{}\": the reader gave no word for the neighbour {}: ",
+            REL, H1, PAINT_ID
+        )),
+        "{}",
+        out
+    );
+    assert!(
+        names_move(&out, &format!("agent runs: adr plan {}", REL)),
+        "{}",
+        out
+    );
+    assert!(
+        has_line_starting(&out, &format!("\"{}\": heading with its body", H2)),
+        "{}",
+        out
+    );
+    assert!(
+        !has_line_starting(&out, &format!("\"{}\": heading with its body", H1)),
+        "{}",
+        out
+    );
+    assert_eq!(rows(&dir).len() - before, 4, "{}", out);
+    assert!(
+        out.contains(&format!(
+            "\"{}\" has no reader rows for its heading with its body",
+            H1
+        )),
+        "{}",
+        out
+    );
+    // With the marker gone the first question is read, and nothing is
+    // read twice.
+    write(
+        &dir,
+        &read(&dir).replace(&format!(" [word:maybe@{}]", PAINT_ID), ""),
+    );
+    let out = ok(&plan(&dir));
+    assert!(!out.contains("gave no word"), "{}", out);
+    assert!(
+        has_line_starting(&out, &format!("\"{}\": heading with its body", H1)),
+        "{}",
+        out
+    );
+    // Four rows for the first question; the second's row on the first's
+    // old text left with that text.
+    assert_eq!(rows(&dir).len() - before, 7, "{}", out);
+}
+
+#[test]
+fn a_finding_the_agent_clears_is_printed_before_the_reader_reads() {
+    let dir = repo();
+    // A Why line over the word limit under the first question.
+    let long = body("one").replacen(
+        "Why: w.",
+        &format!("Why: {}.", vec!["word"; 21].join(" ")),
+        1,
+    );
+    write(
+        &dir,
+        &format!(
+            "# Topic\n{}{}",
+            section(H1, &long),
+            section(H2, &body("two"))
+        ),
+    );
+    let out = ok(&plan(&dir));
+    write_lines(&dir, &out);
+    let before = rows(&dir).len();
+    // The run prints the finding and reads no body: the rows wait on it.
+    let out = ok(&plan(&dir));
+    assert!(
+        out.contains("the Why line has 21 words, the most is 20"),
+        "{}",
+        out
+    );
+    assert!(
+        !out.lines().any(|l| l.ends_with(": heading with its body")),
+        "{}",
+        out
+    );
+    assert_eq!(rows(&dir).len(), before, "{}", out);
+    // The rows wait on the finding, so their absence is no finding of its
+    // own: the one line printed is the one to clear.
+    assert!(!out.contains("has no reader rows"), "{}", out);
+    assert_eq!(out.lines().count(), 2, "{}", out);
+    // Once the line is short, the bodies are read.
+    write(
+        &dir,
+        &read(&dir).replacen(&vec!["word"; 21].join(" "), "w", 1),
+    );
+    let out = ok(&plan(&dir));
+    assert!(!out.contains("the most is 20"), "{}", out);
+    assert_eq!(rows(&dir).len() - before, 8, "{}", out);
+}
+
 // adr: 21cdad59-4f0c-42a5-b4f3-6af946637df3
 #[test]
 fn planning_stops_without_the_model() {
@@ -973,7 +1090,7 @@ fn plan_shows_a_set_letter_the_target_lacks_and_does_not_say_ready() {
 
 // adr: d10dab89-1d42-4764-9d72-22d6fd6a9260
 #[test]
-fn the_body_step_records_closes_and_a_letter_and_refuses_a_word_outside_the_set() {
+fn the_body_step_records_closes_and_a_letter_and_finds_no_word_outside_the_set() {
     let dir = repo();
     let id = extract_ids(&std::fs::read_to_string(dir.join(BASE)).unwrap())[0].clone();
     let b = body("one").replace(
@@ -995,8 +1112,8 @@ fn the_body_step_records_closes_and_a_letter_and_refuses_a_word_outside_the_set(
         .expect("the body row");
     assert_eq!(row.word, "closes B");
 
-    // A letter the question does not have, and `depends`: the run fails and
-    // no row is made.
+    // A letter the question does not have, and `depends`: no word on the
+    // pair, a finding whose move is plan again, and no row is made.
     for (marker, word) in [
         ("[word:closes C]", "closes C"),
         ("[word:depends]", "depends"),
@@ -1007,8 +1124,17 @@ fn the_body_step_records_closes_and_a_letter_and_refuses_a_word_outside_the_set(
         let out = ok(&plan(&dir));
         write_lines(&dir, &out);
         let before = reader_text(&dir);
-        let err = refused(&plan(&dir));
-        assert!(err.contains(word), "{}", err);
+        let out = ok(&plan(&dir));
+        assert!(
+            out.contains("the reader gave no word for the neighbour") && out.contains(word),
+            "{}",
+            out
+        );
+        assert!(
+            names_move(&out, &format!("agent runs: adr plan {}", REL)),
+            "{}",
+            out
+        );
         assert_eq!(reader_text(&dir), before, "{} left no row", word);
     }
 }

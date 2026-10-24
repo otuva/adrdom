@@ -696,6 +696,18 @@ pub const READ_PAIR_INCONSISTENT: Rule = Rule {
     decisions: &["27bd0855-a6c8-4cda-a82b-bf95022a14b0"],
 };
 
+/// Decisions: What word does the reader give a neighbour of a question
+/// with its body? What word does the reader give two current decisions?
+/// A reply that is not a reason and one word of the set is no word on the
+/// pair: the pair is read again by the next run of the same command.
+pub const READER_GIVES_A_WORD: Rule = Rule {
+    name: "reader_gives_a_word",
+    decisions: &[
+        "d10dab89-1d42-4764-9d72-22d6fd6a9260",
+        "a116a1c5-d6ea-4123-be25-3a222ac661e0",
+    ],
+};
+
 /// Decision: Does an owner command commit?
 pub const ANSWER_LINE_HAS_ROW: Rule = Rule {
     name: "answer_line_has_row",
@@ -1106,6 +1118,7 @@ pub const ALL: &[&Rule] = &[
     &BAN_NOT_ON_USED_WORD,
     &READ_PAIR_SAME,
     &READ_PAIR_INCONSISTENT,
+    &READER_GIVES_A_WORD,
     &ANSWER_LINE_HAS_ROW,
     &REFUSAL_LINE_HAS_ROW,
     &REFUSED_TEXT_FROZEN,

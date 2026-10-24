@@ -272,18 +272,22 @@ pub fn reader_no_agent() -> String {
     )
 }
 
-/// The reader gave no usable word for a pair of texts; nothing of that
-/// call is kept.
+/// The reader gave no word for a pair of texts, asked twice: nothing of
+/// that call is kept, and the next run of the same command reads the pair
+/// again. `subject` is what the pair was read for (`<rel>: "<heading>"`
+/// under plan, the two decisions under read); `next` is that command.
 /// The reader's own error is flattened to one line: a stack trace of
 /// several lines never runs into the move.
-pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
-    refuse(
+pub fn reader_no_word(subject: &str, neighbour: &str, e: impl Display, next: Next) -> Said {
+    said(
+        &crate::rule::READER_GIVES_A_WORD,
         format!(
-            "reader: no word for the neighbour {}: {}",
+            "{}: the reader gave no word for the neighbour {}: {}",
+            subject,
             neighbour,
             crate::reader::flatten(&e.to_string())
         ),
-        Next::agent(Act::RunsAgain),
+        next,
     )
 }
 

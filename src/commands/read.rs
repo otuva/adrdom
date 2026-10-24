@@ -15,9 +15,10 @@
 //! it prints: a reading that marks nothing prints nothing.
 //!
 //! The pool is the current decisions only, no term. The reader is asked in
-//! chunks as large as it reads at once, so a failure keeps what earlier
-//! chunks read and loses at most one wave. The
-//! model and the reader are loaded only here and in `adr plan`.
+//! chunks as large as it reads at once, so a pair it gives no word for
+//! loses at most one wave: that chunk keeps nothing, the pair is a finding
+//! whose move is this command again, and the rest of the reading goes on.
+//! The model and the reader are loaded only here and in `adr plan`.
 use crate::embed;
 use crate::index::{self, Rec};
 use crate::ledger;
@@ -112,16 +113,31 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
             letters: Vec::new(),
         })
         .collect();
-    let mut rows = Vec::new();
+    let mut rows: Vec<Option<reader::Row>> = Vec::new();
+    let mut no_word: Vec<Line> = Vec::new();
     // Read once for the run, not once per chunk.
     let live = reader::Live::of(root);
-    for chunk in pairs.chunks(CHUNK) {
-        // The rows of earlier chunks are kept; the error names the move.
-        rows.extend(reader::read_live(root, chunk, &live)?);
+    for (c, chunk) in pairs.chunks(CHUNK).enumerate() {
+        // The rows of earlier chunks are kept; a chunk with a pair the
+        // reader gave no word for keeps nothing, and each such pair is a
+        // finding whose move is this command again.
+        let got = reader::read_live(root, chunk, &live)?;
+        for f in &got.failed {
+            let (a, b) = ordered[c * CHUNK + f.index];
+            let said = msg::reader_no_word(
+                &format!("\"{}\"", heading_of(&decisions[a].text)),
+                &format!("\"{}\"", heading_of(&decisions[b].text)),
+                &f.error,
+                msg::Next::agent(msg::Act::RunsAgain),
+            );
+            no_word.push(Line::Finding(Finding::said(Class::Reader, said)));
+        }
+        rows.extend(got.rows);
     }
     // Marked pairs by (group, first id, second id, line).
     let mut marked: Vec<(usize, &str, &str, Finding)> = Vec::new();
     for (&(a, b), row) in ordered.iter().zip(&rows) {
+        let Some(row) = row else { continue };
         let group = match row.word.as_str() {
             "same" => 0,
             "inconsistent" => 1,
@@ -147,5 +163,6 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
     if !marked.is_empty() {
         out.push(Line::Move(crate::moves::of_marked_pairs()));
     }
+    out.extend(no_word);
     Ok(out)
 }

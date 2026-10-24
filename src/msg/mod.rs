@@ -180,6 +180,18 @@ impl Next {
         Next::one(actor, act.into())
     }
 
+    /// Whether the move opens with the agent: a clause the agent takes
+    /// first, whatever follows it.
+    pub fn is_agents(&self) -> bool {
+        matches!(
+            self.0.first(),
+            Some(Clause::Do {
+                actor: Actor::Agent,
+                ..
+            })
+        )
+    }
+
     /// `not yet: <wait>`: a clause nobody takes yet.
     pub fn not_yet(wait: impl Into<String>) -> Next {
         Next(vec![Clause::NotYet(wait.into())])
@@ -732,7 +744,13 @@ mod tests {
             plan_neighbours_missing("x.md", "Does X?").text(),
             plan_rows_missing("x.md", "Does X?").text(),
             plan_line_missing("x.md", "Does X?", "term", "widget").text(),
-            reader_failed("id-1", "no answer"),
+            reader_no_word(
+                "x.md: \"Does X?\"",
+                "id-1",
+                "no answer",
+                Next::agent(Act::RunsAgain),
+            )
+            .text(),
             reader_write_failed("disk full"),
             malformed_reader_row(3, "bad row").text(),
             reader_row_edited().text(),
