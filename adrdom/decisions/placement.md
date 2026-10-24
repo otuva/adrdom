@@ -374,3 +374,61 @@ Standard: a machine-written cache is verified for shape and against edits; remov
   Costs: a row edited by hand passes as the reader's word.
 
 **Answer:** A
+
+### Does the agent write an unrelated line?
+depends: agent, neighbour, depends, supersedes, What does the agent do to plan a topic file?
+supersedes: Does every neighbour get a line under its heading?
+unrelated: Does a reference line keep its list on one line?, Does check print a line with no move on it?, Does install write outside adrdom?, Does the agent build what no current decision covers?, Does the agent that asks a question build its decision?, Does the agent write the bodies before approve?, Does the agent write the plan?, Does the tool rewrite the ban list from the ledger?, Does the tool write a terms brief for the agent?, What does install write for one agent?, Does a supersedes line name every current decision standing on its target?, Does the reader read a neighbour of a heading?, What does show print of a reader's word on a question?, What stops a question that has no depends line?, What word does the reader give a neighbour of a question with its body?, Does check read the words of an answered question again?, Does the body step read the neighbours brought for the heading?
+
+Problem: a line for every neighbour grows to thirty names under a question, no move reads them, and each new neighbour costs a run.
+Standard: a record holds the rulings, not the list of what was looked at.
+
+- A) No.
+  Why: depends and supersedes are the rulings; a neighbour on neither is the reader's to dispute at approval.
+  Costs: the line stays in answered questions, read and judged by nothing; a neighbour never looked at leaves no trace.
+- B) Yes.
+  Why: every neighbour the tool brings meets a written ruling, and a forgotten one is a finding.
+  Costs: thirty names per question, a run for each new neighbour, and a word no move reads.
+
+### Does the body step read the neighbours brought for the heading?
+depends: reader, neighbour, What word does the reader give a neighbour of a question with its body?
+supersedes: Does the reader read a neighbour of a heading?, Does planning stop with no reader on the machine?, Does the tool bring a plan's own questions as neighbours of each other?
+unrelated: Does every neighbour get a line under its heading?, question, Does the tool read each current decision against its neighbours?, Does the agent write the bodies before approve?, What does show print of a reader's word on a question?, What does the tool bring as neighbours for a new heading?, Does the word limit read the text of an answered question?, Does ask pair the whole question to terms?, Does check read the words of an answered question again?, What does the agent do to plan a topic file?, Does the agent write an unrelated line?, Does a planning step run without the record of the step before?, Does the tool print each pair the reader marks?, move
+
+Problem: the neighbours brought for a heading get no word from the reader, so a decision among them that the body meets is seen by the agent alone.
+Standard: a reviewer reads every item on the list with the full text in hand.
+
+- A) Yes.
+  Why: the same prompt and word set, options in view; a heading's neighbour the body meets gets its word.
+  Costs: up to ten more pairs per question, each a reader call, most of them unrelated.
+- B) No.
+  Why: the reader reads the ten nearest of the body and the own questions; the heading has the agent.
+  Costs: a decision near the heading and far from the body gets no word.
+
+### Does planning stop when the reader is missing?
+depends: reader, plan, Does the body step read the neighbours brought for the heading?=*
+unrelated: Does a planning step run without the record of the step before?, Does a reader's word stop a command?, Does ask stop a question outside the plan?, Does check fail a planner's commit that reaches outside adrdom?, Does planning stop with no reader on the machine?, Does planning stop without the embedding model?, Does the ledger hold the planners?, Does the reader read a neighbour of a heading?, What makes a session a planner?, planner, Does the agent build what no current decision covers?, Does the reader's file keep a row whose text left the records?, What does check hold of a reader's file?, What does the tool keep of a reader's word?, What does the tool print for a build move in a planner session?, Does the agent write an unrelated line?, Does the body step bring the plan's own questions as neighbours?
+
+Problem: the reader is a program apart from the tool; a machine without it brings neighbours with no word, and a plan with wordless rows is a plan with a hole.
+Standard: a step whose input is missing stops and names it; no degraded mode.
+
+- A) Yes.
+  Why: one shape of row; every neighbour read with a body carries a word.
+  Costs: planning needs the reader on the machine; every other command runs without it.
+- B) No.
+  Why: the agent reads the neighbours itself; the word is a line, not a gate, so its absence stops nothing.
+  Costs: two shapes of row, and the owner sees agent lines with nothing against them.
+
+### Does the body step bring the plan's own questions as neighbours?
+depends: plan, neighbour, Does the body step read the neighbours brought for the heading?=*
+unrelated: Does a command compute a move of its own?, Does a planning step run without the record of the step before?, Does every neighbour get a line under its heading?, Does the agent that asks a question build its decision?, Does the agent write the bodies before approve?, Does the reader read a neighbour of a heading?, Does the tool bring a plan's own questions as neighbours of each other?, Does the tool read each current decision against its neighbours?, What word does the reader give a neighbour of a question with its body?, move, Does a question keep its identifier when its heading is reworded?, Does ask pair the whole question to terms?, Does one question heading stand in two topic files?, Does the agent build on a decision before its tier is fully answered?, What does the agent do to plan a topic file?, Does planning stop when the reader is missing?, Does the agent write an unrelated line?
+
+Problem: two new headings in one plan are never each other's neighbour when the pool is the records; the line between them is written by hand and forgotten.
+Standard: deduplicate a batch against itself as well as against the store.
+
+- A) Yes.
+  Why: at the body step each question is read against the plan's nearest questions with the heading set.
+  Costs: a few more reader calls per question; two unanswered questions give no consistent or inconsistent.
+- B) No.
+  Why: the pool is the records; the agent wrote both headings and knows their line.
+  Costs: two headings on one rule in one plan pass; the tier cap is the only net.
