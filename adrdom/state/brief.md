@@ -62,12 +62,11 @@ A term's identifier carries its meaning: the name may change, and a former name 
 
 A topic file, `adrdom/decisions/<topic>.md`, holds the questions of one subject: a `# <Topic>` line, a few lines of prose, then the headings.
 A heading is a `###` line and one question: "Does X ..." or "What does X ...". One that opens with which, where, how many or how much assumes its answer; one with "and" or "or" is two questions.
-Under the heading sit its lines, `depends:`, `supersedes:`, `unrelated:` and `blame:`, entries comma separated; then the body:
+Under the heading sit its lines, `depends:`, `supersedes:` and `blame:`, entries comma separated; then the body:
 
 ```
 ### Does the pre-commit hook run check?
 depends: check, Does check read staged files only?=A
-unrelated: Does check print a line with no move on it?
 
 Problem: what breaks, in one line.
 Standard: the named practice for this, stated flat.
@@ -86,9 +85,9 @@ A question holds nothing of the day it was written: no word on what the code doe
 
 `adr plan <file>` does the step the file is at and prints the next move, until the move is `owner runs: adr approve <file>`. The steps:
 1. Write the headings, then run plan: for each heading it brings the nearest current decisions and terms, its neighbours.
-2. Write a line for every neighbour: `depends:` when the question loses its meaning without it or gains its meaning from it, `supersedes:` when the question replaces that decision, `unrelated:` otherwise. Run plan again until every neighbour is on a line.
+2. Write a line for each neighbour the question stands on or replaces: `depends:` when the question loses its meaning without it or gains its meaning from it, `supersedes:` when the question replaces that decision. A neighbour on neither gets no line.
 3. Write the bodies. Before an option, read the code and the decisions it meets: what the code has to keep is the option's Costs. A second question found on the way is a new heading.
-4. Run plan again: it brings the neighbours of each body with the reader's word, `same`, `consistent`, `inconsistent`, `unrelated` or `closes <letter>`, and a reason. The reader's word is not a ruling; the agent's line is. Write a line for each neighbour it brings, and run plan until the move it prints is the owner's.
+4. Run plan again: it brings the neighbours of each body, and those brought for its heading, with the reader's word, `same`, `consistent`, `inconsistent`, `unrelated` or `closes <letter>`, and a reason. The reader's word is not a ruling; the agent's line is. Run plan until the move it prints is the owner's.
 5. Say the plan is ready, post `owner runs: adr approve <file>` and stop.
 
 A question stands on what it loses its meaning without or gains its meaning from: a term, or a question of the same file; a depends line names at most two questions. Before approval an entry on any line is the term's name or the heading of the question or decision; approve turns them into ids. An entry on an open question carries its answer set, `=A`, `=A|B` or `=*`: the letters under which the question still makes sense.
