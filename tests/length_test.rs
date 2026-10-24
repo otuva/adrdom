@@ -181,6 +181,22 @@ fn the_word_limit_of_an_option_is_twenty() {
     ));
 }
 
+// adr: 8f324216-80a3-4012-b689-e27b6eea7714
+#[test]
+fn an_apostrophe_inside_a_word_joins_it_for_the_limit() {
+    // Nineteen words and "widget's": twenty words, as an agent counts them.
+    let twenty = format!("{} widget's.", vec!["word"; 19].join(" "));
+    assert!(!refused_for(
+        &question("What does the decision hold?", &twenty, "w.", "c."),
+        "option"
+    ));
+    let twenty_one = format!("{} widget's.", vec!["word"; 20].join(" "));
+    assert!(refused_for(
+        &question("What does the decision hold?", &twenty_one, "w.", "c."),
+        "option"
+    ));
+}
+
 #[test]
 fn the_word_limit_holds_for_the_why_line() {
     // adr: 0487a1cf-eb61-4bf8-bd16-eed899d22d2c

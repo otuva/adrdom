@@ -381,7 +381,10 @@ fn the_fake_reader_writes_one_row_per_pair_and_skips_pairs_on_record() {
             &reader::neighbour_key_of_text(&z_body),
         ),
     ];
-    let rows = reader::read_with(&dir, &reader::Fake, &p).unwrap();
+    let rows = reader::read_with(&dir, &reader::Fake, &p)
+        .unwrap()
+        .all()
+        .unwrap();
     assert_eq!(rows.len(), 4);
     assert_eq!(
         rows.iter().map(|r| r.word.as_str()).collect::<Vec<_>>(),
@@ -403,7 +406,10 @@ fn the_fake_reader_writes_one_row_per_pair_and_skips_pairs_on_record() {
     assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
 
     // The same pairs again are not read again: the file does not grow.
-    let again = reader::read_with(&dir, &reader::Fake, &p).unwrap();
+    let again = reader::read_with(&dir, &reader::Fake, &p)
+        .unwrap()
+        .all()
+        .unwrap();
     assert_eq!(again, rows);
     assert_eq!(reader::read_file(&dir).rows.len(), 4);
 
@@ -491,8 +497,10 @@ fn a_read_drops_rows_of_gone_texts() {
     let (dir, _rf) = repo_with_records();
     let old = live_row("Does a question that was struck?", "id-1", "same", 1);
     std::fs::write(reader_path(&dir), format!("{}\n", reader::row_line(&old))).unwrap();
-    let rows =
-        reader::read_with(&dir, &reader::Fake, &[pair(Kind::Plan, "Does X?", "id-2")]).unwrap();
+    let rows = reader::read_with(&dir, &reader::Fake, &[pair(Kind::Plan, "Does X?", "id-2")])
+        .unwrap()
+        .all()
+        .unwrap();
     let file = reader::read_file(&dir);
     assert_eq!(file.rows, rows);
 }
@@ -572,19 +580,54 @@ fn check_judges_a_new_line_by_its_shape_alone() {
 }
 
 #[test]
-fn a_word_outside_the_plan_set_is_an_error_and_keeps_no_row() {
+fn a_word_outside_the_plan_set_is_no_word_and_keeps_no_row() {
     let dir = new_repo();
     let p = vec![
         pair(Kind::Plan, "Does X?", "id-1"),
         pair(Kind::Plan, "Does Y? [word:consistent]", "id-2"),
     ];
-    let err = reader::read_with(&dir, &reader::Fake, &p).unwrap_err();
+    let got = reader::read_with(&dir, &reader::Fake, &p).unwrap();
+    assert_eq!(got.failed.len(), 1, "{:?}", got.failed);
+    let f = &got.failed[0];
     assert!(
-        err.contains("id-2") && err.contains("not one of same, unrelated"),
+        f.index == 1 && f.neighbour == "id-2" && f.error.contains("not one of same, unrelated"),
+        "{:?}",
+        f
+    );
+    // The whole call is kept or none of it: the pair that was fine is not
+    // written, and no pair of the call has a row.
+    assert!(got.rows.iter().all(|r| r.is_none()));
+    assert!(reader::read_file(&dir).rows.is_empty());
+}
+
+/// A reader whose program gives no reply.
+struct Broken;
+
+impl reader::Reader for Broken {
+    fn ask(&self, _pair: &Pair) -> Result<String, String> {
+        Err("claude exited with exit status: 1: quota".to_string())
+    }
+    fn model(&self) -> &'static str {
+        reader::MODEL
+    }
+}
+
+// adr: e78b8297-fd89-4e09-9c3e-9eeb0fd0f654
+#[test]
+fn a_program_that_gives_no_reply_stops_the_call_and_keeps_no_row() {
+    let dir = new_repo();
+    let p = vec![
+        pair(Kind::Body, "Q fine [word:same]", "id-1"),
+        pair(Kind::Body, "Q two [word:same]", "id-2"),
+    ];
+    let err = reader::read_with(&dir, &Broken, &p).unwrap_err();
+    assert!(
+        err.contains("reader: no reply for the neighbour id-")
+            && err.contains("quota")
+            && err.contains("agent runs the same adr command again"),
         "{}",
         err
     );
-    // The whole batch is kept or none of it: the pair that was fine is not written.
     assert!(reader::read_file(&dir).rows.is_empty());
 }
 
@@ -598,7 +641,10 @@ fn the_body_set_accepts_its_four_words_and_closes_with_a_letter_of_the_question(
         .map(|(i, w)| pair(Kind::Body, &format!("Q{} [word:{}]", i, w), "id-1"))
         .collect();
     p.push(pair(Kind::Body, "Q closes [word:closes B]", "id-1"));
-    let rows = reader::read_with(&dir, &reader::Fake, &p).unwrap();
+    let rows = reader::read_with(&dir, &reader::Fake, &p)
+        .unwrap()
+        .all()
+        .unwrap();
     let mut want = reader::BODY_WORDS.to_vec();
     want.push("closes B");
     assert_eq!(
@@ -611,20 +657,23 @@ fn the_body_set_accepts_its_four_words_and_closes_with_a_letter_of_the_question(
 
 // adr: d10dab89-1d42-4764-9d72-22d6fd6a9260
 #[test]
-fn a_body_word_outside_the_set_is_an_error_and_keeps_no_row() {
+fn a_body_word_outside_the_set_is_no_word_and_keeps_no_row() {
     for word in ["same-ish", "depends", "closes", "closes C", "closes AB"] {
         let dir = new_repo();
         let p = vec![
             pair(Kind::Body, "Q fine [word:same]", "id-1"),
             pair(Kind::Body, &format!("Q bad [word:{}]", word), "id-2"),
         ];
-        let err = reader::read_with(&dir, &reader::Fake, &p).unwrap_err();
+        let got = reader::read_with(&dir, &reader::Fake, &p).unwrap();
+        assert_eq!(got.failed.len(), 1, "{}: {:?}", word, got.failed);
+        let f = &got.failed[0];
         assert!(
-            err.contains("id-2") && err.contains("not one of same, consistent, inconsistent, unrelated, closes and the letter of an option"),
-            "{}: {}",
+            f.neighbour == "id-2" && f.error.contains("not one of same, consistent, inconsistent, unrelated, closes and the letter of an option"),
+            "{}: {:?}",
             word,
-            err
+            f
         );
+        assert!(got.rows.iter().all(|r| r.is_none()), "{}", word);
         assert!(reader::read_file(&dir).rows.is_empty(), "{}", word);
     }
 }

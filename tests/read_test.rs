@@ -230,12 +230,22 @@ fn every_word_is_kept_and_a_word_outside_the_set_fails_the_run() {
     read_ok(&dir);
     assert!(set_rows(&dir).iter().any(|r| r.word == "same"));
 
-    // Any other word, depends among them, fails the run and keeps no row.
+    // Any other word, depends among them, is no word: the chunk keeps no
+    // row, the pair is a finding whose move is the command again, and the
+    // run ends well.
     for word in ["maybe", "depends", "closes B"] {
         let (dir, decs) = repo_with(&[word, word]);
         let before = rows(&dir);
         let out = read_with(&dir, &[]);
-        assert!(!out.status.success(), "{}: {}", word, stdout(&out));
+        assert!(out.status.success(), "{}: {}", word, stderr(&out));
+        let text = stdout(&out);
+        assert!(
+            text.contains("the reader gave no word for the neighbour")
+                && text.contains("; agent runs the same adr command again"),
+            "{}: {}",
+            word,
+            text
+        );
         assert_eq!(rows(&dir), before, "{}: no row of the failed chunk", word);
         let hash_a = record::sha256_hex(&text_of(&decs[0]));
         let hash_b = record::sha256_hex(&text_of(&decs[1]));
@@ -541,22 +551,62 @@ fn a_decision_is_read_against_ten_neighbours_not_every_other() {
 }
 
 // adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
+// adr: a116a1c5-d6ea-4123-be25-3a222ac661e0
 #[test]
-fn a_stopped_reading_prints_the_stop_and_its_move_and_no_count() {
+fn a_pair_with_no_word_is_a_finding_and_the_rest_of_the_reading_is_kept() {
     let (dir, decs) = repo_with(&["maybe", "maybe", "maybe", "", "", ""]);
+    // The pairs as `adr read` orders them, the lower identifier first; the
+    // fake reader reads the marker off that side alone. The pairs go to the
+    // reader four at a time, and a chunk with a pair that gets no word keeps
+    // nothing.
+    let mut prs: Vec<(usize, usize)> = Vec::new();
+    for i in 0..decs.len() {
+        for j in i + 1..decs.len() {
+            prs.push(if decs[i].id < decs[j].id {
+                (i, j)
+            } else {
+                (j, i)
+            });
+        }
+    }
+    prs.sort_by(|x, y| (&decs[x.0].id, &decs[x.1].id).cmp(&(&decs[y.0].id, &decs[y.1].id)));
+    let fails = prs
+        .iter()
+        .filter(|(a, _)| !decs[*a].marker.is_empty())
+        .count();
+    let kept_want: usize = prs
+        .chunks(reader::AT_ONCE)
+        .filter(|c| c.iter().all(|(a, _)| decs[*a].marker.is_empty()))
+        .map(|c| c.len())
+        .sum();
+
     let out = read_with(&dir, &[]);
-    assert!(!out.status.success(), "{}", stdout(&out));
-    assert_eq!(stdout(&out), "", "nothing on standard output");
-    let err = stderr(&out);
-    assert_eq!(err.matches("agent ").count(), 1, "one move: {}", err);
-    assert!(err.lines().all(|l| l.starts_with("read: ")), "{}", err);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(stderr(&out), "", "nothing on standard error");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), fails, "{}", text);
+    // One finding per pair the reader gave no word for: the two decisions,
+    // the reply, and the move; no count, no line of another kind.
+    for l in &lines {
+        assert!(
+            l.starts_with("\"Does the widget n")
+                && l.contains("\": the reader gave no word for the neighbour \"Does the widget n")
+                && l.contains("\"maybe\"")
+                && l.ends_with("; agent runs the same adr command again"),
+            "{}",
+            l
+        );
+    }
     assert!(
-        !err.contains(" unread"),
+        !text.contains(" unread"),
         "no count of unread pairs: {}",
-        err
+        text
     );
-    // The rows of the chunks read before the stop are kept, and the next run
-    // reads only what is left. Six decisions each read against five others:
-    // every pair is a neighbour pair.
-    assert!(set_rows(&dir).len() < pairs(&decs), "{}", err);
+    assert_eq!(set_rows(&dir).len(), kept_want, "{}", text);
+    // The next run reads only what is left and finds the same.
+    let again = read_with(&dir, &[]);
+    assert!(again.status.success(), "{}", stderr(&again));
+    assert_eq!(stdout(&again).lines().count(), fails, "{}", stdout(&again));
+    assert_eq!(set_rows(&dir).len(), kept_want);
 }

@@ -12,13 +12,18 @@
 //!    heading?", 60341be0-fd05-4281-92d7-668584a8539a A: no).
 //! 2. A neighbour on no line is a finding, and no body is read.
 //! 3. While a heading has no body, no body is read.
-//! 4. When every heading has a body, each question with no rows at its body
-//!    hash gets the ten nearest neighbours of the pool, read with the body
-//!    prompt ("What word does the reader give a neighbour of a question with
-//!    its body?", d10dab89-1d42-4764-9d72-22d6fd6a9260 A), and the ten
-//!    nearest other questions of the file, read with the plan prompt
+//! 4. When every heading has a body and no finding the agent clears without
+//!    the reader stands on the file (a word over the limit, a banned word, a
+//!    depends line over its bounds, a tell), each question with no rows at
+//!    its body hash gets the ten nearest neighbours of the pool, read with
+//!    the body prompt ("What word does the reader give a neighbour of a
+//!    question with its body?", d10dab89-1d42-4764-9d72-22d6fd6a9260 A), and
+//!    the ten nearest other questions of the file, read with the plan prompt
 //!    ("Does the tool bring a plan's own questions as neighbours of each
-//!    other?", d984e425-3e88-4756-88fb-18241f9f62a7 A).
+//!    other?", d984e425-3e88-4756-88fb-18241f9f62a7 A). While such a finding
+//!    stands, the run prints it and reads nothing: the agent clears it first.
+//!    A pair the reader gives no word for, twice, is a finding whose move is
+//!    plan again; that question's rows wait, the others are read.
 //! 5. What it prints is the file's status, what it read, the findings on the
 //!    file and the file's moves, the one computation `show` reads too.
 //!
@@ -36,7 +41,7 @@ use crate::plan::{self, Planning, Step};
 use crate::reader;
 use crate::record::{self, RecordFile};
 use crate::repo;
-use crate::rules::Command;
+use crate::rules::{Class, Command, Finding, Subject};
 use crate::state;
 use std::path::{Path, PathBuf};
 
@@ -210,12 +215,25 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     }
 
     // Once every heading's neighbours are on a line and every heading has
-    // its body, the neighbours of each question with its body.
+    // its body, the neighbours of each question with its body. The reader
+    // reads only when no finding the agent clears without it stands on the
+    // file (a word over the limit, a banned word, a depends line over its
+    // bounds, a tell): the run prints those at once, and the rows wait on
+    // them. The findings of the planning itself (a step without its record,
+    // a neighbour on no line) are what the step clears, never what stops it.
+    let tests = crate::commands::check::test_index(root, &repo::Source::WorkingTree);
+    let index = crate::rules::RepoIndex::new(root, &e.all, &e.terms, &led);
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
-    if pl.lines_missing(Step::Heading).is_empty()
+    let mut no_word: Vec<Finding> = Vec::new();
+    let read_bodies = pl.lines_missing(Step::Heading).is_empty()
         && pl.without_body().is_empty()
         && !todo.is_empty()
-    {
+        // The one judgement `check` and `approve` read (`judge_topic_file_in`),
+        // so the three agree on whether the rows wait.
+        && !crate::rules::judge_topic_file_in(root, rf, &e.all, &e.terms, &led, &index)
+            .iter()
+            .any(Finding::blocks_the_reader);
+    if read_bodies {
         // The other questions not yet asked are ranked by their own text. One
         // call embeds the texts of the questions to read and of every
         // planned question.
@@ -247,16 +265,55 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
                 }
                 _ => Vec::new(),
             };
-            reader::read_live(root, &plan::body_pairs(rf, i, n, &own), &live).map_err(stop)?;
+            // A pair the reader gave no word for, twice, is a finding whose
+            // move is this command again; the question's rows wait, the
+            // other questions are read on.
+            let got =
+                reader::read_live(root, &plan::body_pairs(rf, i, n, &own), &live).map_err(stop)?;
+            for f in got.failed {
+                let said = msg::reader_no_word(
+                    &format!("{}: \"{}\"", rf.rel, rf.sections[i].heading_text),
+                    &f.neighbour,
+                    &f.error,
+                    crate::moves::clause(crate::moves::MoveKind::Plan {
+                        rel: rf.rel.clone(),
+                    }),
+                );
+                no_word.push(
+                    Finding::said(Class::Reader, said)
+                        .about(Subject::TopicFile(rf.rel.clone()))
+                        .in_section(i),
+                );
+            }
         }
         pl = planning(root, rf, &e, &led);
-        did(&pl, &todo, Step::Body, &mut read);
+        // What it read: the questions whose rows the run made; one with a
+        // pair the reader gave no word for has none.
+        let made: Vec<usize> = pl
+            .questions
+            .iter()
+            .filter(|q| todo.contains(&q.idx) && q.body_done)
+            .map(|q| q.idx)
+            .collect();
+        did(&pl, &made, Step::Body, &mut read);
     }
-
     // What the run prints is read after the rows it wrote: the status, the
-    // findings and the moves of the file as it stands now.
-    let tests = crate::commands::check::test_index(root, &repo::Source::WorkingTree);
-    let report = crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests);
+    // findings and the moves of the file as it stands now. A question with
+    // a pair the reader gave no word for has its rows missing for that one
+    // reason, so that finding stands in for the rows-missing one.
+    let mut report = if read_bodies {
+        crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests)
+    } else {
+        crate::moves::of_topic_file_with(root, rf, &e.all, &e.terms, &led, &tests, &index)
+    };
+    let waiting: Vec<String> = no_word
+        .iter()
+        .flat_map(|f| f.sections.iter())
+        .map(|&i| msg::plan_rows_missing(&rf.rel, &rf.sections[i].heading_text).found)
+        .collect();
+    report.findings.retain(|f| !waiting.contains(&f.found));
+    report.findings.splice(0..0, no_word);
+
     let mut lines = vec![crate::commands::show::topic_file_status_line(&led, rf)];
     lines.extend(read);
     lines.extend(out::report(&report));

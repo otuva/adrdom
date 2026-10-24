@@ -242,34 +242,121 @@ pub fn load_in(root: &Path, path: &std::ffi::OsStr) -> Result<Box<dyn Reader>, S
     })
 }
 
-/// A row for every pair, in order. A pair whose text hash, neighbour,
-/// prompt hash and model are on record keeps its recorded row and is not
-/// read again; the rest are read four at a time. The new rows are appended
-/// to the reader file, under one time, only when every pair of the call has
-/// a word: a call that fails keeps nothing.
-pub fn read(root: &Path, pairs: &[Pair]) -> Result<Vec<Row>, String> {
+/// What one call of the reader gave. `rows` holds, for each pair in order,
+/// its row: the recorded one for a pair on record, and the fresh one when
+/// every fresh pair of the call got a word; a fresh pair of a call that
+/// did not is `None`. `failed` holds each pair the reader gave no word for,
+/// with why.
+#[derive(Debug, Default)]
+pub struct Outcome {
+    pub rows: Vec<Option<Row>>,
+    pub failed: Vec<Failure>,
+}
+
+impl Outcome {
+    /// Every row, when every pair has one.
+    pub fn all(self) -> Option<Vec<Row>> {
+        self.rows.into_iter().collect()
+    }
+}
+
+/// A pair the reader gave no word for, asked twice: a reply that was not
+/// a reason and one word of the set, both times.
+#[derive(Debug, Clone)]
+pub struct Failure {
+    /// The pair's position in the call.
+    pub index: usize,
+    pub neighbour: String,
+    pub error: String,
+}
+
+/// The reader's answer to every pair, in order. A pair whose text hash,
+/// neighbour, prompt hash and model are on record keeps its recorded row
+/// and is not read again; the rest are read four at a time, and a pair
+/// whose reply is off the set is asked once more. The new rows are
+/// appended to the reader file, under one time, only when every pair of
+/// the call has a word: a call with a pair the reader gave no word for
+/// keeps nothing of what it read, and names that pair in `failed`. `Err`
+/// is the reader missing, a call of the program that gave no reply (a
+/// timeout, an exit with an error, a crash) or the file unwritable: a
+/// fault of the machine, never a reply, and it stops the command.
+pub fn read(root: &Path, pairs: &[Pair]) -> Result<Outcome, String> {
     read_live(root, pairs, &Live::of(root))
 }
 
 /// Like `read`, against the live sets a command read once for its run.
-pub fn read_live(root: &Path, pairs: &[Pair], live: &Live) -> Result<Vec<Row>, String> {
+pub fn read_live(root: &Path, pairs: &[Pair], live: &Live) -> Result<Outcome, String> {
     let reader = load(root)?;
     read_with_live(root, reader.as_ref(), pairs, live)
 }
 
-pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Vec<Row>, String> {
+pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Outcome, String> {
     read_with_live(root, reader, pairs, &Live::of(root))
 }
 
-/// One answer of the reader, by the index of the pair it answers.
-type Answered = (usize, Result<(String, String), String>);
+/// One answer of the reader, by the index of the pair it answers: the
+/// reason and the word, or the reply that was off the set (`Ok(Err)`), or
+/// no reply at all (`Err`: the program failed or stopped).
+type Answered = (usize, Result<Result<(String, String), String>, String>);
+
+/// The reader asked `idxs` of `pairs`, `AT_ONCE` at a time.
+fn ask_all(reader: &dyn Reader, pairs: &[Pair], idxs: &[usize]) -> Vec<Answered> {
+    let mut out = Vec::new();
+    for chunk in idxs.chunks(AT_ONCE) {
+        let got: Vec<Answered> = std::thread::scope(|s| {
+            let hs: Vec<_> = chunk
+                .iter()
+                .map(|&i| {
+                    s.spawn(move || {
+                        let p = &pairs[i];
+                        (
+                            i,
+                            reader
+                                .ask(p)
+                                .map(|reply| parse_reply(p.kind, &p.letters, &reply)),
+                        )
+                    })
+                })
+                .collect();
+            hs.into_iter()
+                .zip(chunk)
+                .map(|(h, &i)| {
+                    h.join()
+                        .unwrap_or((i, Err("the reader stopped".to_string())))
+                })
+                .collect()
+        });
+        out.extend(got);
+    }
+    out
+}
+
+/// One reply of the reader, by the index of the pair it answers: a reason
+/// and a word, or the reply off the set.
+type Replied = (usize, Result<(String, String), String>);
+
+/// `ask_all`, stopped by the first pair the program gave no reply for.
+fn ask_or_stop(
+    reader: &dyn Reader,
+    pairs: &[Pair],
+    idxs: &[usize],
+) -> Result<Vec<Replied>, String> {
+    let mut out = Vec::new();
+    for (i, r) in ask_all(reader, pairs, idxs) {
+        match r {
+            Ok(reply) => out.push((i, reply)),
+            Err(e) => return Err(msg::reader_stopped(&pairs[i].neighbour, e)),
+        }
+    }
+    Ok(out)
+}
 
 pub fn read_with_live(
     root: &Path,
     reader: &dyn Reader,
     pairs: &[Pair],
     live: &Live,
-) -> Result<Vec<Row>, String> {
+) -> Result<Outcome, String> {
     let model = reader.model();
     let mut have: HashMap<(String, String, String, String), Row> = HashMap::new();
     for r in read_file(root).rows {
@@ -294,37 +381,30 @@ pub fn read_with_live(
         }
     }
     let time = ledger::now_rfc3339();
-    let mut fresh: Vec<Row> = Vec::new();
-    for chunk in todo.chunks(AT_ONCE) {
-        let got: Vec<Answered> = std::thread::scope(|s| {
-            let hs: Vec<_> = chunk
-                .iter()
-                .map(|&i| {
-                    s.spawn(move || {
-                        let p = &pairs[i];
-                        (
-                            i,
-                            reader
-                                .ask(p)
-                                .and_then(|reply| parse_reply(p.kind, &p.letters, &reply)),
-                        )
-                    })
-                })
-                .collect();
-            hs.into_iter()
-                .zip(chunk)
-                .map(|(h, &i)| {
-                    h.join()
-                        .unwrap_or((i, Err("the reader stopped".to_string())))
-                })
-                .collect()
-        });
-        for (i, r) in got {
-            let p = &pairs[i];
-            match r {
-                Ok((reason, word)) => {
-                    let (text_hash, neighbour, prompt_hash, model) = key(p);
-                    fresh.push(Row {
+    let mut fresh: Vec<(usize, Row)> = Vec::new();
+    let mut failed: Vec<Failure> = Vec::new();
+    // A pair whose reply is off the set is asked once more: a reader is a
+    // model, and one reply off its set is not the pair's answer. A call the
+    // program gave no reply for stops the command: that is the machine, not
+    // the reader's word.
+    let mut got = ask_or_stop(reader, pairs, &todo)?;
+    let again: Vec<usize> = got
+        .iter()
+        .filter(|(_, r)| r.is_err())
+        .map(|&(i, _)| i)
+        .collect();
+    if !again.is_empty() {
+        got.retain(|(_, r)| r.is_ok());
+        got.extend(ask_or_stop(reader, pairs, &again)?);
+    }
+    for (i, r) in got {
+        let p = &pairs[i];
+        match r {
+            Ok((reason, word)) => {
+                let (text_hash, neighbour, prompt_hash, model) = key(p);
+                fresh.push((
+                    i,
+                    Row {
                         time: time.clone(),
                         text_hash,
                         neighbour,
@@ -333,24 +413,31 @@ pub fn read_with_live(
                         prompt_hash,
                         model,
                         version: crate::version::VERSION.to_string(),
-                    });
-                }
-                Err(e) => {
-                    let e = if e.starts_with("reader: ") {
-                        e
-                    } else {
-                        msg::reader_failed(&p.neighbour, e)
-                    };
-                    return Err(e);
-                }
+                    },
+                ));
             }
+            Err(e) => failed.push(Failure {
+                index: i,
+                neighbour: p.neighbour.clone(),
+                error: flatten(&e),
+            }),
         }
     }
-    append_live(root, &fresh, live)?;
-    for r in fresh {
-        have.insert(r.key(), r);
+    // The rows go to the file in the order of the pairs, whatever was asked
+    // again.
+    fresh.sort_by_key(|(i, _)| *i);
+    failed.sort_by_key(|f| f.index);
+    if failed.is_empty() {
+        let fresh: Vec<Row> = fresh.into_iter().map(|(_, r)| r).collect();
+        append_live(root, &fresh, live)?;
+        for r in fresh {
+            have.insert(r.key(), r);
+        }
     }
-    Ok(pairs.iter().map(|p| have[&key(p)].clone()).collect())
+    Ok(Outcome {
+        rows: pairs.iter().map(|p| have.get(&key(p)).cloned()).collect(),
+        failed,
+    })
 }
 
 #[cfg(test)]

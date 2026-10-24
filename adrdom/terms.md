@@ -151,8 +151,8 @@ aliases: user interface, web ui
 
 ## depends
 id: aef1b384-2b33-47a2-92a8-ec7f8fb258ef
-terms: current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
-definition: The line under a question heading naming what the question rests on: a term, a question in the same topic file, or a current decision.
+terms: question=277a8338-c57a-43cc-8b28-6b42e9347f6a, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+definition: The line under a question heading naming what the question rests on: a term or a question of the same topic file.
 aliases: stands on
 
 ## refusal

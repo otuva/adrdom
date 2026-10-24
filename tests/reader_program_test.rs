@@ -167,7 +167,10 @@ mod stubs {
         stub(&bin, "claude", &format!("#!/bin/sh\ncat > {0}/stdin.txt\nprintf '%s\\n' \"$@\" > {0}/args.txt\nprintf '%s\\n' '{{\"result\":\"They ask the same.\\nsame\"}}'\n", bin.display()));
         let r = reader::load_in(&dir, bin.as_os_str()).expect("claude found");
         assert_eq!(r.model(), reader::MODEL);
-        let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
+        let rows = reader::read_with(&dir, r.as_ref(), &[pair()])
+            .unwrap()
+            .all()
+            .unwrap();
         assert_eq!(rows[0].word, "same");
         assert_eq!(rows[0].model, reader::MODEL);
         let got = std::fs::read_to_string(bin.join("stdin.txt")).unwrap();
@@ -203,7 +206,10 @@ mod stubs {
         );
         let r = reader::load_in(&dir, bin.as_os_str()).expect("codex found");
         assert_eq!(r.model(), reader::CODEX_MODEL);
-        let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
+        let rows = reader::read_with(&dir, r.as_ref(), &[pair()])
+            .unwrap()
+            .all()
+            .unwrap();
         assert_eq!(rows[0].word, "same");
         assert_eq!(rows[0].model, reader::CODEX_MODEL);
         let got = std::fs::read_to_string(bin.join("stdin.txt")).unwrap();
@@ -244,6 +250,9 @@ fn the_real_codex_program_reads_one_pair() {
             return;
         }
     };
-    let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
+    let rows = reader::read_with(&dir, r.as_ref(), &[pair()])
+        .unwrap()
+        .all()
+        .unwrap();
     eprintln!("word: {} reason: {}", rows[0].word, rows[0].reason);
 }
