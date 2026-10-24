@@ -8,18 +8,22 @@
 //! 1. Every heading not yet asked with no neighbours on record at its
 //!    heading hash gets the ten nearest neighbours of the pool recorded in
 //!    the neighbours file, whatever state the rest of the file is in. The
-//!    reader reads none of them ("Does the reader read a neighbour of a
-//!    heading?", 60341be0-fd05-4281-92d7-668584a8539a A: no).
+//!    heading step itself reads none of them: the body step does.
 //! 2. While a heading has no body, no body is read.
 //! 3. When every heading has a body and no finding the agent clears without
 //!    the reader stands on the file (a word over the limit, a banned word, a
 //!    depends line over its bounds, a tell), each question with no rows at
-//!    its body hash gets the ten nearest neighbours of the pool, read with
-//!    the body prompt ("What word does the reader give a neighbour of a
-//!    question with its body?", d10dab89-1d42-4764-9d72-22d6fd6a9260 A), and
-//!    the ten nearest other questions of the file, read with the plan prompt
-//!    ("Does the tool bring a plan's own questions as neighbours of each
-//!    other?", d984e425-3e88-4756-88fb-18241f9f62a7 A). While such a finding
+//!    its body hash, or lacking a row for a neighbour recorded for its
+//!    heading, gets the ten nearest neighbours of the pool and then the
+//!    neighbours recorded for its heading that are still in the pool, each
+//!    once, read with the body prompt ("What word does the reader give a
+//!    neighbour of a question with its body?",
+//!    d10dab89-1d42-4764-9d72-22d6fd6a9260 A; "Does the body step read the
+//!    neighbours brought for the heading?",
+//!    e1cbe055-5638-41ea-853e-13991b945ae1 A: yes), and the ten nearest
+//!    other questions of the file, read with the plan prompt ("Does the body
+//!    step bring the plan's own questions as neighbours?",
+//!    aae3f502-1395-4812-96ef-71510a1df4db A: yes). While such a finding
 //!    stands, the run prints it and reads nothing: the agent clears it first.
 //!    A pair the reader gives no word for, twice, is a finding whose move is
 //!    plan again; that question's rows wait, the others are read.
@@ -29,9 +33,9 @@
 //! The model is loaded when a heading has no neighbours on record, and the
 //! reader only when a body is to be read. Planning stops without them
 //! ("Does planning stop without the embedding model?",
-//! 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop with no reader
-//! on the machine?", bd94a89f-7142-4dab-b757-6482a718a0a0 A); `adr read`
-//! loads them too.
+//! 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop when the
+//! reader is missing?", 623bb06f-1762-4a25-9f1b-90cb0923dbc8 A: yes);
+//! `adr read` loads them too.
 use crate::index;
 use crate::ledger;
 use crate::msg;
@@ -42,6 +46,7 @@ use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::rules::{Class, Command, Finding, Subject};
 use crate::state;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Per "What does a command print when it writes nothing?" (1af76f91 A): the
@@ -253,6 +258,13 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
         let (near, qv) =
             index::nearest_with_vectors(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         let vecs = &qv[todo.len()..];
+        // The text of each record of the pool, by identifier, for the
+        // neighbours recorded for a heading (`nearest` embeds the same pool).
+        let terms = state::load_terms(root).map(|t| t.terms).unwrap_or_default();
+        let pool_text: HashMap<String, String> = index::pool(&e.all, &led, &terms)
+            .into_iter()
+            .map(|r| (r.id, r.text))
+            .collect();
         for (&i, n) in todo.iter().zip(&near) {
             let own: Vec<usize> = match planned.iter().position(|&p| p == i) {
                 Some(me) if planned.len() > 1 => {
@@ -263,11 +275,27 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
                 }
                 _ => Vec::new(),
             };
+            // The body's ten nearest, then each neighbour recorded for the
+            // heading that is in the pool and not among them.
+            let mut pool: Vec<(String, String)> =
+                n.iter().map(|x| (x.id.clone(), x.text.clone())).collect();
+            for h in pl
+                .questions
+                .iter()
+                .find(|q| q.idx == i)
+                .map_or(&[][..], |q| &q.heading_neighbours[..])
+            {
+                if let Some(text) = pool_text.get(&h.key) {
+                    if !pool.iter().any(|(id, _)| *id == h.key) {
+                        pool.push((h.key.clone(), text.clone()));
+                    }
+                }
+            }
             // A pair the reader gave no word for, twice, is a finding whose
             // move is this command again; the question's rows wait, the
             // other questions are read on.
-            let got =
-                reader::read_live(root, &plan::body_pairs(rf, i, n, &own), &live).map_err(stop)?;
+            let got = reader::read_live(root, &plan::body_pairs(rf, i, &pool, &own), &live)
+                .map_err(stop)?;
             for f in got.failed {
                 let said = msg::reader_no_word(
                     &format!("{}: \"{}\"", rf.rel, rf.sections[i].heading_text),

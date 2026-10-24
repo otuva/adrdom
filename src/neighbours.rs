@@ -1,8 +1,8 @@
 //! The neighbours file: the record that the heading step of a question was
 //! done, and the neighbours it brought.
 //!
-//! "Does the reader read a neighbour of a heading?"
-//! (60341be0-fd05-4281-92d7-668584a8539a A): no. The tool brings the ten
+//! "Does the body step read the neighbours brought for the heading?"
+//! (e1cbe055-5638-41ea-853e-13991b945ae1 A): yes. The tool brings the ten
 //! nearest current decisions and term definitions of a heading by embedding
 //! and records them in `adrdom/state/neighbours.tsv`, an untracked file: one
 //! row for each neighbour, the heading hash (`record::heading_hash`) and the

@@ -263,9 +263,9 @@ fn the_steps_in_order_from_headings_to_approval() {
     ok(&out);
 }
 
-// adr: 60341be0-fd05-4281-92d7-668584a8539a
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
 #[test]
-fn the_reader_reads_no_neighbour_of_a_heading() {
+fn the_heading_step_reads_no_neighbour_and_the_body_step_reads_those_of_the_heading() {
     let dir = repo();
     let before = reader_text(&dir);
     let held_n = neighbour_rows(&dir).len();
@@ -298,6 +298,35 @@ fn the_reader_reads_no_neighbour_of_a_heading() {
         "no word at the heading step: {}",
         out
     );
+    // The body step reads the neighbours recorded for each heading.
+    let recorded = neighbour_rows(&dir);
+    write(
+        &dir,
+        &format!(
+            "# Topic\n{}{}",
+            section(H1, &body("one")),
+            section(H2, &body("two"))
+        ),
+    );
+    let out = ok(&plan(&dir));
+    let rf = record::load(&dir.join(REL)).unwrap();
+    for (i, h) in [H1, H2].iter().enumerate() {
+        let hash = sha(&record::body_text(&rf, &rf.sections[i]));
+        for (_, id) in recorded
+            .iter()
+            .filter(|(hh, _)| *hh == record::heading_hash(&rf.sections[i]))
+        {
+            assert!(
+                rows(&dir)
+                    .iter()
+                    .any(|r| r.text_hash == hash && r.neighbour == *id),
+                "{} has a row for {}: {}",
+                h,
+                id,
+                out
+            );
+        }
+    }
     // The model is still needed for it.
     let dir = repo();
     two_headings(&dir);
@@ -318,7 +347,7 @@ fn the_reader_reads_no_neighbour_of_a_heading() {
     assert_eq!(neighbour_rows(&dir).len(), held_n, "nothing was written");
 }
 
-// adr: 60341be0-fd05-4281-92d7-668584a8539a
+// adr: 0d977e39-a657-4596-8eca-8ceb335f3081
 #[test]
 fn the_neighbours_file_is_not_tracked_and_a_second_run_writes_neither_file() {
     let dir = repo();
@@ -582,7 +611,7 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     );
 }
 
-// adr: d984e425-3e88-4756-88fb-18241f9f62a7
+// adr: aae3f502-1395-4812-96ef-71510a1df4db
 #[test]
 fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
     let dir = repo();
@@ -966,7 +995,7 @@ fn planning_stops_without_the_model() {
     assert_eq!(rows(&dir).len(), before, "nothing was read");
 }
 
-// adr: bd94a89f-7142-4dab-b757-6482a718a0a0
+// adr: 623bb06f-1762-4a25-9f1b-90cb0923dbc8
 #[test]
 fn planning_stops_without_the_reader() {
     let dir = repo();
@@ -1060,7 +1089,7 @@ fn the_body_step_records_closes_and_a_letter_and_finds_no_word_outside_the_set()
     }
 }
 
-// adr: 60341be0-fd05-4281-92d7-668584a8539a
+// adr: d3be71e4-ce7b-43b0-86a8-e86868521f99
 #[test]
 fn the_neighbours_file_deleted_brings_back_the_heading_step_only_where_a_body_is_missing() {
     let dir = repo();
@@ -1113,5 +1142,143 @@ fn the_neighbours_file_deleted_brings_back_the_heading_step_only_where_a_body_is
         )) && l.ends_with(&format!("agent runs: adr plan {}", REL))),
         "{}",
         shown
+    );
+}
+
+/// A repository whose pool holds more than ten records: the term `zebra`,
+/// which only a heading with that word is near, and eleven terms that the
+/// words of any body are near.
+fn wide_repo() -> PathBuf {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let mut content = String::from(
+        "# Terms\n\n## widget\nid: aaaaaaa0-9999-9999-9999-999999999999\ndefinition: widget\naliases: \n\n## zebra\nid: aaaaaaaf-9999-9999-9999-999999999999\ndefinition: zebra\naliases: \n",
+    );
+    for i in 1..=11 {
+        content.push_str(&format!(
+            "\n## t{i}\nid: aaaaaaa{i:x}-9999-9999-9999-999999999999\ndefinition: problem standard widget glow does the yes no\naliases: \n"
+        ));
+    }
+    approve_terms_via_ledger(&dir, &content);
+    dir
+}
+
+const ZEBRA_ID: &str = "aaaaaaaf-9999-9999-9999-999999999999";
+const HZ: &str = "Does the zebra glow?";
+
+/// The wide repository with one planned question about the zebra, and the
+/// hash of its body.
+fn zebra_planned() -> (PathBuf, String) {
+    let dir = wide_repo();
+    write(&dir, &format!("# Topic\n{}", section(HZ, &body("one"))));
+    for _ in 0..3 {
+        ok(&plan(&dir));
+    }
+    let rf = record::load(&dir.join(REL)).unwrap();
+    let hash = sha(&record::body_text(&rf, &rf.sections[0]));
+    (dir, hash)
+}
+
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
+#[test]
+fn a_neighbour_of_the_heading_outside_the_bodys_ten_is_read_once_at_the_body_step() {
+    let dir = wide_repo();
+    write(&dir, &format!("# Topic\n{}", section(HZ, "")));
+    let out = ok(&plan(&dir));
+    let recorded = neighbour_rows(&dir);
+    assert!(recorded.iter().any(|(_, id)| id == ZEBRA_ID), "{}", out);
+    assert!(rows(&dir).is_empty(), "the heading step read nothing");
+    write(&dir, &format!("# Topic\n{}", section(HZ, &body("one"))));
+    let out = ok(&plan(&dir));
+    let rf = record::load(&dir.join(REL)).unwrap();
+    let hash = sha(&record::body_text(&rf, &rf.sections[0]));
+    let at_body: Vec<reader::Row> = rows(&dir)
+        .into_iter()
+        .filter(|r| r.text_hash == hash)
+        .collect();
+    let zebra: Vec<&reader::Row> = at_body.iter().filter(|r| r.neighbour == ZEBRA_ID).collect();
+    assert_eq!(zebra.len(), 1, "{:?}", at_body);
+    assert!(!zebra[0].word.is_empty());
+    assert_eq!(zebra[0].prompt_hash, Kind::Body.prompt_hash());
+    // The body's ten are the other terms: the zebra is read in addition.
+    assert_eq!(at_body.len(), 10 + 1, "{:?}", at_body);
+    assert_eq!(
+        out.lines()
+            .filter(|l| l.starts_with("  term \"zebra\": body "))
+            .count(),
+        1,
+        "{}",
+        out
+    );
+}
+
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
+#[test]
+fn a_neighbour_in_the_headings_ten_and_the_bodys_ten_gets_one_row() {
+    let (dir, hash) = zebra_planned();
+    let recorded: Vec<String> = neighbour_rows(&dir).into_iter().map(|(_, id)| id).collect();
+    let at_body: Vec<String> = rows(&dir)
+        .into_iter()
+        .filter(|r| r.text_hash == hash)
+        .map(|r| r.neighbour)
+        .collect();
+    let mut once = at_body.clone();
+    once.sort();
+    once.dedup();
+    assert_eq!(
+        once.len(),
+        at_body.len(),
+        "no neighbour twice: {:?}",
+        at_body
+    );
+    let both = recorded
+        .iter()
+        .filter(|id| at_body.iter().any(|n| n == *id));
+    assert!(both.count() > 1, "{:?} {:?}", recorded, at_body);
+    for id in &recorded {
+        assert_eq!(at_body.iter().filter(|n| *n == id).count(), 1, "{}", id);
+    }
+}
+
+// adr: e1cbe055-5638-41ea-853e-13991b945ae1
+#[test]
+fn a_question_lacking_the_row_of_a_heading_neighbour_has_rows_missing_and_plan_reads_only_that_pair(
+) {
+    let (dir, hash) = zebra_planned();
+    let full = rows(&dir).len();
+    let rel = dir.join(REL);
+    let shown = |dir: &Path| stdout(&adr(dir, &["show", rel.to_str().unwrap()], &[], ""));
+    assert!(
+        !shown(&dir).contains("has no reader rows for its heading with its body"),
+        "{}",
+        shown(&dir)
+    );
+    // The rows as an earlier build wrote them: no row for the zebra.
+    let mut text = String::new();
+    for r in rows(&dir) {
+        if !(r.text_hash == hash && r.neighbour == ZEBRA_ID) {
+            text.push_str(&reader::row_line(&r));
+            text.push('\n');
+        }
+    }
+    std::fs::write(dir.join("adrdom/state/reader.tsv"), text).unwrap();
+    assert_eq!(rows(&dir).len(), full - 1);
+    let out = shown(&dir);
+    assert!(
+        out.contains(&format!(
+            "{}: \"{}\" has no reader rows for its heading with its body",
+            REL, HZ
+        )),
+        "{}",
+        out
+    );
+    let out = ok(&plan(&dir));
+    let now = rows(&dir);
+    assert_eq!(now.len(), full, "{}", out);
+    assert_eq!(now.last().unwrap().neighbour, ZEBRA_ID);
+    assert!(
+        !shown(&dir).contains("has no reader rows"),
+        "{}",
+        shown(&dir)
     );
 }

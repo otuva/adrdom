@@ -1,10 +1,10 @@
 //! The reader: a model asked how a new text relates to a neighbour, a
 //! decision, a term or another question of the same plan.
 //!
-//! "Does the reader read a neighbour of a heading?"
-//! (60341be0-fd05-4281-92d7-668584a8539a A): no. A heading is never given to
-//! the reader; its neighbours are recorded without a word
-//! (`neighbours::record`). "What word does the reader give a neighbour of a
+//! "Does the body step read the neighbours brought for the heading?"
+//! (e1cbe055-5638-41ea-853e-13991b945ae1 A): yes. A heading alone is never
+//! given to the reader; its neighbours are recorded without a word
+//! (`neighbours::record`) and read at the body step with the body. "What word does the reader give a neighbour of a
 //! question with its body?" (d10dab89-1d42-4764-9d72-22d6fd6a9260 A): one of
 //! same, consistent, inconsistent, unrelated, or `closes` with the letter of
 //! the option it leaves standing, after one sentence of reason. "What word
@@ -31,8 +31,8 @@
 //! `.codex/rules/adrdom.rules` for `codex`. A repository installed for no
 //! agent has no reader, and with both the tool picks `claude`.
 //!
-//! "Does planning stop with no reader on the machine?"
-//! (bd94a89f-7142-4dab-b757-6482a718a0a0 A): yes. `load` refuses when that
+//! "Does planning stop when the reader is missing?"
+//! (623bb06f-1762-4a25-9f1b-90cb0923dbc8 A): yes. `load` refuses when that
 //! program is not on PATH; planning loads it only at the body
 //! step. `adr read` loads the reader too, for a
 //! `Set` pair: a current decision against another, the first text the one

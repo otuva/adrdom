@@ -15,11 +15,13 @@
 //!
 //! The records of a question are two. The neighbours file holds, at the
 //! heading hash (`record::heading_hash`), the current decisions and terms
-//! brought for the heading, with no word ("Does the reader read a neighbour
-//! of a heading?", 60341be0-fd05-4281-92d7-668584a8539a A: no). The reader
-//! file's rows at the body hash (`record::body_hash`) hold the neighbours of
-//! the heading with its body: current decisions and terms, and the other
-//! questions of the file, whose key is `text:` and their own body hash. A
+//! brought for the heading, with no word. The reader file's rows at the
+//! body hash (`record::body_hash`) hold the neighbours of the heading with
+//! its body: current decisions and terms, among them each neighbour of the
+//! heading still in the pool ("Does the body step read the neighbours
+//! brought for the heading?", e1cbe055-5638-41ea-853e-13991b945ae1 A: yes),
+//! and the other questions of the file, whose key is `text:` and their own
+//! body hash. The body step is not done until each has its row. A
 //! question whose body rows are on record has its heading step done, whether
 //! or not the neighbours file holds its heading. The reader's word
 //! never stops anything ("Does a reader's word stop a command?",
@@ -90,8 +92,11 @@ pub struct Neighbour {
     pub kind: NKind,
     /// The decision's heading, the term's name, or the question's heading.
     pub name: String,
-    /// The reader's word, `None` for a neighbour of a heading: the reader
-    /// does not read it.
+    /// The neighbour's key in the rows: the pool identifier, or `text:` and
+    /// the body hash of a question of the file.
+    pub key: String,
+    /// The reader's word, `None` for a neighbour of a heading: it has none
+    /// until the body step reads it.
     pub word: Option<String>,
     /// The reader's sentence of reason, `None` with no word.
     pub reason: Option<String>,
@@ -650,6 +655,7 @@ fn load_inner(
                     out.push(Neighbour {
                         kind,
                         name,
+                        key: key.to_string(),
                         word: Some(r.word.clone()),
                         reason: Some(r.reason.clone()),
                         line: targets.get(&target).copied(),
@@ -676,6 +682,7 @@ fn load_inner(
                     out.push(Neighbour {
                         kind,
                         name,
+                        key: key.clone(),
                         word: None,
                         reason: None,
                         line: targets.get(&target).copied(),
@@ -698,11 +705,22 @@ fn load_inner(
             let body_stale = body_hash.as_deref().is_some_and(|h| {
                 (!pool_empty && is_stale(h, Kind::Body)) || (others > 0 && is_stale(h, Kind::Plan))
             });
-            let body_done =
-                has_body && !body_stale && (b_rows.is_some() || (pool_empty && others == 0));
+            let h_rows = heading_neighbours(&heading_hash, &targets);
+            // Each neighbour on record for the heading and still in the pool
+            // has its row at the body hash.
+            let heading_read = h_rows.as_deref().unwrap_or_default().iter().all(|h| {
+                b_rows
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .any(|b| b.key == h.key)
+            });
+            let body_done = has_body
+                && !body_stale
+                && heading_read
+                && (b_rows.is_some() || (pool_empty && others == 0));
             // A question whose body step is done has its heading step done, with
             // no neighbours of its own when none is on record.
-            let h_rows = heading_neighbours(&heading_hash, &targets);
             let heading_done = h_rows.is_some() || pool_empty || body_done;
             questions.push(Question {
                 idx: i,
@@ -832,24 +850,25 @@ fn row_kind(neighbour: &str) -> Kind {
 }
 
 /// The reader's pairs for the question at `idx` with its body: each
-/// neighbour of the pool (`near`), then each of the other questions of the
-/// file given in `own` as (index, text) nearest first. A pair carries the
-/// letters of the question's options.
+/// neighbour of the pool (`near`, identifier and text, the body's nearest
+/// then the heading's), then each of the other questions of the file given
+/// in `own` nearest first. A pair carries the letters of the question's
+/// options.
 pub fn body_pairs(
     rf: &RecordFile,
     idx: usize,
-    near: &[index::Neighbour],
+    near: &[(String, String)],
     own: &[usize],
 ) -> Vec<Pair> {
     let new_text = record::body_text(rf, &rf.sections[idx]);
     let letters: Vec<char> = rf.sections[idx].options.iter().map(|o| o.letter).collect();
     let mut out: Vec<Pair> = near
         .iter()
-        .map(|n| Pair {
+        .map(|(id, text)| Pair {
             kind: Kind::Body,
             new_text: new_text.clone(),
-            neighbour: n.id.clone(),
-            neighbour_text: n.text.clone(),
+            neighbour: id.clone(),
+            neighbour_text: text.clone(),
             letters: letters.clone(),
         })
         .collect();
