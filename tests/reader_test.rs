@@ -600,6 +600,37 @@ fn a_word_outside_the_plan_set_is_no_word_and_keeps_no_row() {
     assert!(reader::read_file(&dir).rows.is_empty());
 }
 
+/// A reader whose program gives no reply.
+struct Broken;
+
+impl reader::Reader for Broken {
+    fn ask(&self, _pair: &Pair) -> Result<String, String> {
+        Err("claude exited with exit status: 1: quota".to_string())
+    }
+    fn model(&self) -> &'static str {
+        reader::MODEL
+    }
+}
+
+// adr: e78b8297-fd89-4e09-9c3e-9eeb0fd0f654
+#[test]
+fn a_program_that_gives_no_reply_stops_the_call_and_keeps_no_row() {
+    let dir = new_repo();
+    let p = vec![
+        pair(Kind::Body, "Q fine [word:same]", "id-1"),
+        pair(Kind::Body, "Q two [word:same]", "id-2"),
+    ];
+    let err = reader::read_with(&dir, &Broken, &p).unwrap_err();
+    assert!(
+        err.contains("reader: no reply for the neighbour id-")
+            && err.contains("quota")
+            && err.contains("agent runs the same adr command again"),
+        "{}",
+        err
+    );
+    assert!(reader::read_file(&dir).rows.is_empty());
+}
+
 // adr: d10dab89-1d42-4764-9d72-22d6fd6a9260
 #[test]
 fn the_body_set_accepts_its_four_words_and_closes_with_a_letter_of_the_question() {

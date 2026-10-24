@@ -260,8 +260,8 @@ impl Outcome {
     }
 }
 
-/// A pair the reader gave no word for, asked twice: the program gave no
-/// reply, or the reply was not a reason and one word of the set.
+/// A pair the reader gave no word for, asked twice: a reply that was not
+/// a reason and one word of the set, both times.
 #[derive(Debug, Clone)]
 pub struct Failure {
     /// The pair's position in the call.
@@ -273,11 +273,13 @@ pub struct Failure {
 /// The reader's answer to every pair, in order. A pair whose text hash,
 /// neighbour, prompt hash and model are on record keeps its recorded row
 /// and is not read again; the rest are read four at a time, and a pair
-/// that gets no word is asked once more. The new rows are appended to the
-/// reader file, under one time, only when every pair of the call has a
-/// word: a call with a pair the reader gave no word for keeps nothing of
-/// what it read, and names that pair in `failed`. `Err` is the reader
-/// missing or the file unwritable, never a reply.
+/// whose reply is off the set is asked once more. The new rows are
+/// appended to the reader file, under one time, only when every pair of
+/// the call has a word: a call with a pair the reader gave no word for
+/// keeps nothing of what it read, and names that pair in `failed`. `Err`
+/// is the reader missing, a call of the program that gave no reply (a
+/// timeout, an exit with an error, a crash) or the file unwritable: a
+/// fault of the machine, never a reply, and it stops the command.
 pub fn read(root: &Path, pairs: &[Pair]) -> Result<Outcome, String> {
     read_live(root, pairs, &Live::of(root))
 }
@@ -292,8 +294,10 @@ pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Out
     read_with_live(root, reader, pairs, &Live::of(root))
 }
 
-/// One answer of the reader, by the index of the pair it answers.
-type Answered = (usize, Result<(String, String), String>);
+/// One answer of the reader, by the index of the pair it answers: the
+/// reason and the word, or the reply that was off the set (`Ok(Err)`), or
+/// no reply at all (`Err`: the program failed or stopped).
+type Answered = (usize, Result<Result<(String, String), String>, String>);
 
 /// The reader asked `idxs` of `pairs`, `AT_ONCE` at a time.
 fn ask_all(reader: &dyn Reader, pairs: &[Pair], idxs: &[usize]) -> Vec<Answered> {
@@ -309,7 +313,7 @@ fn ask_all(reader: &dyn Reader, pairs: &[Pair], idxs: &[usize]) -> Vec<Answered>
                             i,
                             reader
                                 .ask(p)
-                                .and_then(|reply| parse_reply(p.kind, &p.letters, &reply)),
+                                .map(|reply| parse_reply(p.kind, &p.letters, &reply)),
                         )
                     })
                 })
@@ -325,6 +329,26 @@ fn ask_all(reader: &dyn Reader, pairs: &[Pair], idxs: &[usize]) -> Vec<Answered>
         out.extend(got);
     }
     out
+}
+
+/// One reply of the reader, by the index of the pair it answers: a reason
+/// and a word, or the reply off the set.
+type Replied = (usize, Result<(String, String), String>);
+
+/// `ask_all`, stopped by the first pair the program gave no reply for.
+fn ask_or_stop(
+    reader: &dyn Reader,
+    pairs: &[Pair],
+    idxs: &[usize],
+) -> Result<Vec<Replied>, String> {
+    let mut out = Vec::new();
+    for (i, r) in ask_all(reader, pairs, idxs) {
+        match r {
+            Ok(reply) => out.push((i, reply)),
+            Err(e) => return Err(msg::reader_stopped(&pairs[i].neighbour, e)),
+        }
+    }
+    Ok(out)
 }
 
 pub fn read_with_live(
@@ -357,11 +381,13 @@ pub fn read_with_live(
         }
     }
     let time = ledger::now_rfc3339();
-    let mut fresh: Vec<Row> = Vec::new();
+    let mut fresh: Vec<(usize, Row)> = Vec::new();
     let mut failed: Vec<Failure> = Vec::new();
-    // A pair that gets no word is asked once more: a reader is a model, and
-    // one reply off its set is not the pair's answer.
-    let mut got = ask_all(reader, pairs, &todo);
+    // A pair whose reply is off the set is asked once more: a reader is a
+    // model, and one reply off its set is not the pair's answer. A call the
+    // program gave no reply for stops the command: that is the machine, not
+    // the reader's word.
+    let mut got = ask_or_stop(reader, pairs, &todo)?;
     let again: Vec<usize> = got
         .iter()
         .filter(|(_, r)| r.is_err())
@@ -369,23 +395,26 @@ pub fn read_with_live(
         .collect();
     if !again.is_empty() {
         got.retain(|(_, r)| r.is_ok());
-        got.extend(ask_all(reader, pairs, &again));
+        got.extend(ask_or_stop(reader, pairs, &again)?);
     }
     for (i, r) in got {
         let p = &pairs[i];
         match r {
             Ok((reason, word)) => {
                 let (text_hash, neighbour, prompt_hash, model) = key(p);
-                fresh.push(Row {
-                    time: time.clone(),
-                    text_hash,
-                    neighbour,
-                    word,
-                    reason,
-                    prompt_hash,
-                    model,
-                    version: crate::version::VERSION.to_string(),
-                });
+                fresh.push((
+                    i,
+                    Row {
+                        time: time.clone(),
+                        text_hash,
+                        neighbour,
+                        word,
+                        reason,
+                        prompt_hash,
+                        model,
+                        version: crate::version::VERSION.to_string(),
+                    },
+                ));
             }
             Err(e) => failed.push(Failure {
                 index: i,
@@ -394,8 +423,12 @@ pub fn read_with_live(
             }),
         }
     }
+    // The rows go to the file in the order of the pairs, whatever was asked
+    // again.
+    fresh.sort_by_key(|(i, _)| *i);
     failed.sort_by_key(|f| f.index);
     if failed.is_empty() {
+        let fresh: Vec<Row> = fresh.into_iter().map(|(_, r)| r).collect();
         append_live(root, &fresh, live)?;
         for r in fresh {
             have.insert(r.key(), r);

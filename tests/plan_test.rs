@@ -934,14 +934,9 @@ fn a_pair_the_reader_gives_no_word_for_is_a_finding_and_the_other_questions_are_
         out
     );
     assert_eq!(rows(&dir).len() - before, 4, "{}", out);
-    assert!(
-        out.contains(&format!(
-            "\"{}\" has no reader rows for its heading with its body",
-            H1
-        )),
-        "{}",
-        out
-    );
+    // The one cause is one finding: the rows missing for that question are
+    // not a second one.
+    assert!(!out.contains("has no reader rows"), "{}", out);
     // With the marker gone the first question is read, and nothing is
     // read twice.
     write(

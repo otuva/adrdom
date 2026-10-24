@@ -272,6 +272,20 @@ pub fn reader_no_agent() -> String {
     )
 }
 
+/// The reader's program gave no reply for a pair (a timeout, an exit with
+/// an error, a crash): the machine's fault, not the reader's word, and the
+/// command stops; nothing of that call is kept.
+pub fn reader_stopped(neighbour: &str, e: impl Display) -> String {
+    refuse(
+        format!(
+            "reader: no reply for the neighbour {}: {}",
+            neighbour,
+            crate::reader::flatten(&e.to_string())
+        ),
+        Next::agent(Act::RunsAgain),
+    )
+}
+
 /// The reader gave no word for a pair of texts, asked twice: nothing of
 /// that call is kept, and the next run of the same command reads the pair
 /// again. `subject` is what the pair was read for (`<rel>: "<heading>"`

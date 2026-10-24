@@ -41,8 +41,7 @@ use crate::plan::{self, Planning, Step};
 use crate::reader;
 use crate::record::{self, RecordFile};
 use crate::repo;
-use crate::rules::Command;
-use crate::rules::Subject::TopicFile;
+use crate::rules::{Class, Command, Finding, Subject};
 use crate::state;
 use std::path::{Path, PathBuf};
 
@@ -223,17 +222,18 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     // them. The findings of the planning itself (a step without its record,
     // a neighbour on no line) are what the step clears, never what stops it.
     let tests = crate::commands::check::test_index(root, &repo::Source::WorkingTree);
-    let mut report = crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests);
+    let index = crate::rules::RepoIndex::new(root, &e.all, &e.terms, &led);
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
-    let mut no_word: Vec<crate::rules::Finding> = Vec::new();
-    if pl.lines_missing(Step::Heading).is_empty()
+    let mut no_word: Vec<Finding> = Vec::new();
+    let read_bodies = pl.lines_missing(Step::Heading).is_empty()
         && pl.without_body().is_empty()
         && !todo.is_empty()
-        && !report
-            .findings
+        // The one judgement `check` and `approve` read (`judge_topic_file_in`),
+        // so the three agree on whether the rows wait.
+        && !crate::rules::judge_topic_file_in(root, rf, &e.all, &e.terms, &led, &index)
             .iter()
-            .any(|f| f.subject == TopicFile(rf.rel.clone()) && f.blocks_the_reader())
-    {
+            .any(Finding::blocks_the_reader);
+    if read_bodies {
         // The other questions not yet asked are ranked by their own text. One
         // call embeds the texts of the questions to read and of every
         // planned question.
@@ -280,8 +280,8 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
                     }),
                 );
                 no_word.push(
-                    crate::rules::Finding::said(crate::rules::Class::Reader, said)
-                        .about(crate::rules::Subject::TopicFile(rf.rel.clone()))
+                    Finding::said(Class::Reader, said)
+                        .about(Subject::TopicFile(rf.rel.clone()))
                         .in_section(i),
                 );
             }
@@ -296,10 +296,22 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
             .map(|q| q.idx)
             .collect();
         did(&pl, &made, Step::Body, &mut read);
-        // What the run prints is read after the rows it wrote: the status,
-        // the findings and the moves of the file as it stands now.
-        report = crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests);
     }
+    // What the run prints is read after the rows it wrote: the status, the
+    // findings and the moves of the file as it stands now. A question with
+    // a pair the reader gave no word for has its rows missing for that one
+    // reason, so that finding stands in for the rows-missing one.
+    let mut report = if read_bodies {
+        crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests)
+    } else {
+        crate::moves::of_topic_file_with(root, rf, &e.all, &e.terms, &led, &tests, &index)
+    };
+    let waiting: Vec<String> = no_word
+        .iter()
+        .flat_map(|f| f.sections.iter())
+        .map(|&i| msg::plan_rows_missing(&rf.rel, &rf.sections[i].heading_text).found)
+        .collect();
+    report.findings.retain(|f| !waiting.contains(&f.found));
     report.findings.splice(0..0, no_word);
 
     let mut lines = vec![crate::commands::show::topic_file_status_line(&led, rf)];
