@@ -56,7 +56,7 @@ definition: What the thing is, never what it does.
 aliases: the other forms of the name, comma separated
 ```
 
-A term is retired by `retired: yes` in its entry. Terms are approved before any topic file that names them, one entry at a time: `owner runs: adr approve adrdom/terms.md <name>`.
+A term's identifier carries its meaning: the name may change, and a former name goes to `aliases:`. A retired term, `retired: yes` in its entry, holds no words. A term is retired only once no question names it: the decisions naming it are superseded first. Terms are approved before any topic file that names them, one entry at a time: `owner runs: adr approve adrdom/terms.md <name>`.
 
 ### Topic files
 

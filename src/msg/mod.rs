@@ -743,7 +743,6 @@ mod tests {
             blame_range_of_no_row("x.md", "Does X?", "adrdom/blame/notes.md", 3, 4).text(),
             plan_neighbours_missing("x.md", "Does X?").text(),
             plan_rows_missing("x.md", "Does X?").text(),
-            plan_line_missing("x.md", "Does X?", "term", "widget").text(),
             reader_no_word(
                 "x.md: \"Does X?\"",
                 "id-1",

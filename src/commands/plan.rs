@@ -10,9 +10,8 @@
 //!    the neighbours file, whatever state the rest of the file is in. The
 //!    reader reads none of them ("Does the reader read a neighbour of a
 //!    heading?", 60341be0-fd05-4281-92d7-668584a8539a A: no).
-//! 2. A neighbour on no line is a finding, and no body is read.
-//! 3. While a heading has no body, no body is read.
-//! 4. When every heading has a body and no finding the agent clears without
+//! 2. While a heading has no body, no body is read.
+//! 3. When every heading has a body and no finding the agent clears without
 //!    the reader stands on the file (a word over the limit, a banned word, a
 //!    depends line over its bounds, a tell), each question with no rows at
 //!    its body hash gets the ten nearest neighbours of the pool, read with
@@ -24,7 +23,7 @@
 //!    stands, the run prints it and reads nothing: the agent clears it first.
 //!    A pair the reader gives no word for, twice, is a finding whose move is
 //!    plan again; that question's rows wait, the others are read.
-//! 5. What it prints is the file's status, what it read, the findings on the
+//! 4. What it prints is the file's status, what it read, the findings on the
 //!    file and the file's moves, the one computation `show` reads too.
 //!
 //! The model is loaded when a heading has no neighbours on record, and the
@@ -214,19 +213,18 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
         did(&pl, &todo, Step::Heading, &mut read);
     }
 
-    // Once every heading's neighbours are on a line and every heading has
-    // its body, the neighbours of each question with its body. The reader
-    // reads only when no finding the agent clears without it stands on the
-    // file (a word over the limit, a banned word, a depends line over its
-    // bounds, a tell): the run prints those at once, and the rows wait on
-    // them. The findings of the planning itself (a step without its record,
-    // a neighbour on no line) are what the step clears, never what stops it.
+    // Once every heading has its neighbours on record and its body, the
+    // neighbours of each question with its body. The reader reads only when
+    // no finding the agent clears without it stands on the file (a word over
+    // the limit, a banned word, a depends line over its bounds, a tell): the
+    // run prints those at once, and the rows wait on them. The finding of
+    // the planning itself (a step without its record) is what the step
+    // clears, never what stops it.
     let tests = crate::commands::check::test_index(root, &repo::Source::WorkingTree);
     let index = crate::rules::RepoIndex::new(root, &e.all, &e.terms, &led);
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
     let mut no_word: Vec<Finding> = Vec::new();
-    let read_bodies = pl.lines_missing(Step::Heading).is_empty()
-        && pl.without_body().is_empty()
+    let read_bodies = pl.without_body().is_empty()
         && !todo.is_empty()
         // The one judgement `check` and `approve` read (`judge_topic_file_in`),
         // so the three agree on whether the rows wait.

@@ -365,7 +365,7 @@ fn push_approve(out: &mut Vec<Move>, rf: &RecordFile) {
 /// The next move of the planning steps for the questions of `rf` not yet
 /// asked: the owner's approve once every record is there.
 pub fn of_planning(rf: &RecordFile, p: &crate::plan::Planning) -> Vec<Move> {
-    use crate::plan::{NextMove, Step};
+    use crate::plan::NextMove;
     let approve = || {
         vec![Move::new(MoveKind::Approve {
             path: rf.rel.clone(),
@@ -375,19 +375,6 @@ pub fn of_planning(rf: &RecordFile, p: &crate::plan::Planning) -> Vec<Move> {
         NextMove::Plan => vec![Move::new(MoveKind::Plan {
             rel: rf.rel.clone(),
         })],
-        NextMove::WriteLines => {
-            let mut missing = p.lines_missing(Step::Heading);
-            if missing.is_empty() {
-                missing = p.lines_missing(Step::Body);
-            }
-            let mut headings: Vec<String> = Vec::new();
-            for (q, _) in missing {
-                if !headings.contains(&q.heading) {
-                    headings.push(q.heading.clone());
-                }
-            }
-            vec![Move::new(MoveKind::WriteLines { headings })]
-        }
         NextMove::WriteBodies(headings) => vec![Move::new(MoveKind::WriteBodies { headings })],
         NextMove::Ready => approve(),
     }

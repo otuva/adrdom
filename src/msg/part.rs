@@ -109,8 +109,6 @@ pub enum Part {
     Option,
     /// The bodies of these headings.
     Body(Vec<String>),
-    /// The lines for the neighbours of these headings.
-    Lines(Vec<String>),
     /// The plan of a topic file.
     Plan,
     /// The decision of this heading, tied to a test by this identifier.
@@ -159,7 +157,6 @@ impl Part {
             Part::Heading => "the heading".into(),
             Part::Option => "the option".into(),
             Part::Body(hs) => format!("the body of {}", quoted(hs)),
-            Part::Lines(hs) => format!("the lines of {}", quoted(hs)),
             Part::Plan => "the plan".into(),
             Part::Decision(heading) => format!("\"{}\"", heading),
             Part::Program(name) => format!("the {} program", name),
@@ -205,7 +202,6 @@ mod tests {
             (Part::Heading, "the heading"),
             (Part::Option, "the option"),
             (Part::Body(vec![h()]), "the body of \"h\""),
-            (Part::Lines(vec![h()]), "the lines of \"h\""),
             (Part::Plan, "the plan"),
             (Part::Decision(h()), "\"h\""),
             (Part::Program("codex".into()), "the codex program"),
@@ -238,7 +234,6 @@ mod tests {
                 | Part::Heading
                 | Part::Option
                 | Part::Body(_)
-                | Part::Lines(_)
                 | Part::Plan
                 | Part::Decision(_)
                 | Part::Program(_)

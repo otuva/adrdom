@@ -50,8 +50,6 @@ pub enum MoveKind {
     PlanUnresolved,
     /// The agent runs `adr plan` on the file.
     Plan { rel: String },
-    /// The agent writes lines for some neighbours of these headings.
-    WriteLines { headings: Vec<String> },
     /// The agent writes the bodies of these headings.
     WriteBodies { headings: Vec<String> },
     /// The owner approves the file at `path`.
@@ -161,7 +159,6 @@ impl Move {
             | MoveKind::BuildWaitsTiers { .. } => Mover::NotYet,
             MoveKind::PlanUnresolved
             | MoveKind::Plan { .. }
-            | MoveKind::WriteLines { .. }
             | MoveKind::WriteBodies { .. }
             | MoveKind::Refused { .. }
             | MoveKind::Build { .. }
@@ -182,9 +179,6 @@ impl Move {
                 Next::agent(Act::Rewrites(Part::Plan)),
             ]),
             MoveKind::Plan { rel } => Next::agent_runs(command(&["plan", rel])),
-            MoveKind::WriteLines { headings } => {
-                Next::agent(Act::Writes(Part::Lines(headings.clone())))
-            }
             MoveKind::WriteBodies { headings } => {
                 Next::agent(Act::Writes(Part::Body(headings.clone())))
             }

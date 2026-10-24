@@ -125,11 +125,6 @@ fn same_moves(dir: &Path, stage: &str) -> String {
     p
 }
 
-fn write_lines(dir: &Path, plan_stdout: &str) {
-    let wanted = lines_wanted(plan_stdout);
-    write(dir, &add_unrelated(&read(dir), &wanted));
-}
-
 fn ids(dir: &Path) -> Vec<String> {
     extract_ids(&read(dir))
 }
@@ -146,10 +141,8 @@ fn plan_names_the_moves_show_names_at_every_step() {
         ),
     );
 
-    // Headings read: the lines are the agent's.
-    let out = same_moves(&dir, "headings");
-    write_lines(&dir, &out);
-    // Lines written: the bodies.
+    // Headings read: the bodies.
+    same_moves(&dir, "headings");
     same_moves(&dir, "bodies");
     write(
         &dir,
@@ -167,9 +160,8 @@ fn plan_names_the_moves_show_names_at_every_step() {
             1,
         ),
     );
-    // Bodies read: the lines of the new neighbours.
-    let out = same_moves(&dir, "bodies read");
-    write_lines(&dir, &out);
+    // Bodies read.
+    same_moves(&dir, "bodies read");
     // Ready: the owner's approval.
     let out = same_moves(&dir, "ready");
     assert!(
@@ -244,7 +236,6 @@ fn plan_prints_the_status_what_it_read_the_findings_and_the_moves_and_nothing_el
         &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, "")),
     );
     let mut outs = vec![plan(&dir)];
-    write_lines(&dir, &outs[0]);
     outs.push(plan(&dir));
     write(
         &dir,
@@ -254,9 +245,7 @@ fn plan_prints_the_status_what_it_read_the_findings_and_the_moves_and_nothing_el
             section(H2, &body("two"))
         ),
     );
-    write_lines(&dir, &plan(&dir));
     outs.push(plan(&dir));
-    write_lines(&dir, outs.last().unwrap());
     outs.push(plan(&dir));
     for out in &outs {
         assert!(

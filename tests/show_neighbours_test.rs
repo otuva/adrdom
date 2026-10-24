@@ -161,17 +161,16 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     let lines = under(&shown, H1);
     assert!(
         lines.iter().any(|l| l.starts_with(&format!(
-            "decision \"{}\": body unrelated; on the unrelated line; ",
+            "decision \"{}\": body unrelated; no line; ",
             BASE_Q
         ))),
         "{}",
         shown
     );
     assert!(
-        lines.iter().any(|l| l.starts_with(&format!(
-            "question \"{}\": body unrelated; on the unrelated line; ",
-            H2
-        ))),
+        lines
+            .iter()
+            .any(|l| l.starts_with(&format!("question \"{}\": body unrelated; no line; ", H2))),
         "{}",
         shown
     );
@@ -308,17 +307,12 @@ fn the_next_lines_follow_the_planning_steps() {
         .status
         .success());
     ends(&next(&dir), &|h| {
-        format!("agent writes the lines of \"{}\"", h)
-    });
-    plan_record(&dir, REL);
-    ends(&next(&dir), &|h| {
         format!("agent writes the body of \"{}\"", h)
     });
-    // The bodies written over a file without the lines: the lines come first.
+    // The bodies written over a file with its heading neighbours on record:
+    // the bodies are read next.
     write_topic(&dir);
-    ends(&next(&dir), &|h| {
-        format!("agent writes the lines of \"{}\"", h)
-    });
+    ends(&next(&dir), &|_| format!("agent runs: adr plan {}", REL));
     plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 }

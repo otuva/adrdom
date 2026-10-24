@@ -640,83 +640,13 @@ pub fn approve_record(dir: &Path, rel: &str) {
     );
 }
 
-/// Does the agent's moves of `adr plan` on `rel` with the fake model and the
-/// fake reader, until the tool says the file is ready: every neighbour the
-/// tool reports on no line gets an entry on the `unrelated:` line under its
-/// heading. It switches no rule off; it is the plumbing a fixture needs
-/// before the owner's approve. A plan that stops for another reason (a body
+/// Does the agent's move of `adr plan` on `rel` with the fake model and the
+/// fake reader: the plumbing a fixture needs before the owner's approve. It
+/// switches no rule off. A plan that stops for another reason (a body
 /// missing, a shape error) is left as it is, so approve reports that.
 pub fn plan_record(dir: &Path, rel: &str) {
     let path = dir.join(rel);
-    for _ in 0..6 {
-        let out = adr(dir, &["plan", path.to_str().unwrap()], &[], "");
-        if !out.status.success() {
-            return;
-        }
-        let wanted = lines_wanted(&stdout(&out));
-        if wanted.is_empty() {
-            return;
-        }
-        let text = std::fs::read_to_string(&path).unwrap();
-        std::fs::write(&path, add_unrelated(&text, &wanted)).unwrap();
-    }
-}
-
-/// The (heading, name) of each finding `adr plan` printed of a neighbour on
-/// no line: `<rel>: the <kind> "<name>" is a neighbour of
-/// "<heading>" and is on no line; ...`.
-pub fn lines_wanted(plan_stdout: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    for l in plan_stdout.lines() {
-        let Some((left, right)) = l.split_once("\" is a neighbour of \"") else {
-            continue;
-        };
-        let Some((_, name)) = left.rsplit_once(" \"") else {
-            continue;
-        };
-        let Some((heading, _)) = right.split_once("\" and is on no line") else {
-            continue;
-        };
-        let pair = (heading.to_string(), name.to_string());
-        if !out.contains(&pair) {
-            out.push(pair);
-        }
-    }
-    out
-}
-
-/// `text` with each name added to the `unrelated:` line under its heading,
-/// a new line directly under the `depends:` line (and under a `supersedes:`
-/// line that follows it) when there is none.
-pub fn add_unrelated(text: &str, wanted: &[(String, String)]) -> String {
-    let mut lines: Vec<String> = text.lines().map(String::from).collect();
-    for (heading, name) in wanted {
-        let Some(h) = lines
-            .iter()
-            .position(|l| l.strip_prefix("### ").map(str::trim) == Some(heading.as_str()))
-        else {
-            continue;
-        };
-        let end = (h + 1..lines.len())
-            .find(|&j| lines[j].starts_with("### "))
-            .unwrap_or(lines.len());
-        if let Some(j) = (h + 1..end).find(|&j| lines[j].starts_with("unrelated: ")) {
-            lines[j].push_str(&format!(", {}", name));
-            continue;
-        }
-        let mut at = (h + 1..end)
-            .find(|&j| lines[j].starts_with("depends: "))
-            .unwrap_or(h);
-        while at + 1 < end && lines[at + 1].starts_with("supersedes: ") {
-            at += 1;
-        }
-        lines.insert(at + 1, format!("unrelated: {}", name));
-    }
-    let mut out = lines.join("\n");
-    if text.ends_with('\n') {
-        out.push('\n');
-    }
-    out
+    adr(dir, &["plan", path.to_str().unwrap()], &[], "");
 }
 
 /// Appends a hand-crafted ledger row (bypassing every command): `event`,

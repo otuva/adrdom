@@ -1,13 +1,17 @@
 //! Planning a topic file: the neighbours of each question not yet asked,
 //! what the reader said about those of its body, which neighbour is on a
-//! line, and what is missing. `adr plan`, `adr approve` and show all read it.
+//! `depends:` or `supersedes:` line, and what is missing. `adr plan`,
+//! `adr approve` and show all read it.
 //!
 //! "What does the agent do to plan a topic file?"
 //! (46fc51ff-66b9-4841-a953-ae0d4c2fc424 A): write headings; get neighbours;
-//! write lines; write bodies; get neighbours of the full questions; ask
+//! write bodies; get neighbours of the full questions; ask
 //! approval. "Does a planning step run without the record of the step
 //! before?" (d3be71e4-ce7b-43b0-86a8-e86868521f99 A): no; the records are
 //! the neighbours file, the reader file's rows and the lines the agent wrote.
+//! "Does the agent write an unrelated line?"
+//! (a065dced-a3b3-467c-b299-17bb70742046 A): no; a line is a `depends:` or
+//! `supersedes:` entry, and a neighbour on neither needs none.
 //!
 //! The records of a question are two. The neighbours file holds, at the
 //! heading hash (`record::heading_hash`), the current decisions and terms
@@ -17,9 +21,7 @@
 //! the heading with its body: current decisions and terms, and the other
 //! questions of the file, whose key is `text:` and their own body hash. A
 //! question whose body rows are on record has its heading step done, whether
-//! or not the neighbours file holds its heading. A line is a `depends:`,
-//! `supersedes:` or `unrelated:` entry ("Does every neighbour get a line under its
-//! heading?", c6451ecc-17a9-447e-a9c9-fe9b35ec789c A). The reader's word
+//! or not the neighbours file holds its heading. The reader's word
 //! never stops anything ("Does a reader's word stop a command?",
 //! e78b8297-fd89-4e09-9c3e-9eeb0fd0f654 A).
 //!
@@ -71,7 +73,6 @@ pub enum Step {
 pub enum LineKind {
     Depends,
     Supersedes,
-    Unrelated,
 }
 
 impl LineKind {
@@ -79,7 +80,6 @@ impl LineKind {
         match self {
             LineKind::Depends => "depends",
             LineKind::Supersedes => "supersedes",
-            LineKind::Unrelated => "unrelated",
         }
     }
 }
@@ -95,7 +95,6 @@ pub struct Neighbour {
     pub word: Option<String>,
     /// The reader's sentence of reason, `None` with no word.
     pub reason: Option<String>,
-    pub on_line: bool,
     /// The line the neighbour is on, `None` when it is on no line.
     pub line: Option<LineKind>,
 }
@@ -131,8 +130,6 @@ pub struct Planning {
 pub enum NextMove {
     /// Some question has no record at a step: `adr plan`.
     Plan,
-    /// Some neighbour is on no line: the agent writes the lines.
-    WriteLines,
     /// Some headings have no body: the agent writes them (their headings).
     WriteBodies(Vec<String>),
     /// Every record is there: the owner approves.
@@ -301,8 +298,8 @@ pub fn unrelated_refusals(
     out
 }
 
-/// What every line of question `idx` names, from its `depends:`,
-/// `supersedes:` and `unrelated:` lines.
+/// What every line of question `idx` names, from its `depends:` and
+/// `supersedes:` lines.
 fn line_targets(
     idx: usize,
     rf: &RecordFile,
@@ -328,11 +325,6 @@ fn line_targets(
         if let Ok(id) = depends::resolve_supersedes(&e, cross, led) {
             out.entry(Target::Decision(id))
                 .or_insert(LineKind::Supersedes);
-        }
-    }
-    for e in section_unrelated_entries(idx, rf, terms_list, cross, led) {
-        if let Ok(t) = resolve_ref(&e, rf, idx, terms_list, cross, led) {
-            out.entry(t).or_insert(LineKind::Unrelated);
         }
     }
     out
@@ -660,7 +652,6 @@ fn load_inner(
                         name,
                         word: Some(r.word.clone()),
                         reason: Some(r.reason.clone()),
-                        on_line: targets.contains_key(&target),
                         line: targets.get(&target).copied(),
                     });
                 }
@@ -687,7 +678,6 @@ fn load_inner(
                         name,
                         word: None,
                         reason: None,
-                        on_line: targets.contains_key(&target),
                         line: targets.get(&target).copied(),
                     });
                 }
@@ -754,26 +744,10 @@ impl Planning {
         self.questions.iter().filter(|q| !q.has_body).collect()
     }
 
-    /// Every neighbour of `step` that is on no line, with its question.
-    pub fn lines_missing(&self, step: Step) -> Vec<(&Question, &Neighbour)> {
-        let mut out = Vec::new();
-        for q in &self.questions {
-            let ns = match step {
-                Step::Heading => &q.heading_neighbours,
-                Step::Body => &q.body_neighbours,
-            };
-            out.extend(ns.iter().filter(|n| !n.on_line).map(|n| (q, n)));
-        }
-        out
-    }
-
     /// The next move, in the order of the steps.
     pub fn next(&self) -> NextMove {
         if !self.missing_heading().is_empty() {
             return NextMove::Plan;
-        }
-        if !self.lines_missing(Step::Heading).is_empty() {
-            return NextMove::WriteLines;
         }
         let bare = self.without_body();
         if !bare.is_empty() {
@@ -782,37 +756,7 @@ impl Planning {
         if !self.missing_body().is_empty() {
             return NextMove::Plan;
         }
-        if !self.lines_missing(Step::Body).is_empty() {
-            return NextMove::WriteLines;
-        }
         NextMove::Ready
-    }
-
-    /// What approve refuses at the step of writing lines: each neighbour on
-    /// no line. Needs neither the model nor the reader.
-    pub fn line_refusals(&self) -> Vec<msg::Said> {
-        self.questions
-            .iter()
-            .flat_map(|q| self.lines_missing_of(q))
-            .collect()
-    }
-
-    /// One finding per neighbour on no line: a neighbour read at both steps
-    /// is named once.
-    fn lines_missing_of(&self, q: &Question) -> Vec<msg::Said> {
-        let mut out: Vec<msg::Said> = Vec::new();
-        for n in q
-            .heading_neighbours
-            .iter()
-            .chain(&q.body_neighbours)
-            .filter(|n| !n.on_line)
-        {
-            let m = msg::plan_line_missing(&self.rel, &q.heading, n.kind.label(), &n.name);
-            if !out.iter().any(|o| o.found == m.found) {
-                out.push(m);
-            }
-        }
-        out
     }
 
     /// The records missing at the step `adr plan` takes next: every heading's

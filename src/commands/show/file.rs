@@ -154,7 +154,6 @@ pub(super) fn change_lines(
     change: &Change,
     own: Option<&str>,
     names: &HashMap<String, String>,
-    unrelated: bool,
 ) -> Vec<Line> {
     let prefix = own.and_then(|o| o.split_once(' ').map(|(p, _)| format!("{} ", p)));
     // The heading changed: a heading line gone and one come, both shown.
@@ -178,7 +177,6 @@ pub(super) fn change_lines(
             .lines
             .iter()
             .filter(|l| heading_changed || own != Some(l.text.as_str()))
-            .filter(|l| unrelated || !l.text.starts_with("unrelated:"))
             .map(|l| Line::Record {
                 depth: 1,
                 text: reference_named(&l.marked(), &l.text, names),
@@ -267,7 +265,6 @@ fn removed_topic_file(r: &Records, rel: &str, views: Views) -> Vec<Line> {
                 &approval::question_lines(&old, sec),
                 st,
                 &r.names,
-                views.unrelated,
                 views.dependents || !is_answered(st),
             ));
             if views.superseded && st == QuestionStatus::Superseded {
@@ -293,7 +290,7 @@ fn terms_file_lines(r: &Records, tf: &TermsFile, views: Views, st: FileStatus) -
     let mut lines = vec![file_status(repo::TERMS_PATH, st)];
     let changes = approval::terms_file(&r.root, tf, &r.led);
     if let Some(whole) = &changes.whole {
-        lines.extend(change_lines(whole, None, &r.names, true));
+        lines.extend(change_lines(whole, None, &r.names));
     }
     for (t, change) in tf.terms.iter().zip(&changes.entries) {
         lines.push(change_status(
@@ -306,7 +303,6 @@ fn terms_file_lines(r: &Records, tf: &TermsFile, views: Views, st: FileStatus) -
                 change,
                 Some(&format!("## {}", t.name)),
                 &r.names,
-                true,
             )),
             None => lines.extend(approval::entry_lines(tf, t).into_iter().skip(1).map(|l| {
                 Line::Record {
@@ -335,7 +331,6 @@ fn terms_file_lines(r: &Records, tf: &TermsFile, views: Views, st: FileStatus) -
             change,
             Some(&format!("## {}", name)),
             &r.names,
-            true,
         ));
     }
     lines

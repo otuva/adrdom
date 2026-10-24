@@ -82,11 +82,6 @@ fn plan_for() -> String {
     format!("agent runs: adr plan {}", REL)
 }
 
-fn lines_for(headings: &[&str]) -> String {
-    let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
-    format!("agent writes the lines of {}", names.join(", "))
-}
-
 /// Asserts `lines` are the findings of one planning step: one or more per
 /// heading of `headings`, each a `plan:` finding about its heading that
 /// ends with the move `mv` names for it.
@@ -138,14 +133,11 @@ fn show_names_the_next_move_at_every_step() {
     let p = path.to_str().unwrap();
 
     // A plan that waits for its approval follows the planning steps: the
-    // agent plans it, writes the lines of what it read, and only then does
-    // the owner approve.
+    // agent plans it, and only then does the owner approve.
     // Each step's findings carry the step's move (per "Does a command
     // compute a move of its own?", aac5c313 A): one per question.
     assert_each_names(&next(&dir), &[ONE, TWO, THREE], |_| plan_for());
     assert!(adr(&dir, &["plan", p], &[], "").status.success());
-    assert_each_names(&next(&dir), &[ONE, TWO, THREE], |h| lines_for(&[h]));
-    plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 
     // The approve asks every question in one run, whatever its tier.

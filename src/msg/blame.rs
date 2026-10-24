@@ -105,19 +105,6 @@ pub fn plan_rows_missing(rel: &str, heading: &str) -> Said {
     )
 }
 
-/// A neighbour in the reader's rows is on no depends, supersedes or
-/// unrelated line of the question.
-pub fn plan_line_missing(rel: &str, heading: &str, kind: &str, name: &str) -> Said {
-    said(
-        &rule::NEIGHBOUR_IS_ON_A_LINE,
-        format!(
-            "{}: the {} \"{}\" is a neighbour of \"{}\" and is on no line",
-            rel, kind, name, heading
-        ),
-        Next::agent(Act::Writes(Part::Lines(vec![heading.to_string()]))),
-    )
-}
-
 /// One question `adr plan` read the neighbours of, and the step it read them
 /// at: its heading, or its heading with its body.
 pub fn plan_question_read(heading: &str, what: &str) -> String {

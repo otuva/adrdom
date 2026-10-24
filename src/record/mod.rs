@@ -155,7 +155,7 @@ pub struct Section {
     /// `supersedes: ` ids, comma-separated in the source, in file order (4.14).
     pub supersedes: Vec<String>,
     /// `unrelated: ` entries, comma-separated in the source, in file order
-    /// ("Does every neighbour get a line under its heading?").
+    /// ("What does a reference in a topic file carry?").
     pub unrelated: Vec<String>,
     /// `blame: ` entries, comma-separated in the source, in file order (per
     /// "What does a question carry of the blame file it came from?").
