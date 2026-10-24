@@ -196,9 +196,11 @@ pub fn prose_tells_in(
     out
 }
 
-/// Words of a line, by the repository's one definition of a word.
+/// Words of a line for the word limit: the repository's one definition of
+/// a word, an apostrophe inside a word joining its parts
+/// (`text::word_count`).
 fn count_words(text: &str) -> usize {
-    crate::text::word_runs(text).len()
+    crate::text::word_count(text)
 }
 
 /// Whether a heading opens with "Does", leading numbering such as "1.1"
