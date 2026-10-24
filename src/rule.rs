@@ -147,12 +147,6 @@ pub const QUESTION_HAS_BODY: Rule = Rule {
     decisions: &["f5eeaacf-1c9f-478b-8a97-2df1aaf39458"],
 };
 
-/// Decision: What does a reference in a topic file carry?
-pub const UNRELATED_ENTRY_NAMES_ONE_DECISION: Rule = Rule {
-    name: "unrelated_entry_names_one_decision",
-    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
-};
-
 /// Decision: Does one decision supersede several?
 pub const SUPERSEDES_TARGET_IS_CURRENT: Rule = Rule {
     name: "supersedes_target_is_current",
@@ -936,12 +930,6 @@ pub const HEADING_ONCE_IN_FILE: Rule = Rule {
     decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
 };
 
-/// Decision: What does a reference in a topic file carry?
-pub const UNRELATED_ENTRY_NAMES_SOMETHING: Rule = Rule {
-    name: "unrelated_entry_names_something",
-    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
-};
-
 /// Decision: What does a term hold?
 pub const TERMS_FILE_SHAPE: Rule = Rule {
     name: "terms_file_shape",
@@ -1024,7 +1012,6 @@ pub const ALL: &[&Rule] = &[
     &STAND_QUESTION_LIMIT,
     &DEPENDS_LINE_QUESTION_LIMIT,
     &QUESTION_HAS_BODY,
-    &UNRELATED_ENTRY_NAMES_ONE_DECISION,
     &SUPERSEDES_TARGET_IS_CURRENT,
     &SUPERSEDES_NAMES_DEPENDENTS,
     &SUPERSEDES_ENTRY_NAMES_ONE_DECISION,
@@ -1143,7 +1130,6 @@ pub const ALL: &[&Rule] = &[
     &QUESTION_NOT_ON_WHAT_IT_SUPERSEDES,
     &NO_QUESTION_ON_WHAT_PLAN_SUPERSEDES,
     &HEADING_ONCE_IN_FILE,
-    &UNRELATED_ENTRY_NAMES_SOMETHING,
     &TERMS_FILE_SHAPE,
     &TERMS_FILE_EXISTS,
     &GITIGNORE_MATCHES_INSTALL,

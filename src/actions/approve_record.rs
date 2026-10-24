@@ -245,46 +245,6 @@ pub(super) fn do_approve_record(
             work_rf.lines[j] = format!("supersedes: {}", ids.join(", "));
         }
     }
-    // The `unrelated:` line holds ids too (per "What does a reference in a
-    // topic file carry?"): a decision, a term or a question of the
-    // file by its identifier, a dropped question as written.
-    for (i, sec) in sections_snapshot.iter().enumerate() {
-        if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {
-            continue;
-        }
-        let Some(j) =
-            (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("unrelated: "))
-        else {
-            continue;
-        };
-        let mut ids: Vec<String> = Vec::new();
-        for e in crate::plan::section_unrelated_entries(
-            i,
-            &work_rf,
-            terms_list,
-            &cross_file_headings,
-            led,
-        ) {
-            let id = match crate::plan::resolve_ref(
-                &e,
-                &work_rf,
-                i,
-                terms_list,
-                &cross_file_headings,
-                led,
-            ) {
-                Ok(crate::plan::Target::Decision(id))
-                | Ok(crate::plan::Target::Term(id))
-                | Ok(crate::plan::Target::Dropped(id)) => id,
-                Ok(crate::plan::Target::Question(q)) => work_rf.sections[q].id.clone().unwrap_or(e),
-                Err(_) => e,
-            };
-            if !ids.contains(&id) {
-                ids.push(id);
-            }
-        }
-        work_rf.lines[j] = format!("unrelated: {}", ids.join(", "));
-    }
     // The `blame:` line holds identifiers too (per "What does a question
     // carry of the blame file it came from?"): each name becomes the
     // identifier on the blame file's id line, the ranges as written. Only a

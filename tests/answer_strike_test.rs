@@ -247,30 +247,6 @@ fn two_questions_naming_one_old_decision_both_answer_and_print_the_heading() {
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
 #[test]
-fn an_unrelated_line_naming_a_struck_decision_still_resolves() {
-    let dir = setup();
-    put(&dir, "a", Q1, None);
-    answer_ok(&dir, "a", Q1, "A");
-    let id1 = id_of(&dir.join(rel("a")), Q1);
-    put(&dir, "b", Q4, Some(Q1));
-    answer_ok(&dir, "b", Q4, "A");
-    assert!(!read(&dir, "a").contains(Q1));
-    let p = write_record(
-        &dir,
-        &rel("c"),
-        &format!(
-            "# C\n\n### {}\ndepends: widget\nunrelated: {}\n{}",
-            Q5, id1, BODY
-        ),
-    );
-    let out = adr(&dir, &["plan", p.to_str().unwrap()], &[], "");
-    let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(!text.contains("names nothing"), "{}", text);
-    approve_ok(&dir, "c");
-}
-
-// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
-#[test]
 fn show_superseded_reads_a_struck_section_from_the_ledger_and_git() {
     let dir = setup();
     put(&dir, "a", Q1, None);

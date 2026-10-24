@@ -63,9 +63,6 @@ fn shape_want(name: &str) -> &'static str {
         "second supersedes line" => {
             "supersedes second line, line 6; agent rewrites the supersedes line"
         }
-        "second unrelated line" => {
-            "unrelated second line, line 6; agent rewrites the unrelated line"
-        }
         "second terms line" => "terms second line, line 8; agent rewrites the terms line",
         "duplicate depends entry" => "depends: duplicate entry, line 4; agent removes the entry",
         "duplicate id line" => "duplicate id line; agent removes the id line",
@@ -497,16 +494,6 @@ fn plan_text_shape_findings_are_notes_in_a_draft_and_failures_when_approved() {
                 good().replace(
                     "depends: widget\n",
                     "depends: widget\nsupersedes: aaa\nsupersedes: bbb\n"
-                )
-            ),
-        ),
-        (
-            "second unrelated line",
-            format!(
-                "# Gate\n\n{}",
-                good().replace(
-                    "depends: widget\n",
-                    "depends: widget\nunrelated: aaa\nunrelated: bbb\n"
                 )
             ),
         ),

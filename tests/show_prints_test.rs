@@ -165,52 +165,85 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
     );
 }
 
-// The unrelated line prints like every other reference line.
+// adr: a065dced-a3b3-467c-b299-17bb70742046
+//
+// An `unrelated:` line of an earlier record form under an answered question
+// is left where it stands: check passes, the question stays answered as it
+// is, and show prints the line under no flag.
 #[test]
-fn show_prints_the_unrelated_line_of_an_answered_question_only_under_dependents() {
-    // adr: b0acc95b-3dd5-4158-ac5c-65a2159972a9
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let one = q(ONE).replacen(
-        "depends: widget\n",
-        &format!("depends: widget\nunrelated: {}\n", TWO),
-        1,
-    );
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", one, q(TWO)));
-    approve_record(&dir, REL);
-    assert!(adr_answer(&dir, &id_of(&path, ONE), "A").status.success());
-    commit_all(&dir, "the gate, asked");
-    let plain = show(&dir, &[REL]);
-    assert!(plain.contains("  depends: widget\n"), "{}", plain);
-    assert!(!plain.contains("unrelated:"), "{}", plain);
-    // The first question is answered: its depends and unrelated lines come
-    // under --dependents.
-    let flagged = show(&dir, &[REL, "--dependents"]);
-    assert!(
-        flagged.contains(&format!("  unrelated: {}\n", TWO)),
-        "{}",
-        flagged
-    );
-
-    // Edit the unrelated line of the first question: the change prints as it
-    // does for any reference line.
+fn an_old_unrelated_line_under_an_answered_question_stays_and_is_never_printed() {
+    let (dir, path) = asked();
+    let two = id_of(&path, TWO);
     let text = std::fs::read_to_string(&path).unwrap();
-    let edited = text.replacen(
-        &format!("unrelated: {}", id_of(&path, TWO)),
-        "unrelated: widget",
-        1,
+    // Under the first question's depends line, which approve wrote with ids.
+    let at = text.find(&format!("### {}\n", ONE)).unwrap();
+    let depends_end = at + text[at..].find("\nid: ").unwrap() + 1;
+    let edited = format!(
+        "{}unrelated: {}\n{}",
+        &text[..depends_end],
+        two,
+        &text[depends_end..]
     );
-    assert_ne!(edited, text);
-    std::fs::write(&path, edited).unwrap();
-    let plain = show(&dir, &[REL]);
-    assert!(plain.contains("[changed"), "{}", plain);
+    std::fs::write(&path, &edited).unwrap();
+    // The record as the ledger held it when the line was written: approved
+    // and answered with the line in place.
+    let rf = adr::record::load(&path).unwrap();
+    for sec in &rf.sections {
+        append_ledger_row_at(
+            &dir,
+            "approved",
+            sec.id.as_deref().unwrap(),
+            &adr::record::question_hash(&rf, sec),
+            REL,
+            "2030-01-01T00:00:00Z",
+        );
+    }
+    append_ledger_row_at(
+        &dir,
+        "approved",
+        "-",
+        &adr::record::plan_hash(&rf),
+        REL,
+        "2030-01-01T00:00:00Z",
+    );
+    let one = id_of(&path, ONE);
+    let sec = rf
+        .sections
+        .iter()
+        .find(|s| s.id.as_deref() == Some(one.as_str()))
+        .unwrap();
+    let section = adr::record::section_hash(&rf.lines, sec);
+    append_ledger_row_at(&dir, "asked", &one, &section, ONE, "2030-01-01T00:00:01Z");
+    append_ledger_row_at(
+        &dir,
+        "answered",
+        &one,
+        &section,
+        "A",
+        "2030-01-01T00:00:02Z",
+    );
+    commit_all(&dir, "the gate, with a line of an earlier form");
+
+    let checked = adr(&dir, &["check"], &[], "");
+    assert!(checked.status.success(), "{}", stderr(&checked));
     assert!(
-        plain.contains(&format!("- unrelated: {}\n", TWO)),
+        !format!("{}{}", stdout(&checked), stderr(&checked)).contains("unrelated"),
+        "{}{}",
+        stdout(&checked),
+        stderr(&checked)
+    );
+    let plain = show(&dir, &[REL]);
+    assert!(
+        plain.contains(&format!("[answered A] {}\n", ONE)),
         "{}",
         plain
     );
-    assert!(plain.contains("+ unrelated: widget\n"), "{}", plain);
+    assert!(!plain.contains("unrelated"), "{}", plain);
+    let flagged = show(&dir, &[REL, "--dependents"]);
+    assert!(flagged.contains("  depends: widget\n"), "{}", flagged);
+    assert!(!flagged.contains("unrelated"), "{}", flagged);
+    assert!(!show(&dir, &[]).contains("unrelated"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
 }
 
 //
@@ -887,48 +920,28 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
     );
 }
 
-// adr: d1d6fed2-4e1a-44bd-b9cb-22f779a00bce
+// adr: a065dced-a3b3-467c-b299-17bb70742046
+// adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
 //
-// An open question's unrelated line prints in the plain listing, an answered
-// question's only under --dependents; `--unrelated` is no flag.
+// An `unrelated:` line under a question not answered is a stray line: check
+// names it, approve refuses it; `--unrelated` is no flag.
 #[test]
-fn unrelated_line_prints_as_a_reference_line_and_the_flag_is_refused() {
+fn an_unrelated_line_under_a_new_question_is_a_stray_line_and_the_flag_is_refused() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let (a, b) = ("Is the widget gate picked?", "Is the widget gate waiting?");
     let with_unrelated = format!("### {}\ndepends: widget\nunrelated: {}\n{}\n", a, b, BODY);
     let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", with_unrelated, q(b)));
-    // A draft: every question is open, and its unrelated line prints.
-    let draft = show(&dir, &[REL]);
+    let checked = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&checked), stderr(&checked));
+    assert!(text.contains("stray line 5"), "{}", text);
+    let refused = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!refused.status.success());
     assert!(
-        draft.contains(&format!("+ unrelated: {}\n", b)),
+        stderr(&refused).contains("stray line 5"),
         "{}",
-        draft
-    );
-
-    approve_record(&dir, REL);
-    assert!(adr_answer(&dir, &id_of(&path, a), "A").status.success());
-
-    let plain = show(&dir, &[REL]);
-    assert!(!plain.contains("unrelated:"), "{}", plain);
-    let shown = show(&dir, &[REL, "--dependents"]);
-    // Under the heading: the option picked, then the reference lines.
-    let after_a: Vec<&str> = shown
-        .lines()
-        .skip_while(|l| !l.ends_with(&format!("] {}", a)))
-        .skip(1)
-        .take(3)
-        .collect();
-    assert_eq!(
-        after_a,
-        vec![
-            "  Yes the widget holds.".to_string(),
-            "  depends: widget".to_string(),
-            format!("  unrelated: {}", b)
-        ],
-        "{}",
-        shown
+        stderr(&refused)
     );
 
     let refused = adr(

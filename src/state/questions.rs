@@ -304,7 +304,7 @@ pub fn frozen_text_edited(led: &Ledger, lines: &[String], sec: &Section) -> bool
 /// banned-word scan reads (per "What does a reference in a topic file carry?"): the section's
 /// hashed range (heading through the hash end, see `record::hash_range`) with the `terms:` line
 /// itself left out (so re-resolving never matches against a term's own previous resolution rather
-/// than the prose that produced it), and with `id:`, `depends:`, `supersedes:`, `unrelated:` and
+/// than the prose that produced it), and with `id:`, `depends:`, `supersedes:`, `unrelated:` (of an earlier form) and
 /// `blame:` lines left out too, since those hold ids and references, not prose, once a plan is
 /// approved.
 pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> String {

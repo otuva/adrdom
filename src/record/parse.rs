@@ -222,7 +222,6 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         heading_text,
         id: scan.id,
         supersedes: scan.supersedes,
-        unrelated: scan.unrelated,
         blame: scan.blame,
         depends: scan.depends,
         options: scan.options,

@@ -121,12 +121,7 @@ fn a_question_put_back_after_a_plan_change_struck_it_reads_as_new() {
     let (dir, path) = approved();
     let full = std::fs::read_to_string(&path).unwrap();
     let at = full.find(&format!("### {}\n", TWO)).unwrap();
-    // Struck, and no line of the question left names it.
-    let kept: String = full[..at]
-        .lines()
-        .filter(|l| !l.starts_with("unrelated:"))
-        .map(|l| format!("{}\n", l))
-        .collect();
+    let kept: String = full[..at].lines().map(|l| format!("{}\n", l)).collect();
     std::fs::write(&path, kept).unwrap();
     approve_record(&dir, REL);
     commit_all(&dir);
@@ -523,11 +518,7 @@ fn a_question_put_back_after_an_uncommitted_strike_reads_as_new() {
     let (dir, path) = approved();
     let full = std::fs::read_to_string(&path).unwrap();
     let at = full.find(&format!("### {}\n", TWO)).unwrap();
-    let kept: String = full[..at]
-        .lines()
-        .filter(|l| !l.starts_with("unrelated:"))
-        .map(|l| format!("{}\n", l))
-        .collect();
+    let kept: String = full[..at].lines().map(|l| format!("{}\n", l)).collect();
     std::fs::write(&path, kept).unwrap();
     approve_record(&dir, REL);
     std::fs::write(&path, without_id(&full, TWO)).unwrap();

@@ -196,9 +196,8 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
 /// id minted in memory so a real term in a terms.md that has never been
 /// approved still resolves instead of drowning this in "which is no
 /// term" refusals. `cross_file_headings` (`depends::cross_file_heading_index`,
-/// built once per command run) is read only by the `supersedes:` and
-/// `unrelated:` rules; a `depends:` entry is resolved against the file and
-/// the terms alone.
+/// built once per command run) is read only by the `supersedes:` rules; a
+/// `depends:` entry is resolved against the file and the terms alone.
 ///
 /// `names` is every heading by its id, of any state and any topic file
 /// (`view::heading_texts`), built once per command run by the caller:
@@ -402,13 +401,6 @@ pub fn record_refusals(
         led,
         None,
     ));
-
-    // Per "What does a reference in a topic file carry?": an
-    // `unrelated:` entry names a current decision, a term, another question
-    // of the file or a dropped question.
-    for said in crate::plan::unrelated_refusals(rel, rf, terms_list, cross_file_headings, led) {
-        out.push(Finding::said(Class::Plan, said));
-    }
 
     out.extend(blame_line_refusals(rel, rf, blame, led));
 

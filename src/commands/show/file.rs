@@ -187,7 +187,7 @@ pub(super) fn change_lines(
 
 /// `printed`, the printed form of the record line `line`, with the
 /// identifiers turned back into words when `line` is a reference line
-/// (`depends:`, `supersedes:`, `unrelated:`, `blame:`): what approve turns
+/// (`depends:`, `supersedes:`, `blame:`): what approve turns
 /// names into identifiers on, and nothing else. An identifier in prose stays
 /// as the file holds it, the text approve signs.
 fn reference_named(printed: &str, line: &str, names: &HashMap<String, String>) -> String {
@@ -199,7 +199,7 @@ fn reference_named(printed: &str, line: &str, names: &HashMap<String, String>) -
 }
 
 fn is_reference(line: &str) -> bool {
-    ["depends:", "supersedes:", "unrelated:", "blame:"]
+    ["depends:", "supersedes:", "blame:"]
         .iter()
         .any(|p| line.starts_with(p))
 }
@@ -234,9 +234,14 @@ pub(super) fn named(line: &str, names: &HashMap<String, String>) -> String {
 }
 
 /// The reference lines a question carries (`depends:`, `supersedes:`,
-/// `unrelated:`, `blame:`), and its body, each as the file holds it.
+/// `blame:`), and its body, each as the file holds it. An `unrelated:` line
+/// of an earlier record form (`tells::UNRELATED_PREFIX`) is neither: it is
+/// never printed.
 pub(super) fn reference_and_body(lines: &[String]) -> (Vec<String>, Vec<String>) {
-    let rest = lines.iter().skip(1);
+    let rest = lines
+        .iter()
+        .skip(1)
+        .filter(|l| !l.starts_with(crate::tells::UNRELATED_PREFIX));
     (
         rest.clone().filter(|l| is_reference(l)).cloned().collect(),
         rest.filter(|l| !is_reference(l)).cloned().collect(),
