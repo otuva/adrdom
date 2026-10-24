@@ -235,8 +235,9 @@ pub(super) fn named(line: &str, names: &HashMap<String, String>) -> String {
 
 /// The reference lines a question carries (`depends:`, `supersedes:`,
 /// `blame:`), and its body, each as the file holds it. An `unrelated:` line
-/// of an earlier record form (`tells::UNRELATED_PREFIX`) is neither: it is
-/// never printed.
+/// of an earlier record form (`tells::UNRELATED_PREFIX`) is neither and is
+/// left out of the listing; a change to one prints as the file holds it,
+/// like any line a change touches.
 pub(super) fn reference_and_body(lines: &[String]) -> (Vec<String>, Vec<String>) {
     let rest = lines
         .iter()

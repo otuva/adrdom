@@ -235,6 +235,13 @@ pub(super) fn scan_body(
         for j in unrelated_lines {
             stray_errors.push(format!("stray line {}", j + 1));
         }
+        // In line order, as the loop above reports them.
+        stray_errors.sort_by_key(|e| {
+            e.rsplit(' ')
+                .next()
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(0)
+        });
     }
 
     // A fourth option is a shape error; the minimum (two, unless the
@@ -284,11 +291,13 @@ pub(super) fn scan_body(
 
 /// A heading whose body holds only blank lines, `depends:` lines, a
 /// `supersedes:` line (part of the plan, per "Does approve turn the
-/// supersedes line into identifiers?"), a `blame:` line (per "What does a question carry of the blame file it came from?"),
-/// and an `id:` line (per "What stops a question that has no depends line?" and "What does a
-/// reference in a topic file carry?"): needs no id of its own to stay a skeleton, but `approve`
-/// gives every heading an id, skeletons included, so a skeleton must stay a skeleton once it has
-/// one. A `depends:` line with nothing after it, indented or not.
+/// supersedes line into identifiers?"), a `blame:` line (per "What does a
+/// question carry of the blame file it came from?"), and an `id:` line (per
+/// "What stops a question that has no depends line?" and "What does a
+/// reference in a topic file carry?"): needs no id of its own to stay a
+/// skeleton, but `approve` gives every heading an id, skeletons included, so
+/// a skeleton must stay a skeleton once it has one. A `depends:` line with
+/// nothing after it, indented or not.
 fn is_bare_depends_line(line: &str) -> bool {
     line.trim() == "depends:"
 }
