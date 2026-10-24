@@ -24,7 +24,7 @@
 - ban (bans, banned, banning): Adding the hash of a word to the list nothing in the repository may contain.
 - install (installs, installed, installing): The act that puts the tool's hooks and brief into a repository.
 - ui (user interface, web ui): The part of the tool the owner sees and uses in a browser.
-- depends (stands on): The line under a question heading naming what the question rests on: a term, a question in the same topic file, or a current decision.
+- depends (stands on): The line under a question heading naming what the question rests on: a term or a question of the same topic file.
 - refusal (refuse, refuses, refused, refusing): The owner's ruling that a question cannot be settled as asked.
 - answer set (answer sets): The letters of a question's options under which a question standing on it is asked.
 - origin (origins): A prose file outside adrdom whose text the records take in.
